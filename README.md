@@ -26,10 +26,11 @@ Both versions are documented in the Wiki of this repository [Wiki](https://githu
 The windows GUI version can be installed using the setup files (see [releases](https://github.com/Fluorescence-Tools/quest/releases)).
 
 ## Warnings
-  1. QuEST can be used to estimate dynamic quenching, e.g., to plan the labeling scheme for FRET measurements. QuEST provides precise estimates that are not necessary accurate.
-  2. QuEST is the first software that implemented the accessible contact volume that was later described in more detail in the publication [COSB2016](https://doi.org/10.1016/j.sbi.2016.11.012). Due to differencies in the ACV implementation, QuEST may produce slightly different results (not quantified)
-  3. QuEST operates on single structures and assumes that the structure is fixed while the dye samples its conformational space
-  4. A crude approximation of the dye is used. Specific interactions e.g. binding pockets are not considered.
+  1. QuEST determines precise values that are not necessary accurate.
+  2. QuEST was the first software to implement the ACVs. ACVs were later described in more detail (see: [COSB2016](https://doi.org/10.1016/j.sbi.2016.11.012). Differencies in the ACV implementation, may produce slightly different results.
+  3. QuEST operates on single static structures.
+  4. A crude approximation of the dye is used by a sinlge sphere is used.
+  5. Specific interactions e.g. binding pockets are not considered.
 
 ## Citation
 If you have used QuEST in a scientific publication, we would appreciate citations to the following paper: 
