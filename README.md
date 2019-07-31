@@ -1,4 +1,4 @@
-# QuEST
+# QuEST - Quenching ESTimator
 
 ## General description
 
