@@ -49,7 +49,7 @@ If you have used QuEST in a scientific publication, we would appreciate citation
 > Peulen, T.O., Opanasyuk, O., and Seidel, C.A., 2017. Combining Graphical and Analytical Methods with Molecular Simulations To Analyze Time-Resolved FRET Measurements of Labeled Macromolecules Accurately. The Journal of Physical Chemistry B  2017, 121, 35, 8211-8241 (Feature Article)
 
 
-For more informations on ACVs see:
+For more informations on accessible contact volumes (ACVs) see:
 
 [![DOI for citing LabelLib](https://img.shields.io/badge/DOI-10.1016%2Fj.sbi.2016.11.012-blue.svg)](https://doi.org/10.1016/j.sbi.2016.11.012)
 > Dimura, M., Peulen, T.O., Hanke, C.A., Prakash, A., Gohlke, H. and Seidel, C.A., 2016. Quantitative FRET studies and integrative modeling unravel the structure and dynamics of biomolecular systems. Current opinion in structural biology, 40, pp.163-185.
@@ -61,7 +61,7 @@ _Author(s)_: Thomas-Otavio Peulen
 
 _Maintainer_: `tpeulen`
 
-_License_: [LGPL](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html)
+_License_: [MIT](https://mit-license.org/)
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
 License as published by the Free Software Foundation; either

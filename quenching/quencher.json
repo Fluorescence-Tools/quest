@@ -1,0 +1,22 @@
+{
+   "MET": {
+       "atoms": ["CB"],
+       "rate": 1.7,
+       "atom_idx": []
+   },
+   "TRP": {
+       "atoms": ["CB"],
+       "rate": 3.5,
+       "atom_idx": []
+   },
+   "TYR": {
+       "atoms": ["CB"],
+       "rate": 3.5,
+       "atom_idx": []
+   },
+   "HIS": {
+       "atoms": ["CB"],
+       "rate": 1.5,
+       "atom_idx": []
+   }
+}
