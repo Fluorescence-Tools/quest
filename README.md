@@ -15,15 +15,25 @@ PET-quenching of the dye by MET, PRO, TYR and TRP residues is approximated by a 
 
 # Building and installation
 
+## Versions
+
 There are two QuEST versions:
   1. GUI-QuEST a end-user software with graphical user interface for Windows 
   2. Command-QuEST a command line version for Windows, Linux and MacOS
 
 Both versions are documented in the Wiki of this repository [Wiki](https://github.com/Fluorescence-Tools/quest/wiki).
 
-### Windows GUI version
+## Windows GUI version
 
 The windows GUI version can be installed using the setup files (see [releases](https://github.com/Fluorescence-Tools/quest/releases)).
+
+## Command-QuEST
+
+# Usage
+
+## GUI-QuEST
+
+## Command-QuEST
 
 ## Warnings
   1. QuEST determines precise values that are not necessary accurate.
