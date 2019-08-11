@@ -1,0 +1,40 @@
+<RCC>
+  <qresource prefix="icons">
+    <file>icons/potential.ico</file>
+    <file>document-new.svg</file>
+    <file>preferences-system.svg</file>
+    <file>icons/pdb2label.ico</file>
+    <file>icons/hdf2pdb.ico</file>
+    <file>icons/list-add.svg</file>
+    <file>icons/edit-clear.svg</file>
+    <file>icons/accessories-calculator.svg</file>
+    <file>icons/FCS-Filter.ico</file>
+    <file>icons/FCS.ico</file>
+    <file>icons/structure2transfer.ico</file>
+    <file>icons/Peptide_FRET.ico</file>
+    <file>icons/filter.ico</file>
+    <file>icons/dye-diffusion.ico</file>
+    <file>document-open.svg</file>
+    <file>icons/Cone.ico</file>
+    <file>icons/TCSPC.ico</file>
+    <file>icons/Anisotropy-Lines.ico</file>
+    <file>icons/FRET-Lines.ico</file>
+    <file>icons/FRET.ico</file>
+    <file>icons/Cone.ico</file>
+    <file>icons/BOINCManager.png</file>
+    <file>icons/help-browser.svg</file>
+    <file>icons/document-open.svg</file>
+    <file>icons/Document-print.svg</file>
+    <file>icons/Document-print-preview.svg</file>
+    <file>icons/Document-save.svg</file>
+    <file>icons/Edit-delete.svg</file>
+    <file>icons/Edit-delete-2.svg</file>
+    <file>icons/System-log-out.svg</file>
+    <file>icons/kitesurf.png</file>
+    <file>icons/kitesurf.svg</file>
+  </qresource>
+  <qresource prefix="newPrefix"/>
+  <qresource prefix="newPrefix">
+    <file>icons/fortune.ico</file>
+  </qresource>
+</RCC>

@@ -1,4 +1,0 @@
-"""
-Stochastic reaction simulation
-"""
-
