@@ -1,4 +1,4 @@
-# QuEST - Quenching ESTimator
+# QuEst - Quenching Estimator
 
 ## General description
 
@@ -116,6 +116,19 @@ For more informations on accessible contact volumes (ACVs) see:
 [![DOI for citing LabelLib](https://img.shields.io/badge/DOI-10.1016%2Fj.sbi.2016.11.012-blue.svg)](https://doi.org/10.1016/j.sbi.2016.11.012)
 > Dimura, M., Peulen, T.O., Hanke, C.A., Prakash, A., Gohlke, H. and Seidel, C.A., 2016. Quantitative FRET studies and integrative modeling unravel the structure and dynamics of biomolecular systems. Current opinion in structural biology, 40, pp.163-185.
 
+
+# Contribute
+
+To improve our dye models we need a larger set of experimental data.
+If you are interested in using, and improving experimental coarse-
+grained dye models for integrative modelling. Independently if you 
+are a developer of not, you can contribute by
+
+* assembling more experimental data
+* improve the documentation
+
+If you are interested, sign up on GitHub, contact the developers, and
+put a star on this project.
 
 # Info
 
