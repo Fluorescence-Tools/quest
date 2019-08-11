@@ -36,6 +36,8 @@ using a command line interface (see documentation below).
 
 ![Simulation of dynamic quenching](https://github.com/Fluorescence-Tools/quest/blob/master/doc/img/readme_screenshot_3.png)
 
+Alternatively, QuEst can be used a library for potential integration
+into other simulations and/or data analysis pipelines (see [Jupyter Notebook](https://github.com/Fluorescence-Tools/quest/blob/master/notebooks/quenching_and_fret.ipynb))
 
 ## Potential use-cases
 
