@@ -2,11 +2,40 @@
 
 ## General description
 
-QUEST (QUenching ESTimation) simulates the dynamic quenching of xanthene dyes tethers to proteins by flexible linkers by simulating PET and the diffusion of dyes. 
+QUEST (QUenching ESTimation) simulates the dynamic quenching of xanthene 
+dyes tethers to proteins by flexible linkers by simulating PET and the 
+diffusion of dyes.
 
-In QUEST the dyes are approximated by a sphere diffusing within their accessible volume (AV) (see [labellib](https://github.com/Fluorescence-Tools/LabelLib)). 
+The dynamic quenching of a fluorescent dye coupled to a protein is 
+simulated in three steps:
 
-PET-quenching of the dye by MET, PRO, TYR and TRP residues is approximated by a step function where the dye is quenched with a provided rate contestant if it is closer than a given threshold distance.
+1. The dye's accessible volume (AV) is calculated, the positions of the 
+quenching amino acids are determined, to every quenching amino acid
+a quenching rate constant is assigned. 
+2. The diffusion of the dye within it's accessible volume is simulated
+using Brownian dynamics (BD) simulations. In the BD simulations a
+dye that is close to the vicinity of the protein diffuses slower due
+to unspecific interactions.
+3. The distance between the dye and the quenching amino acids is used
+to calculate the dye's fluorescence decay.
+
+![Simulation of dynamic quenching](https://github.com/Fluorescence-Tools/quest/blob/master/doc/img/readme_screenshot_0.png)
+
+
+In QUEST the dyes are approximated by a sphere diffusing within their 
+accessible volume (AV) (see [labellib](https://github.com/Fluorescence-Tools/LabelLib)). 
+
+PET-quenching of the dye by MET, PRO, TYR and TRP residues is 
+approximated by a step function where the dye is quenched with a 
+provided rate contestant if it is closer than a given threshold 
+distance.
+
+The relevant simulation parameters can be adjusted either in a 
+graphical user interface `quest_gui` or QuEst can be controlled
+using a command line interface (see documentation below).
+
+![Simulation of dynamic quenching](https://github.com/Fluorescence-Tools/quest/blob/master/doc/img/readme_screenshot_3.png)
+
 
 ## Potential use-cases
 
