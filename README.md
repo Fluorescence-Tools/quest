@@ -35,6 +35,37 @@ The windows GUI version can be installed using the setup files (see [releases](h
 
 ## Command-QuEST
 
+1) Go to the folder of the program in the command line (by clicking on shell.bat)
+2) run: "python estimate_qy.py xxxxxx" xxxx are the parameter
+3) mandatory parameters: the pdb-file, the chain id, the amino acid numbers
+
+The command line tools are located in the folder `tools`.
+
+Example
+-------
+
+```bash
+python estimate_qy.py -f 3q5d_fixed.pdb -c " " -p 11 401
+```
+The argument `-f` corresponds to the PDB file, `-c` to the chain ID,
+`-p` tp the labeled residue number
+
+To get a list of the parameters run:
+
+```bash
+python estimate_qy.py -h
+```
+
+Additionally, there is a helper script which replaces the resname 
+of a given residue with "ALA". This might be usefull if you want to 
+exclude one of the quenchers.
+
+```bash
+python hide_quencher.py     123        3q5d_fixed.pdb   out.pdb
+```
+where the first argument is the resid to exclude, the second is the
+PDB file, and the third is the ouput PDB filename.
+
 ## Warnings
   1. QuEST determines precise values that are not necessary accurate.
   2. QuEST was the first software to implement the ACVs. ACVs were later described in more detail (see: [COSB2016](https://doi.org/10.1016/j.sbi.2016.11.012). Differencies in the ACV implementation, may produce slightly different results.

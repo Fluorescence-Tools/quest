@@ -61,7 +61,7 @@ def calcQY(tup):
   hideQuencher(lp,tempPdb1.name,tempPdb2.name)
   
   
-  subprocess.call(['python', 'determine_qy.py','-f',tempPdb2.name,'-c',' ','-p',str(lp),'-o',outpPdb], shell=True)
+  subprocess.call(['python', 'estimate_qy.py','-f',tempPdb2.name,'-c',' ','-p',str(lp),'-o',outpPdb], shell=True)
   os.remove(tempPdb1.name)
   os.remove(tempPdb2.name)
 
