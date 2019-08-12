@@ -759,7 +759,7 @@ def get_residue_sequence(structure):
         return structure.io.sequence(structure)
 
 
-class Structure(lib.Data):
+class Structure(object):
 
     max_atom_residue = 16
 
@@ -844,7 +844,7 @@ class Structure(lib.Data):
         array([ 0.        ,  3.09665806, -3.08322105,  3.13562203,  3.09102453,...])
         """
 
-        lib.Data.__init__(self)
+        super(Structure, self).__init__(self)
         self.is_coarse = make_coarse
         self.verbose = verbose
         self.auto_update = auto_update

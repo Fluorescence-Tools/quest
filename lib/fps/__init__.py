@@ -1,17 +1,17 @@
 import os.path
 package_directory = os.path.dirname(os.path.abspath(__file__))
-
 import ctypes as C
 import platform
 import json
 import os
 from collections import OrderedDict
+
 import numpy as np
 from PyQt5 import QtGui, QtCore, uic, QtWidgets
 from lib.fps.fps import subav, simulate_traj, RDAMeanE, RDAMean, dRmp
 from lib.fps.fps import density2points, spherePoints, asa
 from lib.io import PDB
-from lib import Structure
+from lib.structure import Structure
 
 
 b, o = platform.architecture()
@@ -363,13 +363,13 @@ class AV(object):
             print("Linker-radius  : %.2f" % radius1)
             print("Attachment-atom: %i" % attachment_atom_index)
             print("AV-resolution  : %.2f" % simulation_grid_resolution)
-        if simulation_type == 'AV1':
-            points, density, ng, x0 = calculate1R(linker_length, linker_width, radius1, attachment_atom_index, x, y, z, vdw, verbose=verbose,
-                                                  linkersphere=allowed_sphere_radius, dg=simulation_grid_resolution)
-        elif simulation_type == 'AV3':
+        if simulation_type == 'AV3':
             points, density, ng, x0 = calculate3R(linker_length, linker_width, radius1, radius2, radius3,
                                                   attachment_atom_index, x, y, z, vdw, dg=simulation_grid_resolution, verbose=verbose,
                                                   linkersphere=allowed_sphere_radius)
+        else:
+            points, density, ng, x0 = calculate1R(linker_length, linker_width, radius1, attachment_atom_index, x, y, z, vdw, verbose=verbose,
+                                                  linkersphere=allowed_sphere_radius, dg=simulation_grid_resolution)
         self.ng = ng
         self.points = points
         self.points_fast = points
