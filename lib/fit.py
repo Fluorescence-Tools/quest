@@ -11,53 +11,6 @@ from lib import widgets
 import lib
 
 
-def walk_emcee(fit, steps, thin, nwalkers, chi2max, std):
-    ndim = fit.model.nFree
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, fit.lnprob, args=[chi2max])
-    std = np.array(fit.model.parameterValues) * std
-    pos = [fit.model.parameterValues + std*np.random.randn(ndim) for i in range(nwalkers)]
-    sampler.run_mcmc(pos, steps, thin=thin)
-    return [sampler.flatlnprobability, sampler.flatchain]
-
-
-def walk_mcmc(fit, steps, step_size, chi2max, temp, thin):
-    dim = fit.model.nFree
-    state_initial = fit.model.parameterValues
-    n_samples = steps // thin
-    # initialize arrays
-    lnp = np.empty(n_samples)
-    parameter = np.zeros((n_samples, dim))
-    n_accepted = 0
-    state_prev = np.copy(state_initial)
-    lnp_prev = np.array(fit.lnprob(state_initial))
-    while n_accepted < n_samples:
-        state_next = state_prev + np.random.normal(0.0, step_size, dim) * state_initial
-        lnp_next = fit.lnprob(state_next, chi2max)
-        if not np.isfinite(lnp_next):
-            continue
-        if (-lnp_next + lnp_prev)/temp > np.log(np.random.rand()):
-            # save results
-            parameter[n_accepted] = state_next
-            lnp[n_accepted] = lnp_next
-            # switch previous and next
-            np.copyto(state_prev, state_next)
-            np.copyto(lnp_prev, lnp_next)
-            n_accepted += 1
-    return [lnp, parameter]
-
-
-def lnprior(bounds, parameters):
-    for (bound, value) in zip(bounds, parameters):
-        lb, ub = bound
-        if lb is not None:
-            if value < lb:
-                return -np.inf
-        if ub is not None:
-            if value > ub:
-                return -np.inf
-    return 0.0
-
-
 class Variable(Genealogy):
 
     def __init__(self, value=None, lb=None, ub=None, name='', model=None,
@@ -526,27 +479,7 @@ class Surface(object):
             return np.array([[0], [0]]).T
 
     def run(self):
-        print("Surface:run")
-        self.clear()
-        fit = self.fit.clean()
-        self.parameterNames = fit.model.parameterNames + ['chi2r']
-        self._parameterNames = self.fit.model.parameterNames
-
-        pool = multiprocessing.Pool()
-        if self.method == 'emcee':
-            results = [pool.apply_async(walk_emcee, (fit, self.steps,
-                                                     self.thin, self.nwalker, self.maxchi2, self.step_size))
-                       for i in range(self.nprocs)]
-        elif self.method == 'mcmc':
-            results = [pool.apply_async(walk_mcmc, (fit, self.steps, self.step_size, self.maxchi2,
-                                                    self.temperature, self.thin))
-                       for i in range(self.nprocs)]
-        for r in results:
-            lnProb, parameter = r.get()
-            chi2 = lnProb * -2.0 / float(self.fit.model.numberOfPoints - self.fit.model.nFree - 1.0)
-            mask = np.where(np.isfinite(chi2))
-            self._chi2.append(chi2[mask])
-            self._parameter.append(parameter[mask])
+        pass
 
 
 class SurfaceThread(Surface, QtCore.QThread):
@@ -600,7 +533,6 @@ class FittingWidget(QtWidgets.QWidget):
 
     def onFitDone(self):
         self.fit.model.updateAll()
-        widgets.MyMessageBox('Fitting finished', info=str(self.fit))
         self.pushButton_fit.setEnabled(True)
 
     def onFitRangeChanged(self):
@@ -806,7 +738,6 @@ class ErrorWidget(QtWidgets.QWidget):
 
     def onFinished(self):
         self.pushButton_runChi2.setEnabled(True)
-        widgets.MyMessageBox('Error-analysis finished')
         self.fit.model.updateAll()
 
     def onChi2MinChanged(self):
