@@ -6,13 +6,16 @@ from lib import Genealogy
 
 class Data(Genealogy):
 
-    def __init__(self, origin=None):
+    def __init__(
+            self,
+            origin=Genealogy
+    ):
         self._name = None
         Genealogy.__init__(self)
         self.origin = origin
 
     @property
-    def name(self):
+    def name(self) -> str:
         if self._name is None:
             try:
                 fn = copy(self.filename)
@@ -23,15 +26,19 @@ class Data(Genealogy):
             return self._name
 
     @name.setter
-    def name(self, v):
+    def name(
+            self,
+            v: str
+    ):
         self._name = v
 
     def __str__(self):
-        s = "origin: " + self.origin + "\n"
+        s = "origin: " + str(self.origin) + "\n"
         return s
 
 
 class Curve(object):
+
     def __init__(self, **kwargs):
         """
         The `Curve`-class takes x and y values of a curve and implements some useful magic-members
@@ -111,7 +118,11 @@ class Curve(object):
 
 class DataCurve(Data, Curve):
 
-    def __init__(self, filename="", skiprows=9):
+    def __init__(
+            self,
+            filename:str = "",
+            skiprows: int = 9
+    ):
         Curve.__init__(self)
         Data.__init__(self)
         self.filename = filename
@@ -137,23 +148,38 @@ class DataCurve(Data, Curve):
             s = "No data\n"
         return s
 
-    def setData(self, filename, x, y, weights):
+    def setData(
+            self,
+            filename: str,
+            x: np.array,
+            y: np.array,
+            weights: np.array
+    ):
         self.filename = filename
         self._weights = weights
         self.x = x
         self.y = y
         self._len = len(x)
 
-    def loadData(self, filename):
+    def loadData(
+            self,
+            filename: str
+    ):
         if os.path.isfile(filename):
             self.x, self.y = np.loadtxt(filename, unpack=True, skiprows=self.skiprows)
             self._len = len(self.y)
             self._weights = np.ones(self.y.shape)
 
-    def set_weights(self, w):
+    def set_weights(
+            self,
+            w: np.array
+    ):
         self._weights = w
 
-    def __getitem__(self, key):
+    def __getitem__(
+            self,
+            key: str
+    ):
         xmin, xmax = 0, len(self.y)
         start = xmin if key.start is None else key.start
         stop = xmax if key.stop is None else key.stop
@@ -172,44 +198,53 @@ class DataCurve(Data, Curve):
         c.y = y
         return c
     
-    def __len__(self):
+    def __len__(self) -> int:
         try:
             return self._len
         except AttributeError:
             return len(self.y)
 
     @property
-    def dt(self):
+    def dt(self) -> float:
         if len(self.x) > 1:
             return self.x[1] - self.x[0]
         else:
             return 1.0
 
     @property
-    def ex(self):
+    def ex(self) -> np.array:
         return self._ex
 
     @ex.setter
-    def ex(self, v):
+    def ex(
+            self,
+            v: np.array
+    ):
         self._ex = v
 
     @property
-    def ey(self):
+    def ey(self) -> np.array:
         return self._ey
 
     @ey.setter
-    def ey(self, v):
+    def ey(
+            self,
+            v: np.array
+    ):
         self._ey = v
 
     @property
-    def weights(self):
+    def weights(self) -> np.array:
         if self._weights is None:
             return 1./self.ey
         else:
             return self._weights
 
     @weights.setter
-    def weights(self, v):
+    def weights(
+            self,
+            v: np.array
+    ):
         self._weights = v
 
     def clean(self):

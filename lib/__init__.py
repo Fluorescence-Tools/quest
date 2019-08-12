@@ -9,13 +9,14 @@ from . import ui
 from . import io
 import json
 from . import tools
+from typing import List
 
 rootNode = Genealogy()
 rootNode.name = 'rootNode'
 fits = []
 
 
-def getDataCurves():
+def getDataCurves() -> List[Genealogy]:
     """
     Returns all curves `lib.DataCurve` except if the curve is names "Global-fit"
     """
