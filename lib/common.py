@@ -25,13 +25,6 @@ MAX_BONDS = {'H': 1,
              'P': 5
 }
 
-# Dictionary of FRET-conversion functions (polynomal coefficents)
-FRET = {"RDA2Rmp": [-14.454, 1.45246, -0.0052, 1.9e-5],
-        "Rmp2RDA": [12.57637, 0.584808, 0.005067, 0.000021],
-        "RDAE2Rmp": [-33.132620, 1.963202, -0.008030, 0.000021],
-        "Rmp2RDAE": [19.455314, 0.507799, 0.002925, -0.000003]
-}
-
 # For Center of Mass Calculation.
 # Taken from http://www.chem.qmul.ac.uk/iupac/AtWt/ & PyMol
 atom_weights = {
@@ -276,18 +269,3 @@ AA3_TO_ID = dict([(aa[0], i) for i, aa in enumerate(_aa_index)])
 # Types of coordinate entries
 COORD_RECORDS = ["ATOM  ", "HETATM"]
 
-def convFRET2Rmp(type, dFRET):
-    """
-    Convert different types of distances (<RDA>, <RDA>E)using a standard polynomial as defined in the
-    common.py file.
-
-    :param type: either RDA or RDAE
-    :param dFRET: float (the distance)
-    :return: float distance between mean-positions
-    """
-    if type == 'RDA':
-        c = FRET['RDA2Rmp']
-    elif type == 'RDAE':
-        c = FRET['RDAE2Rmp']
-    Rmp = c[0] + c[1] * dFRET + c[2] * dFRET ** 2 + c[3] * dFRET ** 3
-    return Rmp

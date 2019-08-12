@@ -1,7 +1,6 @@
 __author__ = 'thomas'
 import numpy as np
 
-from . import filter
 from . import datatools
 
 

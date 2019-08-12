@@ -34,7 +34,6 @@ if args.count("build_ext") > 0 and args.count("--inplace") == 0:
 # and build up the set of Extension objects
 eList = [
     ['./lib/fps/fps.pyx', './lib/fps/mt19937cok.cpp'],
-    ['./lib/io/tttrlib.pyx'],
     ['./lib/math/functions/rdf.pyx'],
     ['./lib/math/functions/small.pyx'],
     ['./lib/math/linalg/vector.pyx'],

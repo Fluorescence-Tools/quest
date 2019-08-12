@@ -44,57 +44,6 @@ def hist2func(x, H, binEdges):
         raise TypeError('unknon input type')
 
 
-def cartesian(arrays, out=None):
-    """
-    Generate a cartesian product of input arrays.
-
-    Parameters
-    ----------
-    arrays : list of array-like
-        1-D arrays to form the cartesian product of.
-    out : ndarray
-        Array to place the cartesian product in.
-
-    Returns
-    -------
-    out : ndarray
-        2-D array of shape (M, len(arrays)) containing cartesian products
-        formed of input arrays.
-
-    Examples
-    --------
-    >>> cartesian(([1, 2, 3], [4, 5], [6, 7]))
-    array([[1, 4, 6],
-           [1, 4, 7],
-           [1, 5, 6],
-           [1, 5, 7],
-           [2, 4, 6],
-           [2, 4, 7],
-           [2, 5, 6],
-           [2, 5, 7],
-           [3, 4, 6],
-           [3, 4, 7],
-           [3, 5, 6],
-           [3, 5, 7]])
-
-    """
-
-    arrays = [numpy.asarray(x) for x in arrays]
-    dtype = arrays[0].dtype
-
-    n = numpy.prod([x.size for x in arrays])
-    if out is None:
-        out = numpy.zeros([n, len(arrays)], dtype=dtype)
-
-    m = n / arrays[0].size
-    out[:,0] = numpy.repeat(arrays[0], m)
-    if arrays[1:]:
-        cartesian(arrays[1:], out=out[0:m,1:])
-        for j in range(1, arrays[0].size):
-            out[j*m:(j+1)*m,1:] = out[0:m,1:]
-    return out
-
-
 def overlapping_region(dataset1, dataset2):
     x1, y1 = dataset1
     x2, y2 = dataset2
@@ -140,6 +89,7 @@ def overlapping_region(dataset1, dataset2):
     oy2 = y2.compressed()
     
     return (ox1, oy1), (ox2, oy2)
+
 
 def align_x_spacing(dataset1, dataset2, method = 'linear-close'):
     (ox1, oy1), (ox2, oy2) = dataset1, dataset2
@@ -198,42 +148,3 @@ def align_x_spacing(dataset1, dataset2, method = 'linear-close'):
         ry1 = ty            
     return ((rx1, ry1), (rx2, ry2))
 
-if __name__ == "__main__":
-    print("Test align_x_spacing")
-    import matplotlib.pylab as p
-    x1 = numpy.linspace(-1, 12, 10)
-    y1 = numpy.cos(x1)
-    a1 = (x1, y1)
-    
-    x2 = numpy.linspace(-1, 12, 10)
-    y2 = numpy.sin(x2)
-    a2 = (x2, y2)
-    
-    (rx1, ry1), (rx2, ry2) = align_x_spacing(a1, a2)
-    p.plot(x1, y1, 'r')
-    p.plot(rx1, ry1, 'k')
-    p.plot(x2, y2, 'g')
-    p.plot(rx2, ry2, 'b')
-    p.show()
-    
-    print("Test overlay")
-    import matplotlib.pylab as p
-    x1 = numpy.linspace(-5, 5, 10)
-    y1 = numpy.sin(x1)
-    a1 = (x1, y1)
-    
-    x2 = numpy.linspace(0, 10, 10)
-    y2 = numpy.sin(x2)
-    a2 = (x2, y2)
-    
-    (rx1, ry1), (rx2, ry2) = overlay(a1, a2)
-    print(ry1)
-    print(ry2)
-
-    p.plot(x1, y1, 'r')
-    p.plot(rx1, ry1, 'k')
-    p.plot(x2, y2, 'g')
-    p.plot(rx2, ry2, 'b')
-    p.show()    
-         
-        
