@@ -2,10 +2,10 @@ __author__ = 'thomas'
 import os
 import sys
 
-from PyQt4 import QtGui, QtCore, uic
+from PyQt5 import QtGui, QtCore, uic, QtWidgets
 from OpenGL.GL import *
-from PyQt4.QtOpenGL import *
-from PyQt4.Qt import Qt
+from PyQt5.QtOpenGL import *
+from PyQt5.Qt import Qt
 
 from lib.plots.plotbase import Plot
 
@@ -171,13 +171,13 @@ class MolQtWidget(QGLWidget):
 
 
 
-class ControlWidget(QtGui.QWidget):
+class ControlWidget(QtWidgets.QWidget):
 
     history = ['spectrum count, rainbow_rev, all, byres=1',
                'intra_fit all']
 
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
         uic.loadUi('experiments/plots/ui/molViewControlWidget.ui', self)
         self.parent = parent
 

@@ -7,7 +7,7 @@ import json
 import os
 from collections import OrderedDict
 import numpy as np
-from PyQt4 import QtCore, QtGui, uic
+from PyQt5 import QtGui, QtCore, uic, QtWidgets
 from lib.fps.fps import subav, simulate_traj, RDAMeanE, RDAMean, dRmp
 from lib.fps.fps import density2points, spherePoints, asa
 from lib.io import PDB
@@ -613,17 +613,17 @@ class AvPotential(object):
         return self.getChi2()
 
 
-class AvWidget(AvPotential, QtGui.QWidget):
+class AvWidget(AvPotential, QtWidgets.QWidget):
 
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self, parent=parent)
+        QtWidgets.QWidget.__init__(self, parent=parent)
         uic.loadUi('./lib/fps/avWidget.ui', self)
         AvPotential.__init__(self)
         self._filename = None
         self.connect(self.actionOpenLabeling, QtCore.SIGNAL("triggered()"), self.onLoadAvJSON)
 
     def onLoadAvJSON(self):
-        self.filename = str(QtGui.QFileDialog.getOpenFileName(None, 'Open FRET-JSON', '', 'link file (*.fps.json)'))
+        self.filename = str(QtWidgets.QFileDialog.getOpenFileName(None, 'Open FRET-JSON', '', 'link file (*.fps.json)')[0])
 
     @property
     def filename(self):

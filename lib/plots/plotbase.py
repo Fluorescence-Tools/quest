@@ -1,12 +1,12 @@
-from PyQt4 import QtGui
+from PyQt5 import QtGui, QtCore, uic, QtWidgets
 
 from lib import Genealogy
 
 
-class Plot(QtGui.QWidget, Genealogy):
+class Plot(QtWidgets.QWidget, Genealogy):
     def __init__(self, parent=None):
         Genealogy.__init__(self)
-        QtGui.QWidget.__init__(self, parent)
+        QtWidgets.QWidget.__init__(self, parent)
         parent = parent
         self.widgets = []
 
@@ -26,7 +26,7 @@ class Plot(QtGui.QWidget, Genealogy):
         pass
 
     def close(self):
-        QtGui.QWidget.close(self)
+        QtWidgets.QWidget.close(self)
         try:
             self.pltControl.close()
         except AttributeError:

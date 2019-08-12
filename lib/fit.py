@@ -2,7 +2,7 @@ import multiprocessing
 import os
 
 import numpy as np
-from PyQt4 import QtCore, QtGui, uic
+from PyQt5 import QtGui, QtCore, uic, QtWidgets
 from scipy.stats import f as fdist
 import emcee
 
@@ -566,11 +566,10 @@ class SurfaceThread(Surface, QtCore.QThread):
         self.fit.model.updatePlots()
 
 
-
-class FittingWidget(QtGui.QWidget):
+class FittingWidget(QtWidgets.QWidget):
 
     def __init__(self, fit=None, **kwargs):
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
         hide_fit_button = kwargs.get('hide_fit_button', False)
         auto_range = kwargs.get('auto_range', True)
         hide_range = kwargs.get('hide_range', False)
@@ -629,7 +628,7 @@ class FittingWidget(QtGui.QWidget):
             self.spinBox_2.setValue(int(xmax))
 
 
-class VariableWidget(QtGui.QWidget, Variable):
+class VariableWidget(QtWidgets.QWidget, Variable):
 
     def make_linkcall(self, target):
         def linkcall():
@@ -661,7 +660,7 @@ class VariableWidget(QtGui.QWidget, Variable):
     def __init__(self, name, value, model=None,
                  ub=None, lb=None, layout=None, **kwargs):
         parent = kwargs.get('parent', None)
-        QtGui.QWidget.__init__(self, parent)
+        QtWidgets.QWidget.__init__(self, parent)
         uic.loadUi('lib/ui/variable_widget.ui', self)
         if layout is not None:
             layout.addWidget(self)
@@ -782,10 +781,10 @@ class VariableWidget(QtGui.QWidget, Variable):
         return re
 
 
-class ErrorWidget(QtGui.QWidget):
+class ErrorWidget(QtWidgets.QWidget):
 
     def __init__(self, fit=None, **kwargs):
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
         uic.loadUi("lib/ui/errorWidget_2.ui", self)
         self.fit = fit
         self.parent = kwargs.get('parent', None)
@@ -834,7 +833,7 @@ class ErrorWidget(QtGui.QWidget):
             self.fit.model.updatePlots()
 
     def onSaveChi2Surface(self):
-        filename = str(QtGui.QFileDialog.getSaveFileName(self, 'Save File', '.'))
+        filename = str(QtWidgets.QFileDialog.getSaveFileName(self, 'Save File', '.'))
         self.fit.surface.saveSurface(filename)
 
     @property

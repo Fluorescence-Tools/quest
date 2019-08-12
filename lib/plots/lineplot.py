@@ -1,4 +1,4 @@
-from PyQt4 import QtGui, QtCore, uic
+from PyQt5 import QtGui, QtCore, uic, QtWidgets
 import numpy as np
 from guiqwt.plot import CurveDialog
 from guiqwt.builder import make
@@ -7,9 +7,9 @@ from lib.plots.plotbase import Plot
 from lib.math.functions import autocorr
 
 
-class linePlotWidget(QtGui.QWidget):
+class linePlotWidget(QtWidgets.QWidget):
     def __init__(self, parent=None, d_scalex='lin', d_scaley='log', r_scalex='lin', r_scaley='lin'):
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
         uic.loadUi('experiments/plots/ui/linePlotWidget.ui', self)
         self.parent = parent
 

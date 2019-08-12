@@ -1,4 +1,4 @@
-from PyQt4 import QtGui, QtCore, uic
+from PyQt5 import QtGui, QtCore, uic, QtWidgets
 import numpy as np
 from guiqwt.plot import CurveDialog, ImageDialog
 from guiqwt.builder import make
@@ -6,14 +6,14 @@ from lib.plots.plotbase import Plot
 from lib import VariableWidget
 
 
-class SurfacePlotWidget(QtGui.QWidget):
+class SurfacePlotWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
         self.xmin = VariableWidget('', 0.0, model=parent, hide_fix_checkbox=True, hide_link=True)
         self.xmax = VariableWidget('', 0.0, model=parent, hide_fix_checkbox=True, hide_link=True)
         self.ymin = VariableWidget('', 0.0, model=parent, hide_fix_checkbox=True, hide_link=True)
         self.ymax = VariableWidget('', 0.0, model=parent, hide_fix_checkbox=True, hide_link=True)
 
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
         uic.loadUi('experiments/plots/ui/chi2Hist.ui', self)
         self.horizontalLayout.addWidget(self.xmin)
         self.horizontalLayout.addWidget(self.xmax)
@@ -47,7 +47,7 @@ class SurfacePlotWidget(QtGui.QWidget):
         self.update()
 
     def update(self):
-        QtGui.QWidget.update(self)
+        QtWidgets.QWidget.update(self)
         self.comboBox.blockSignals(True)
         self.comboBox_2.blockSignals(True)
         pn = self.parent.source.parameterNames

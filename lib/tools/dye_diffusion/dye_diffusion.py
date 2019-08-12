@@ -7,7 +7,7 @@ import tempfile
 
 import numpy as np
 import numexpr as ne
-from PyQt4 import QtCore, QtGui, uic
+from PyQt5 import QtGui, QtCore, uic, QtWidgets
 from guiqwt.plot import CurveDialog
 from guiqwt.builder import make
 
@@ -348,7 +348,6 @@ class SimulateDiffusion(object):
             print(self._quencher_distances)
 
 
-
 class DonorDecay(object):
 
     def __init__(self, tau0=None, kQ=1.0, nph=0, verbose=False, auto_update=False, pdb=None,
@@ -465,7 +464,6 @@ class DonorDecay(object):
         tf = tempfile.NamedTemporaryFile(suffix=".pdb")
         self._tmp_file = tf.name
         tf.close()
-        print self._tmp_file
         self._structure.write(self._tmp_file)
 
     def calc_av(self, verbose=False):
@@ -559,12 +557,12 @@ class DonorDecay(object):
         self.calc_photons(verbose=verbose)
 
 
-class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
+class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
 
     name = "Lifetime-Calculator"
 
     def __init__(self, verbose=False, settings_file='./settings/dye_diffusion.json'):
-        QtGui.QWidget.__init__(self)
+        super(TransientDecayGenerator, self).__init__()
         uic.loadUi('./lib/ui/dye_diffusion2.ui', self)
         self.pdb_selector = PDBSelector()
         self.verticalLayout_10.addWidget(self.pdb_selector)
@@ -576,14 +574,14 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
         DonorDecay.__init__(self, **settings)
         ## User-interface
-        self.connect(self.actionLoad_PDB, QtCore.SIGNAL('triggered()'), self.onLoadPDB)
-        self.connect(self.actionLoad_settings, QtCore.SIGNAL('triggered()'), self.onLoadSettings)
+        self.actionLoad_PDB.triggered.connect(self.onLoadPDB)
+        self.actionLoad_settings.triggered.connect(self.onLoadSettings)
 
-        self.connect(self.doubleSpinBox_6, QtCore.SIGNAL("valueChanged(double)"), self.onSimulationTimeChanged)
-        self.connect(self.doubleSpinBox_7, QtCore.SIGNAL("valueChanged(double)"), self.onSimulationDtChanged)
-        self.connect(self.pushButton_3, QtCore.SIGNAL("clicked()"), self.update_all)
-        self.connect(self.pushButton_4, QtCore.SIGNAL("clicked()"), self.onSaveHist)
-        self.connect(self.pushButton_5, QtCore.SIGNAL("clicked()"), self.onSaveAV)
+        self.doubleSpinBox_6.valueChanged.connect(self.onSimulationTimeChanged)
+        self.doubleSpinBox_7.valueChanged.connect(self.onSimulationDtChanged)
+        self.pushButton_3.clicked.connect(self.update_all)
+        self.pushButton_4.clicked.connect(self.onSaveHist)
+        self.pushButton_5.clicked.connect(self.onSaveAV)
 
         self.tmp_dir = tempfile.gettempdir()
         print("Temporary Directory: %s" % self.tmp_dir)
@@ -625,7 +623,7 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     def onSaveHist(self, verbose=False):
         verbose = self.verbose or verbose
-        filename = QtGui.QFileDialog.getSaveFileName(self, 'Save File', '.')
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, 'Save File', '.')
         self.save_histogram(filename=filename, verbose=verbose)
 
     def molview_highlight_quencher(self):
@@ -646,7 +644,7 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @settings_file.setter
     def settings_file(self, v):
-        return self.lineEdit_2.setText(v)
+        self.lineEdit_2.setText(v)
 
     @property
     def load_3d_av(self):
@@ -709,7 +707,7 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
             print("\nWriting AVs to directory")
             print("-------------------------")
         if directory is None:
-            directory = str(QtGui.QFileDialog.getExistingDirectory(self, 'Choose directory', '.'))
+            directory = str(QtWidgets.QFileDialog.getExistingDirectory(self, 'Choose directory', '.'))
         if verbose:
             print("Directory: %s" % directory)
             print("Filename-Prefix: %s" % str(self.filename_prefix))
@@ -739,7 +737,10 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @all_quencher_atoms.setter
     def all_quencher_atoms(self, v):
-        self.groupBox_5.setChecked(not v)
+        try:
+            self.groupBox_5.setChecked(not v)
+        except AttributeError:
+            pass
 
     @property
     def filename_prefix(self):
@@ -762,7 +763,7 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
         self.spinBox.setValue(int(time_steps))
 
     def onLoadPDB(self):
-        self.pdb_filename = str(QtGui.QFileDialog.getOpenFileName(None, 'Open PDB-File', '', 'PDB-files (*.pdb)'))
+        self.pdb_filename = str(QtWidgets.QFileDialog.getOpenFileName(None, 'Open PDB-File', '', 'PDB-files (*.pdb)')[0])
         self.structure = self.pdb_filename
         self.pdb_selector.atoms = self.structure.atoms
         self.tmp_dir = tempfile.gettempdir()
@@ -774,7 +775,10 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @dg.setter
     def dg(self, v):
-        self.doubleSpinBox_17.setValue(float(v))
+        try:
+            self.doubleSpinBox_17.setValue(float(v))
+        except AttributeError:
+            pass
 
     @property
     def slow_radius(self):
@@ -782,7 +786,10 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @slow_radius.setter
     def slow_radius(self, v):
-        self.doubleSpinBox_10.setValue(v)
+        try:
+            self.doubleSpinBox_10.setValue(v)
+        except AttributeError:
+            pass
 
     @property
     def nBins(self):
@@ -794,7 +801,10 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @n_photons.setter
     def n_photons(self, v):
-        return self.doubleSpinBox_11.setValue(v / 1e6)
+        try:
+            self.doubleSpinBox_11.setValue(v / 1e6)
+        except AttributeError:
+            pass
 
     @property
     def quencher(self):
@@ -811,7 +821,10 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
         s = ""
         for resID in list(v.keys()):
             s += " "+resID
-        self.lineEdit_3.setText(s)
+        try:
+            self.lineEdit_3.setText(s)
+        except AttributeError:
+            pass
 
     @property
     def sticky_mode(self):
@@ -822,15 +835,18 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @sticky_mode.setter
     def sticky_mode(self, v):
-        print("set sticky: ")
-        if v == 'surface':
-            print("surface")
-            self.radioButton.setChecked(True)
-            self.radioButton_2.setChecked(False)
-        elif v == 'quencher':
-            print("quencher")
-            self.radioButton.setChecked(False)
-            self.radioButton_2.setChecked(True)
+        try:
+            print("set sticky: ")
+            if v == 'surface':
+                print("surface")
+                self.radioButton.setChecked(True)
+                self.radioButton_2.setChecked(False)
+            elif v == 'quencher':
+                print("quencher")
+                self.radioButton.setChecked(False)
+                self.radioButton_2.setChecked(True)
+        except AttributeError:
+            pass
 
     @property
     def av_parameter(self):
@@ -842,9 +858,12 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @av_parameter.setter
     def av_parameter(self, d):
-        self.doubleSpinBox.setValue(d['linker_length'])
-        self.doubleSpinBox_2.setValue(d['linker_width'])
-        self.doubleSpinBox_3.setValue(d['radius1'])
+        try:
+            self.doubleSpinBox.setValue(d['linker_length'])
+            self.doubleSpinBox_2.setValue(d['linker_width'])
+            self.doubleSpinBox_3.setValue(d['radius1'])
+        except AttributeError:
+            pass
 
     @property
     def critical_distance(self):
@@ -852,7 +871,10 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @critical_distance.setter
     def critical_distance(self, v):
-        self.doubleSpinBox_12.setValue(float(v))
+        try:
+            self.doubleSpinBox_12.setValue(float(v))
+        except AttributeError:
+            pass
 
     @property
     def slow_fact(self):
@@ -860,7 +882,10 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @slow_fact.setter
     def slow_fact(self, v):
-        self.doubleSpinBox_5.setValue(float(v))
+        try:
+            self.doubleSpinBox_5.setValue(float(v))
+        except AttributeError:
+            pass
 
     @property
     def t_max(self):
@@ -871,8 +896,11 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @t_max.setter
     def t_max(self, v):
-        self.onSimulationTimeChanged()
-        self.doubleSpinBox_6.setValue(float(v / 1000.0))
+        try:
+            self.onSimulationTimeChanged()
+            self.doubleSpinBox_6.setValue(float(v / 1000.0))
+        except AttributeError:
+            pass
 
     @property
     def t_step(self):
@@ -883,8 +911,11 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @t_step.setter
     def t_step(self, v):
-        self.onSimulationTimeChanged()
-        return self.doubleSpinBox_7.setValue(float(v * 1000.0))
+        try:
+            self.onSimulationTimeChanged()
+            self.doubleSpinBox_7.setValue(float(v * 1000.0))
+        except AttributeError:
+            pass
 
     @property
     def diffusion_coefficient(self):
@@ -892,7 +923,10 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @diffusion_coefficient.setter
     def diffusion_coefficient(self, v):
-        self.doubleSpinBox_4.setValue(v)
+        try:
+            self.doubleSpinBox_4.setValue(v)
+        except AttributeError:
+            pass
 
     @property
     def kQ(self):
@@ -900,7 +934,10 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @kQ.setter
     def kQ(self, v):
-        return self.doubleSpinBox_9.setValue(float(v))
+        try:
+            self.doubleSpinBox_9.setValue(float(v))
+        except AttributeError:
+            pass
 
     @property
     def tau0(self):
@@ -908,7 +945,10 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @tau0.setter
     def tau0(self, v):
-        return self.doubleSpinBox_8.setValue(float(v))
+        try:
+            self.doubleSpinBox_8.setValue(float(v))
+        except AttributeError:
+            pass
 
     @property
     def attachment_chain(self):
@@ -916,7 +956,10 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @attachment_chain.setter
     def attachment_chain(self, v):
-        self.pdb_selector.chain_id = v
+        try:
+            self.pdb_selector.chain_id = v
+        except AttributeError:
+            pass
 
     @property
     def attachment_residue(self):
@@ -924,7 +967,10 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @attachment_residue.setter
     def attachment_residue(self, v):
-        self.pdb_selector.residue_id = v
+        try:
+            self.pdb_selector.residue_id = v
+        except AttributeError:
+            pass
 
     @property
     def attachment_atom(self):
@@ -932,7 +978,10 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @attachment_atom.setter
     def attachment_atom(self, v):
-        self.pdb_selector.atom_name = v
+        try:
+            self.pdb_selector.atom_name = v
+        except AttributeError:
+            pass
 
     @property
     def pdb_filename(self):
@@ -940,6 +989,9 @@ class TransientDecayGenerator(QtGui.QWidget, DonorDecay):
 
     @pdb_filename.setter
     def pdb_filename(self, value):
-        self.lineEdit.setText(value)
+        try:
+            self.lineEdit.setText(value)
+        except AttributeError:
+            pass
 
 

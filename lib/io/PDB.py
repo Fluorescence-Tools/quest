@@ -101,7 +101,7 @@ def read(filename, assignCharge=False, verbose=True):
                     if atoms['res_name'][ni] in common.CHARGE_DICT:
                         if atoms['atom_name'][ni] == common.TITR_ATOM_COARSE[atoms['res_name'][ni]]:
                             atoms['charge'][ni] = common.CHARGE_DICT[atoms['res_name'][ni]]
-                atoms['element'][ni] = assign_element(atoms['atom_name'][ni])
+                atoms['element'][ni] = assign_element(str(atoms['atom_name'][ni]))
                 atoms['mass'][ni] = common.atom_weights[atoms['element'][ni]]
                 atoms['radius'][ni] = common.VDW_DICT[atoms['element'][ni]]
             except KeyError:

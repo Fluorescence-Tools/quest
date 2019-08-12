@@ -1,8 +1,7 @@
 import os
 import pickle
 import random
-from PyQt4 import QtGui, QtCore, uic
-#from PyQt4.QtCore import pyqtSignal
+from PyQt5 import QtGui, QtCore, uic, QtWidgets
 from lib.structure import Structure, TrajectoryFile
 import numpy as np
 import lib
@@ -38,10 +37,10 @@ def get_fortune(fortunepath='./lib/ui/fortune/', min_length=0, max_length=100, a
         return fortunecookie
 
 
-class AVProperties(QtGui.QWidget):
+class AVProperties(QtWidgets.QWidget):
 
     def __init__(self, av_type="AV1"):
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
         uic.loadUi('./lib/ui/av_property.ui', self)
         self._av_type = av_type
         self.av_type = av_type
@@ -141,21 +140,18 @@ class AVProperties(QtGui.QWidget):
         self.doubleSpinBox_9.setValue(v)
 
 
-class PDBSelector(QtGui.QWidget):
+class PDBSelector(QtWidgets.QWidget):
 
     def __init__(self, show_labels=True, update=None):
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
         uic.loadUi('./lib/tools/dye_diffusion/ui/pdb_widget.ui', self)
         self._pdb = None
-        self.connect(self.comboBox, QtCore.SIGNAL("currentIndexChanged(int)"), self.onChainChanged)
-        self.connect(self.comboBox_2, QtCore.SIGNAL("currentIndexChanged(int)"), self.onResidueChanged)
+        self.comboBox.currentIndexChanged.connect(self.onChainChanged)
+        self.comboBox_2.currentIndexChanged.connect(self.onResidueChanged)
         if not show_labels:
             self.label.hide()
             self.label_2.hide()
             self.label_3.hide()
-        if update is not None:
-            self.connect(self.comboBox_2, QtCore.SIGNAL("currentIndexChanged(int)"), update)
-            self.connect(self.comboBox_2, QtCore.SIGNAL("currentIndexChanged(int)"), update)
 
     @property
     def atoms(self):
@@ -233,31 +229,26 @@ class PDBSelector(QtGui.QWidget):
     def update_chain(self):
         self.comboBox.clear()
         chain_ids = list(set(self.atoms['chain'][:]))
+        chain_ids = [str(c) for c in chain_ids]
         self.comboBox.addItems(chain_ids)
 
 
-class MyMessageBox(QtGui.QMessageBox):
+class MyMessageBox(QtWidgets.QMessageBox):
 
     def __init__(self, label=None, info=None):
-        QtGui.QMessageBox.__init__(self)
+        QtWidgets.QMessageBox.__init__(self)
         self.Icon = 1
         self.setSizeGripEnabled(True)
-        self.setIcon(QtGui.QMessageBox.Information)
+        self.setIcon(QtWidgets.QMessageBox.Information)
         if label is not None:
             self.setWindowTitle(label)
         if info is not None:
             self.setDetailedText(info)
-        if lib.fortune_properties['enabled']:
-            fortune = get_fortune(**lib.fortune_properties)
-            self.setInformativeText(fortune)
-            self.exec_()
-            self.setMinimumWidth(450)
-            self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
         else:
             self.close()
 
     def event(self, e):
-        result = QtGui.QMessageBox.event(self, e)
+        result = QtWidgets.QMessageBox.event(self, e)
 
         self.setMinimumHeight(0)
         self.setMaximumHeight(16777215)
@@ -275,7 +266,7 @@ class MyMessageBox(QtGui.QMessageBox):
         return result
 
 
-class CurveSelector(QtGui.QListWidget):
+class CurveSelector(QtWidgets.QListWidget):
 
     @property
     def curve_name(self):
@@ -301,22 +292,23 @@ class CurveSelector(QtGui.QListWidget):
             return None
 
     def show(self):
-        QtGui.QListWidget.show(self)
+        QtWidgets.QListWidget.show(self)
         if len(self.datasets) == 0:
             self.hide()
         self.clear()
         self.addItems([d.name for d in self.datasets])
 
     def __init__(self, **kwargs):
-        QtGui.QListWidget.__init__(self, **kwargs)
+        QtWidgets.QListWidget.__init__(self, **kwargs)
         self.resize(300, 150)
         self.doubleClicked.connect(self.hide)
         self.clicked.connect(self.hide)
         self.hide()
 
-class PDBLoad(QtGui.QWidget):
+
+class PDBLoad(QtWidgets.QWidget):
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
         uic.loadUi("lib/ui/proteinMCLoad.ui", self)
         self._data = None
         self._filename = ''
@@ -324,7 +316,7 @@ class PDBLoad(QtGui.QWidget):
         #self.connect(self.pushButton_12, QtCore.SIGNAL("clicked()"), self.onLoadStructure)
 
     def onLoadStructure(self):
-        self.filename = str(QtGui.QFileDialog.getOpenFileName(None, 'Open Structure', '', 'PDB-file (*.pdb)'))
+        self.filename = str(QtWidgets.QFileDialog.getOpenFileName(None, 'Open Structure', '', 'PDB-file (*.pdb)'))
         self.structure = self.filename
         self.lineEdit.setText(str(self.structure.n_atoms))
         self.lineEdit_2.setText(str(self.structure.n_residues))
@@ -347,7 +339,7 @@ class PDBLoad(QtGui.QWidget):
 
     @structure.setter
     def structure(self, v):
-        self._data = Structure(v, make_coarse=self.calcLookUp)
+        self._data = Structure(v, make_coarse=False)
 
 
 class LoadThread(QtCore.QThread):
@@ -367,10 +359,10 @@ class LoadThread(QtCore.QThread):
         print('reading finished')
 
 
-class PDBFolderLoad(QtGui.QWidget):
+class PDBFolderLoad(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
         uic.loadUi("lib/ui/proteinFolderLoad.ui", self)
         self.connect(self.pushButton_12, QtCore.SIGNAL("clicked()"), self.onLoadStructure)
         self.updatePBar(0)
@@ -388,7 +380,7 @@ class PDBFolderLoad(QtGui.QWidget):
         self.progressBar.setValue(val)
 
     def onLoadStructure(self):
-        directory = str(QtGui.QFileDialog.getExistingDirectory(self, "Select Directory"))
+        directory = str(QtWidgets.QFileDialog.getExistingDirectory(self, "Select Directory")[0])
 
         self.folder = directory
         filenames = [os.path.join(directory, f) for f in os.listdir(directory)

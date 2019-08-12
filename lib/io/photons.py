@@ -1,11 +1,11 @@
 import tempfile
 import os
 
-from PyQt4 import QtGui, QtCore, uic
+from PyQt5 import QtGui, QtCore, uic, QtWidgets
 import numpy as np
 import tables
 
-from . import tttrlib
+import lib.io.tttrlib as tttrlib
 
 
 filetypes = {
@@ -501,9 +501,9 @@ class Photons(object):
         return re
 
 
-class SpcFileWidget(QtGui.QWidget):
+class SpcFileWidget(QtWidgets.QWidget):
     def __init__(self, parent):
-        QtGui.QWidget.__init__(self)
+        QtWidgets.QWidget.__init__(self)
         uic.loadUi('lib/io/ui/spcSampleSelectWidget.ui', self)
         self.parent = parent
         self.filetypes = filetypes
@@ -604,9 +604,9 @@ class SpcFileWidget(QtGui.QWidget):
 
     def onLoadSample(self):
         if self.fileType in ("hdf"):
-            filenames = [str(QtGui.QFileDialog.getOpenFileName(None, 'Open Photon-HDF', '', 'link file (*.h5)'))]
+            filenames = [str(QtWidgets.QFileDialog.getOpenFileName(None, 'Open Photon-HDF', '', 'link file (*.h5)')[0])]
         else:
-            directory = str(QtGui.QFileDialog.getExistingDirectory(self, "Select Directory"))
+            directory = str(QtWidgets.QFileDialog.getExistingDirectory(self, "Select Directory")[0])
             filenames = [directory + '/' + s for s in os.listdir(directory)]
         self.filenames = filenames
         self._photons = Photons(filenames, self.fileType)
