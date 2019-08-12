@@ -5,36 +5,42 @@ import lib.common as common
 
 
 keys = ['i', 'chain', 'res_id', 'res_name',
-             'atom_id', 'atom_name', 'element',
-             'coord',
-             'charge', 'radius', 'bfactor', 'mass']
+        'atom_id', 'atom_name', 'element',
+        'coord',
+        'charge', 'radius', 'bfactor', 'mass']
 
-formats = ['i4', '|S1', 'i4', '|S5',
-           'i4', '|S5', '|S1',
+formats = ['i4', '|U1', 'i4', '|U5',
+           'i4', '|U5', '|U1',
            '3f8',
            'f8', 'f8', 'f8', 'f8']
 
 
-def assign_element(atomName):
-    """Tries to guess element from atom name if not recognised."""
-    if not atomName or atomName.capitalize() not in common.atom_weights:
-    # Inorganic elements have their name shifted left by one position
-    #  (is a convention in PDB, but not part of the standard).
-    # isdigit() check on last two characters to avoid mis-assignment of
-    # hydrogens atoms (GLN HE21 for example)
+def assign_element_to_atom_name(
+        atom_name: str
+):
+    """Tries to guess element from atom name if not recognised.
+
+    :param atom_name: string
+
+    Examples
+    --------
+
+    >>> assign_element_to_atom_name('CA')
+    C
+    """
+    print(atom_name)
+    element = ""
+    if atom_name.upper() not in common.atom_weights:
+        # Inorganic elements have their name shifted left by one position
+        #  (is a convention in PDB, but not part of the standard).
+        # isdigit() check on last two characters to avoid mis-assignment of
+        # hydrogens atoms (GLN HE21 for example)
         # Hs may have digit in [0]
-        if atomName[0].isdigit():
-            putative_element = atomName[1]
-        else:
-            putative_element = atomName[0]
-        if putative_element.capitalize() in common.atom_weights:
-            msg = "Used element %r for Atom (name=%s) with given element %r" % (putative_element, atomName, atomName)
-            atomName = putative_element
-        else:
-            msg = "Could not assign element %r for Atom (name=%s) with given element %r" % \
-                  (putative_element, atomName, atomName)
-            atomName = ""
-    return atomName
+        putative_element = atom_name[1] if atom_name[0].isdigit() else atom_name[0]
+        print(putative_element)
+        if putative_element.capitalize() in common.atom_weights.keys():
+            element = putative_element
+    return element
 
 
 def sequence(structure, use_atoms=False):
@@ -68,27 +74,18 @@ def sequence(structure, use_atoms=False):
     return chain_dict
 
 
-def read(filename, assignCharge=False, verbose=True):
-    """
-    Open pdb_file and read each line into pdb (a list of lines)
-    :param filename:
-    :return: numpy structured array containing the PDB info and VdW-radii and charges
-    """
-    #if verbose:
-    print("Opening PDB-file: %s" % filename)
-    if not os.path.isfile(filename):
-        raise ValueError("PDB-Filename %s does not exist" % filename)
-    f = open(filename, 'r')
-    rows = f.readlines()
-    f.close()
-    atoms = np.empty(len(rows), dtype={'names': keys, 'formats': formats})
+
+def parse_string_pdb(string, assignCharge=False, **kwargs):
+    rows = string.splitlines()
+    verbose = kwargs.get('verbose', True)
+    atoms = np.zeros(len(rows), dtype={'names': keys, 'formats': formats})
     ni = 0
     for line in rows:
-        if line[0:6] == "ATOM  ":
+        if line.startswith('ATOM'):
             atom_name = line[12:16].strip().upper()
             atoms['i'][ni] = ni
             atoms['chain'][ni] = line[21]
-            atoms['res_name'][ni] = line[17:20]#.strip().upper()
+            atoms['res_name'][ni] = line[17:20].strip().upper()
             atoms['atom_name'][ni] = atom_name
             atoms['res_id'][ni] = line[22:26]
             atoms['atom_id'][ni] = line[6:11]
@@ -96,25 +93,116 @@ def read(filename, assignCharge=False, verbose=True):
             atoms['coord'][ni][1] = line[38:46]
             atoms['coord'][ni][2] = line[46:54]
             atoms['bfactor'][ni] = line[60:65]
+            atoms['element'][ni] = assign_element_to_atom_name(atom_name)
             try:
                 if assignCharge:
                     if atoms['res_name'][ni] in common.CHARGE_DICT:
                         if atoms['atom_name'][ni] == common.TITR_ATOM_COARSE[atoms['res_name'][ni]]:
                             atoms['charge'][ni] = common.CHARGE_DICT[atoms['res_name'][ni]]
-                atoms['element'][ni] = assign_element(str(atoms['atom_name'][ni]))
                 atoms['mass'][ni] = common.atom_weights[atoms['element'][ni]]
                 atoms['radius'][ni] = common.VDW_DICT[atoms['element'][ni]]
             except KeyError:
                 print("Cloud not assign parameters to: %s" % line)
             ni += 1
-    path, baseName = os.path.split(filename)
+    atoms = atoms[:ni]
     if verbose:
-        print("======================================")
-        print("Filename: %s" % filename)
-        print("Path: %s" % path)
         print("Number of atoms: %s" % (ni + 1))
-        print("--------------------------------------")
-    return atoms[:ni]
+    return atoms
+
+
+def parse_string_pqr(string, **kwargs):
+    rows = string.splitlines()
+    verbose = kwargs.get('verbose', True)
+    atoms = np.zeros(len(rows), dtype={'names': keys, 'formats': formats})
+    ni = 0
+
+    for line in rows:
+        if line[:4] == "ATOM" or line[:6] == "HETATM":
+            # Extract x, y, z, r from pqr to xyzr file
+            atom_name = line[12:16].strip().upper()
+            atoms['i'][ni] = ni
+            atoms['chain'][ni] = line[21]
+            atoms['atom_name'][ni] = atom_name.upper()
+            atoms['res_name'][ni] = line[17:20].strip().upper()
+            atoms['res_id'][ni] = line[21:27]
+            atoms['atom_id'][ni] = line[6:11]
+            atoms['coord'][ni][0] = "%10.5f" % float(line[30:38].strip())
+            atoms['coord'][ni][1] = "%10.5f" % float(line[38:46].strip())
+            atoms['coord'][ni][2] = "%10.5f" % float(line[46:54].strip())
+            atoms['radius'][ni] = "%10.5f" % float(line[63:70].strip())
+            atoms['element'][ni] = assign_element_to_atom_name(atom_name)
+            atoms['charge'][ni] = "%10.5f" % float(line[55:62].strip())
+            ni += 1
+
+    atoms = atoms[:ni]
+    if verbose:
+        print("Number of atoms: %s" % (ni + 1))
+    return atoms
+
+
+def assign_element_to_atom_name(
+        atom_name: str
+):
+    """Tries to guess element from atom name if not recognised.
+
+    :param atom_name: string
+
+    Examples
+    --------
+
+    >>> assign_element_to_atom_name('CA')
+    C
+    """
+    print(atom_name)
+    if atom_name.upper() not in common.atom_weights:
+        # Inorganic elements have their name shifted left by one position
+        #  (is a convention in PDB, but not part of the standard).
+        # isdigit() check on last two characters to avoid mis-assignment of
+        # hydrogens atoms (GLN HE21 for example)
+        # Hs may have digit in [0]
+        putative_element = atom_name[1] if str(atom_name[0]).isdigit() else atom_name[0]
+        if putative_element.capitalize() in common.atom_weights:
+            atom_name = putative_element
+        else:
+            atom_name = ""
+    return atom_name
+
+
+def read(filename, assignCharge=False, **kwargs):
+    """ Open pdb_file and read each line into pdb (a list of lines)
+
+    :param filename:
+    :return:
+        numpy structured array containing the PDB info and VdW-radii and charges
+
+    Examples
+    --------
+
+    >>> pdb_file = './sample_data/model/hgbp1/hGBP1_closed.pdb'
+    >>> pdb = mfm.io.pdb_file.read(pdb_file, verbose=True)
+    >>> pdb[:5]
+    array([ (0, ' ', 7, 'MET', 1, 'N', 'N', [72.739, -17.501, 8.879], 0.0, 1.65, 0.0, 14.0067),
+           (1, ' ', 7, 'MET', 2, 'CA', 'C', [73.841, -17.042, 9.747], 0.0, 1.76, 0.0, 12.0107),
+           (2, ' ', 7, 'MET', 3, 'C', 'C', [74.361, -18.178, 10.643], 0.0, 1.76, 0.0, 12.0107),
+           (3, ' ', 7, 'MET', 4, 'O', 'O', [73.642, -18.708, 11.489], 0.0, 1.4, 0.0, 15.9994),
+           (4, ' ', 7, 'MET', 5, 'CB', 'C', [73.384, -15.89, 10.649], 0.0, 1.76, 0.0, 12.0107)],
+          dtype=[('i', '<i4'), ('chain', 'S1'), ('res_id', '<i4'), ('res_name', 'S5'), ('atom_id', '<i4'), ('atom_name', 'S5
+    '), ('element', 'S1'), ('coord', '<f8', (3,)), ('charge', '<f8'), ('radius', '<f8'), ('bfactor', '<f8'), ('mass', '<f8')
+    ])
+    """
+    verbose = kwargs.get('verbose', True)
+    with open(filename, 'r') as f:
+        string = f.read()
+        if verbose:
+            path, baseName = os.path.split(filename)
+            print("======================================")
+            print("Filename: %s" % filename)
+            print("Path: %s" % path)
+        if filename.endswith('.pdb'):
+            atoms = parse_string_pdb(string, assignCharge, **kwargs)
+        elif filename.endswith('.pqr'):
+            atoms = parse_string_pqr(string, **kwargs)
+    return atoms
 
 
 def write(filename, atoms=None, append=False):
@@ -232,8 +320,8 @@ class Pdb(object):
                 atom_name = line[12:16].strip().upper()
                 atoms['i'][ni] = ni
                 atoms['chain'][ni] = line[21]
-                atoms['res_name'][ni] = line[17:20]#.strip().upper()
-                atoms['atom_name'][ni] = atom_name
+                atoms['res_name'][ni] = line[17:20].strip().upper()
+                atoms['atom_name'][ni] = atom_name.strip().upper()
                 atoms['res_id'][ni] = line[22:26]
                 atoms['atom_id'][ni] = line[6:11]
                 atoms['coord'][ni][0] = line[30:38]

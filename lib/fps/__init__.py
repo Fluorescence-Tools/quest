@@ -407,7 +407,7 @@ class AV(object):
         if verbose:
             print("Calculating slow-AV:")
             print(slow_centers)
-        if isinstance(slow_radius, (int, long, float)):
+        if isinstance(slow_radius, (int, float)):
             slow_radii = np.ones(slow_centers.shape[0])*slow_radius
         elif len(slow_radius) != slow_centers.shape[0]:
             raise ValueError("The size of the slow_radius doesnt match the number of slow_centers")

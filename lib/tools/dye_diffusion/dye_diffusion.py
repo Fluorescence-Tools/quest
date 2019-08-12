@@ -654,14 +654,15 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         load_av = load_av or self.load_3d_av
         self.molview.reset()
         if self.pdb_filename is not None:
-            self.molview.openFile(self._tmp_file, frame=1, mode='cartoon', object_name='protein')
+            self.molview.openFile(self._tmp_file, frame=1, mode='cartoon', object_name='p')
         self.molview.pymol.cmd.do("hide all")
-        self.molview.pymol.cmd.do("show spheres, protein")
-        self.molview.pymol.cmd.do("color gray, protein")
+        self.molview.pymol.cmd.do("show spheres, p")
+        self.molview.pymol.cmd.do("color gray, p")
 
         if self.diff_file is not None:
             self.molview.openFile(self.diff_file, frame=1, object_name='trajectory')
             self.molview.pymol.cmd.do("color green, trajectory")
+            self.molview.pymol.cmd.do("set sphere_scale, 0.2, trajectory")
         if load_av:
             if self.av_slow_file is not None:
                 self.molview.openFile(self.av_slow_file, frame=1, object_name='sticky_av')

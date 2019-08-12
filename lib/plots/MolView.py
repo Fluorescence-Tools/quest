@@ -15,24 +15,12 @@ except ImportError:
     pass
 
 
-
-"""
-Id Atom
-
-id_atom returns the original source id of a single atom, or raises and exception if the atom does not exist or if the selection corresponds to multiple atoms.
-PYMOL API
-
-list = cmd.id_atom(string selection)
-"""
-
-
 class EmittingStream(QtCore.QObject):
 
     textWritten = QtCore.pyqtSignal(str)
 
     def write(self, text):
         self.textWritten.emit(str(text))
-
 
 
 class MolQtWidget(QGLWidget):
@@ -167,8 +155,6 @@ class MolQtWidget(QGLWidget):
     def reset(self):
         self.nFrames = 0
         self.pymol.cmd.reinitialize()
-
-
 
 
 class ControlWidget(QtWidgets.QWidget):
