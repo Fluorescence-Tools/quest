@@ -4,19 +4,10 @@ channels:
     - conda-forge
 
 dependencies:
-    - python=2.7
-    - pyyaml
-    - numpy
-    - numba
-    - scipy
-    - numexpr
-    - pytables
-    - hdf5
-    - mdtraj
-    - ipython
-    - matplotlib
+    - python=3.7
     - pyqt>=5.6.0
-    - pyqtgraph
+    - numpy
+    - numexpr
+    - guiqwt
     - pyopengl
-    - qtconsole
-    - qsci_editor
+    - pymol
