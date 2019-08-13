@@ -2,7 +2,7 @@ import os
 import pickle
 import random
 from PyQt5 import QtGui, QtCore, uic, QtWidgets
-from lib.structure import Structure, TrajectoryFile
+from lib.structure import Structure
 import numpy as np
 import lib
 
@@ -21,7 +21,7 @@ class PDBSelector(QtWidgets.QWidget):
 
     def __init__(self, show_labels=True, update=None):
         QtWidgets.QWidget.__init__(self)
-        uic.loadUi('./lib/tools/dye_diffusion/ui/pdb_widget.ui', self)
+        uic.loadUi('./lib/ui/pdb_widget.ui', self)
         self._pdb = None
         self.comboBox.currentIndexChanged.connect(self.onChainChanged)
         self.comboBox_2.currentIndexChanged.connect(self.onResidueChanged)

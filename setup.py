@@ -32,26 +32,26 @@ if args.count("build_ext") > 0 and args.count("--inplace") == 0:
 
 
 # and build up the set of Extension objects
-eList = [
-    ['./lib/fps/fps.pyx', './lib/fps/mt19937cok.cpp'],
-    ['./lib/math/functions/rdf.pyx'],
-    ['./lib/math/functions/small.pyx'],
-    ['./lib/math/linalg/vector.pyx'],
-    ['./lib/structure/cStructure.pyx'],
-    ['./lib/tools/dye_diffusion/photon.pyx', './lib/tools/dye_diffusion/mt19937cok.cpp'],
+extension_list = [
+    ['./quest/lib/fps/fps.pyx', './quest/lib/fps/mt19937cok.cpp'],
+    ['./quest/lib/math/functions/rdf.pyx'],
+    ['./quest/lib/math/functions/small.pyx'],
+    ['./quest/lib/math/linalg/vector.pyx'],
+    ['./quest/lib/structure/cStructure.pyx'],
+    ['./quest/lib/tools/dye_diffusion/photon.pyx', './quest/lib/tools/dye_diffusion/mt19937cok.cpp'],
 ]
 
-extensions = [make_extension(extension) for extension in eList]
+extensions = [make_extension(extension) for extension in extension_list]
 
 long_description = "QuEst is a Quenching Estimator"
 setup(
-    version="18.9.1",
-    description="Fluorescence-Fitting",
+    version="19.8.13",
+    description="QuEst estimates the fluorescence quenching of dyes tethered to proteins",
     long_description=long_description,
     author="Thomas-Otavio Peulen",
     author_email='thomas.otavio.peulen@gmail.com',
     url='https://github.com/Fluorescence-Tools/quest',
-    name="QuEst",
+    name="quest",
     classifiers=[
         'Environment :: X11 Applications :: Qt',
         'Intended Audience :: Science/Research',
@@ -65,8 +65,7 @@ setup(
     keywords='fluorescence quenching',
     packages=find_packages(),
     package_data={
-        # If any package contains the listed file types and include them:
-        '': ['*.json', '*.yaml', '*.ui', '*.png', '*.svg', '*.css'],
+        '': ['*.json', '*.yaml', '*.ui', '*.png', '*.svg', '*.css', '*.so', '*.dll'],
     },
     install_requires=['numpy'],
     ext_modules=extensions,
