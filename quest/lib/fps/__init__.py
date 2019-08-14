@@ -1,5 +1,4 @@
 import os.path
-package_directory = os.path.dirname(os.path.abspath(__file__))
 import ctypes as C
 import platform
 import json
@@ -12,8 +11,9 @@ from lib.fps.fps import subav, simulate_traj, RDAMeanE, RDAMean, dRmp
 from lib.fps.fps import density2points, spherePoints, asa
 from lib.io import PDB
 from lib.structure import Structure
+import LabelLib as ll
 
-
+package_directory = os.path.dirname(os.path.abspath(__file__))
 b, o = platform.architecture()
 if 'Windows' in o:
     if '32' in b:
@@ -36,7 +36,21 @@ _fps.calculate1R.argtypes = [C.c_double, C.c_double, C.c_double,
                              C.POINTER(C.c_char)]
 
 
-def calculate1R(l, w, r, atom_i, x, y, z, vdw, linkersphere=0.5, linknodes=3, vdwRMax=1.8, dg=0.5, verbose=False):
+def calculate1R(l: float,
+                w: float,
+                r: float,
+                atom_i: int,
+                x: np.array,
+                y: np.array,
+                z: np.array,
+                vdw: np.array,
+                linkersphere: float = 0.5,
+                linknodes: int = 3,
+                vdwRMax: float = 1.8,
+                dg: float = 0.5,
+                verbose: bool = False,
+                use_labellib: bool = False
+                ):
     """
     Parameters
     ----------
@@ -71,40 +85,53 @@ def calculate1R(l, w, r, atom_i, x, y, z, vdw, linkersphere=0.5, linknodes=3, vd
     if verbose:
         print("AV: calculate1R")
     n_atoms = len(vdw)
+    if not use_labellib:
+        npm = int(np.floor(l / dg))
+        ng = 2 * npm + 1
+        ng3 = ng * ng * ng
+        density = np.zeros(ng3, dtype=np.uint8)
+        x0, y0, z0 = x[atom_i], y[atom_i], z[atom_i]
+        r0 = np.array([x0, y0, z0])
 
-    npm = int(np.floor(l / dg))
-    ng = 2 * npm + 1
-    ng3 = ng * ng * ng
-    density = np.zeros(ng3, dtype=np.uint8)
-    x0, y0, z0 = x[atom_i], y[atom_i], z[atom_i]
-    r0 = np.array([x0, y0, z0])
+        # http://docs.scipy.org/doc/numpy/reference/generated/numpy.ndarray.ctypes.html
+        # Be careful using the ctypes attribute - especially on temporary arrays or arrays
+        # constructed on the fly. For example, calling (a+b).ctypes.data_as(ctypes.c_void_p)
+        # returns a pointer to memory that is invalid because the array created as (a+b) is
+        # deallocated before the next Python statement.
 
-    # http://docs.scipy.org/doc/numpy/reference/generated/numpy.ndarray.ctypes.html
-    # Be careful using the ctypes attribute - especially on temporary arrays or arrays
-    # constructed on the fly. For example, calling (a+b).ctypes.data_as(ctypes.c_void_p)
-    # returns a pointer to memory that is invalid because the array created as (a+b) is
-    # deallocated before the next Python statement.
+        x = np.ascontiguousarray(x)
+        y = np.ascontiguousarray(y)
+        z = np.ascontiguousarray(z)
+        vdw = np.ascontiguousarray(vdw)
 
-    x = np.ascontiguousarray(x)
-    y = np.ascontiguousarray(y)
-    z = np.ascontiguousarray(z)
-    vdw = np.ascontiguousarray(vdw)
+        _x = x.ctypes.data_as(C.POINTER(C.c_double))
+        _y = y.ctypes.data_as(C.POINTER(C.c_double))
+        _z = z.ctypes.data_as(C.POINTER(C.c_double))
+        _vdw = vdw.ctypes.data_as(C.POINTER(C.c_double))
 
-    _x = x.ctypes.data_as(C.POINTER(C.c_double))
-    _y = y.ctypes.data_as(C.POINTER(C.c_double))
-    _z = z.ctypes.data_as(C.POINTER(C.c_double))
-    _vdw = vdw.ctypes.data_as(C.POINTER(C.c_double))
+        _density = density.ctypes.data_as(C.POINTER(C.c_char))
+        n = _fps.calculate1R(l, w, r, atom_i, dg, _x, _y, _z, _vdw,
+                             n_atoms, vdwRMax, linkersphere, linknodes, _density)
+        points = density2points(n, npm, dg, density, r0, ng)
+        density = density.reshape([ng, ng, ng])
+    else:
+        # use labellib
+        vdw_copy = np.copy(vdw)
+        vdw_copy[atom_i] = 0.0
+        atoms = np.vstack([x, y, z, vdw_copy]).T
+        source = atoms[atom_i]
+        av1 = ll.dyeDensityAV1(
+            atoms,
+            source,
+            l, w, r, dg
+        )
+        raise NotImplementedError
 
-    _density = density.ctypes.data_as(C.POINTER(C.c_char))
-    n = _fps.calculate1R(l, w, r, atom_i, dg, _x, _y, _z, _vdw,
-                         n_atoms, vdwRMax, linkersphere, linknodes, _density)
     if verbose:
         print("Number of atoms: %i" % n_atoms)
         print("Attachment atom coordinates: %s" % r0)
         print("Points in AV: %i" % n)
 
-    points = density2points(n, npm, dg, density, r0, ng)
-    density = density.reshape([ng, ng, ng])
     return points, density, ng, r0
 
 
@@ -116,8 +143,23 @@ _fps.calculate3R.argtypes = [C.c_double, C.c_double, C.c_double, C.c_double, C.c
                              C.POINTER(C.c_char)]
 
 
-def calculate3R(l, w, r1, r2, r3, atom_i, x, y, z, vdw,
-                linkersphere=0.5, linknodes=3, vdwRMax=1.8, dg=0.4, verbose=False):
+def calculate3R(l: float,
+                w: float,
+                r1: float,
+                r2: float,
+                r3: float,
+                atom_i: int,
+                x: np.array,
+                y: np.array,
+                z: np.array,
+                vdw: np.array,
+                linkersphere: float = 0.5,
+                linknodes: int = 3,
+                vdwRMax: float = 1.8,
+                dg: float = 0.5,
+                verbose: bool = False,
+                use_labellib: bool = False
+                ):
     """
     Parameters
     ----------
