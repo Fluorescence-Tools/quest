@@ -58,7 +58,15 @@ Both versions are documented in the Wiki of this repository [Wiki](https://githu
 
 The windows GUI version can be installed using the setup files (see [releases](https://github.com/Fluorescence-Tools/quest/releases)).
 
-## Command-QuEST
+## Conda
+
+Add the fluorescence tools repository to your conda installation and
+install quest via conda
+
+```bash
+conda config --add channels fluorescence-tools
+conda install quest
+```
 
 # Usage
 
