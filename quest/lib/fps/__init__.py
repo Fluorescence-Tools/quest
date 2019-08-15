@@ -1,39 +1,31 @@
 import os.path
-import ctypes as C
-import platform
 import json
 import os
 from collections import OrderedDict
 
 import numpy as np
 from PyQt5 import QtGui, QtCore, uic, QtWidgets
-from lib.fps.fps import subav, simulate_traj, RDAMeanE, RDAMean, dRmp
-from lib.fps.fps import density2points, spherePoints, asa
+from lib.fps.fps import subav, simulate_traj, RDAMeanE, RDAMean, dRmp, density2points, spherePoints, asa
 from lib.io import PDB
 from lib.structure import Structure
 import LabelLib as ll
+from lib.io import write_xyz
 
-package_directory = os.path.dirname(os.path.abspath(__file__))
-b, o = platform.architecture()
-if 'Windows' in o:
-    if '32' in b:
-        fpslibrary = 'fpsnative.win32.dll' # os.path.join(package_directory, './dll/fpsnative.win32.dll')
-    elif '64' in b:
-        fpslibrary = 'fpsnative.win64.dll' # os.path.join(package_directory, './dll/fpsnative.win64.dll')
-else:
-    if platform.system() == 'Linux':
-        fpslibrary = 'liblinux_fps.so' # os.path.join(package_directory, './dll/liblinux_fps.so')
-    else:
-        fpslibrary = 'libav.dylib' # os.path.join(package_directory, './dll/libav.dylib')
 
-_fps = np.ctypeslib.load_library(fpslibrary, './dll')
-_fps.calculate1R.restype = C.c_int
-_fps.calculate1R.argtypes = [C.c_double, C.c_double, C.c_double,
-                             C.c_int, C.c_double,
-                             C.POINTER(C.c_double), C.POINTER(C.c_double), C.POINTER(C.c_double),
-                             C.POINTER(C.c_double), C.c_int, C.c_double,
-                             C.c_double, C.c_int,
-                             C.POINTER(C.c_char)]
+def density2points_ll(nx, ny, nz, g, dx, dy, dz, ox, oy, oz):
+    points = np.empty((nx*ny*nz, 3), dtype=np.float)
+    iat = 0
+    for iz in range(nz):
+        for iy in range(ny):
+            for ix in range(nx):
+                val = g[ix, iy, iz]
+                if val <= 0.0:
+                    continue
+                iat += 1
+                points[iat][0] = ix * dx + ox
+                points[iat][1] = iy * dy + oy
+                points[iat][2] = iz * dz + oz
+    return points[:iat]
 
 
 def calculate1R(l: float,
@@ -48,209 +40,53 @@ def calculate1R(l: float,
                 linknodes: int = 3,
                 vdwRMax: float = 1.8,
                 dg: float = 0.5,
-                verbose: bool = False,
-                use_labellib: bool = False
+                verbose: bool = False
                 ):
     """
-    Parameters
-    ----------
-    :param l: float
-        linker length
-    :param w: float
-        linker width
-    :param r: float
-        dye-radius
-    :param atom_i: int
-        attachment-atom index
-    :param x: array
-        Cartesian coordinates of atoms (x)
-    :param y: array
-        Cartesian coordinates of atoms (y)
-    :param z: array
-        Cartesian coordinates of atoms (z)
-    :param vdw:
-        Van der Waals radii (same length as number of atoms)
-    :param linkersphere: float
-        Initial linker-sphere to start search of allowed dye positions
-    :param linknodes: int
-        By default 3
-    :param vdwRMax: float
-        Maximal Van der Waals radius
-    :param dg: float
-        Resolution of accessible volume in Angstrom
-    :param verbose: bool
-        If true informative output is printed on std-out
+    :param l: linker length
+    :param w: linker width
+    :param r: dye-radius
+    :param atom_i: attachment-atom index
+    :param x: Cartesian coordinates of atoms (x)
+    :param y: Cartesian coordinates of atoms (y)
+    :param z: Cartesian coordinates of atoms (z)
+    :param vdw: Van der Waals radii (same length as number of atoms)
+    :param linkersphere: Initial linker-sphere to start search of allowed dye positions (not used anymore)
+    :param linknodes: By default 3 (not used anymore)
+    :param vdwRMax: Maximal Van der Waals radius (not used anymore)
+    :param dg: Resolution of accessible volume in Angstrom
+    :param verbose: If true informative output is printed on std-out
     :return:
     """
     if verbose:
         print("AV: calculate1R")
     n_atoms = len(vdw)
-    if not use_labellib:
-        npm = int(np.floor(l / dg))
-        ng = 2 * npm + 1
-        ng3 = ng * ng * ng
-        density = np.zeros(ng3, dtype=np.uint8)
-        x0, y0, z0 = x[atom_i], y[atom_i], z[atom_i]
-        r0 = np.array([x0, y0, z0])
+    x0, y0, z0 = x[atom_i], y[atom_i], z[atom_i]
+    r0 = np.array([x0, y0, z0])
 
-        # http://docs.scipy.org/doc/numpy/reference/generated/numpy.ndarray.ctypes.html
-        # Be careful using the ctypes attribute - especially on temporary arrays or arrays
-        # constructed on the fly. For example, calling (a+b).ctypes.data_as(ctypes.c_void_p)
-        # returns a pointer to memory that is invalid because the array created as (a+b) is
-        # deallocated before the next Python statement.
-
-        x = np.ascontiguousarray(x)
-        y = np.ascontiguousarray(y)
-        z = np.ascontiguousarray(z)
-        vdw = np.ascontiguousarray(vdw)
-
-        _x = x.ctypes.data_as(C.POINTER(C.c_double))
-        _y = y.ctypes.data_as(C.POINTER(C.c_double))
-        _z = z.ctypes.data_as(C.POINTER(C.c_double))
-        _vdw = vdw.ctypes.data_as(C.POINTER(C.c_double))
-
-        _density = density.ctypes.data_as(C.POINTER(C.c_char))
-        n = _fps.calculate1R(l, w, r, atom_i, dg, _x, _y, _z, _vdw,
-                             n_atoms, vdwRMax, linkersphere, linknodes, _density)
-        points = density2points(n, npm, dg, density, r0, ng)
-        density = density.reshape([ng, ng, ng])
-    else:
-        # use labellib
-        vdw_copy = np.copy(vdw)
-        vdw_copy[atom_i] = 0.0
-        atoms = np.vstack([x, y, z, vdw_copy]).T
-        source = atoms[atom_i]
-        av1 = ll.dyeDensityAV1(
-            atoms,
-            source,
-            l, w, r, dg
-        )
-        raise NotImplementedError
+    vdw_copy = np.copy(vdw)
+    vdw_copy[atom_i] = 0.0
+    atoms = np.vstack([x, y, z, vdw_copy])
+    source = r0
+    av1 = ll.dyeDensityAV1(
+        atoms,
+        source,
+        l, w, r, dg
+    )
+    nx, ny, nz = av1.shape
+    g = np.array(av1.grid).reshape([nx, ny, nz], order='F')
+    print(nx, ny, nz, dg, dg, dg, x0, y0, z0)
+    points = density2points_ll(nx, ny, nz, g, dg, dg, dg, x0, y0, z0)
+    g[g < 0] = 0
+    g[g > 0] = 1
+    density = g.astype(np.uint8)
+    ng = nx
 
     if verbose:
         print("Number of atoms: %i" % n_atoms)
         print("Attachment atom coordinates: %s" % r0)
-        print("Points in AV: %i" % n)
 
     return points, density, ng, r0
-
-
-_fps.calculate3R.argtypes = [C.c_double, C.c_double, C.c_double, C.c_double, C.c_double,
-                             C.c_int, C.c_double,
-                             C.POINTER(C.c_double), C.POINTER(C.c_double), C.POINTER(C.c_double),
-                             C.POINTER(C.c_double), C.c_int, C.c_double,
-                             C.c_double, C.c_int,
-                             C.POINTER(C.c_char)]
-
-
-def calculate3R(l: float,
-                w: float,
-                r1: float,
-                r2: float,
-                r3: float,
-                atom_i: int,
-                x: np.array,
-                y: np.array,
-                z: np.array,
-                vdw: np.array,
-                linkersphere: float = 0.5,
-                linknodes: int = 3,
-                vdwRMax: float = 1.8,
-                dg: float = 0.5,
-                verbose: bool = False,
-                use_labellib: bool = False
-                ):
-    """
-    Parameters
-    ----------
-    :param l: float
-        linker length
-    :param w: float
-        linker width
-    :param r1: float
-        Dye-radius 1
-    :param r2: float
-        Dye-radius 2
-    :param r3: float
-        Dye-radius 3
-    :param atom_i: int
-        attachment-atom index
-    :param x: array
-        Cartesian coordinates of atoms (x)
-    :param y: array
-        Cartesian coordinates of atoms (y)
-    :param z: array
-        Cartesian coordinates of atoms (z)
-    :param vdw:
-        Van der Waals radii (same length as number of atoms)
-    :param linkersphere: float
-        Initial linker-sphere to start search of allowed dye positions
-    :param linknodes: int
-        By default 3
-    :param vdwRMax: float
-        Maximal Van der Waals radius
-    :param dg: float
-        Resolution of accessible volume in Angstrom
-    :param verbose: bool
-        If true informative output is printed on std-out
-    :return:
-    """
-    if verbose:
-        print("AV: calculate1R")
-    n_atoms = len(vdw)
-
-    npm = int(np.floor(l / dg))
-    ng = 2 * npm + 1
-    ng3 = ng * ng * ng
-    density = np.zeros(ng3, dtype=np.uint8)
-    x0, y0, z0 = x[atom_i], y[atom_i], z[atom_i]
-    r0 = np.array([x0, y0, z0])
-
-    x = np.ascontiguousarray(x)
-    y = np.ascontiguousarray(y)
-    z = np.ascontiguousarray(z)
-    vdw = np.ascontiguousarray(vdw)
-
-    _x = x.ctypes.data_as(C.POINTER(C.c_double))
-    _y = y.ctypes.data_as(C.POINTER(C.c_double))
-    _z = z.ctypes.data_as(C.POINTER(C.c_double))
-    _vdw = vdw.ctypes.data_as(C.POINTER(C.c_double))
-
-    _density = density.ctypes.data_as(C.POINTER(C.c_char))
-    n = _fps.calculate3R(l, w, r1, r2, r3, atom_i, dg, _x, _y, _z, _vdw,
-                         n_atoms, vdwRMax, linkersphere, linknodes, _density)
-    if verbose:
-        print("Number of atoms: %i" % n_atoms)
-        print("Attachment atom: %s" % r0)
-        print("Points in AV: %i" % n)
-
-    points = density2points(n, npm, dg, density, r0, ng)
-    density = density.reshape([ng, ng, ng])
-    return points, density, ng, r0
-
-
-def write_xyz(filename, points, verbose=False):
-    """
-    Writes the points as xyz-format file. The xyz-format file can be opened and displayed for instance
-    in PyMol
-    :param filename: string
-        Filename the cartesian coordinates in points are written to as xyz-format file
-    :param points:
-    :param verbose:
-    """
-    if verbose:
-        print("\nwrite_xyz")
-        print("---------")
-        print("Filename: %s" % filename)
-    fp = open(filename, 'w')
-    npoints = len(points)
-    fp.write('%i\n' % npoints)
-    fp.write('Name\n')
-    for p in points:
-        fp.write('D %.3f %.3f %.3f\n' % (p[0], p[1], p[2]))
-    fp.close()
-    if verbose:
-        print("-------------------")
 
 
 class AV(object):
@@ -422,7 +258,7 @@ class AV(object):
         if verbose:
             print("Points in total-AV: %i" % density.sum())
         if save_av:
-            write_xyz(output_file+'.xyz', points, verbose=verbose)
+            write_xyz(output_file + '.xyz', points, verbose=verbose)
 
     def calc_slow_av(self, slow_centers=None, slow_radius=None, save=True, verbose=True, replace_density=False):
         """
@@ -469,7 +305,7 @@ class AV(object):
         if verbose or self.verbose:
             print("Points in slow-AV: %i" % n)
         if save:
-            write_xyz(self.output_file+'_slow.xyz', points, verbose=verbose)
+            write_xyz(self.output_file + '_slow.xyz', points, verbose=verbose)
         self.density_slow = slow_density
         self.points_slow = points
         if replace_density:
