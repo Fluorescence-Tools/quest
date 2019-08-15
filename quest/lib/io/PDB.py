@@ -151,7 +151,6 @@ def assign_element_to_atom_name(
     >>> assign_element_to_atom_name('CA')
     C
     """
-    print(atom_name)
     if atom_name.upper() not in common.atom_weights:
         # Inorganic elements have their name shifted left by one position
         #  (is a convention in PDB, but not part of the standard).
