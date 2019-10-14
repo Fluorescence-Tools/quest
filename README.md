@@ -37,42 +37,53 @@ using a command line interface (see documentation below).
 ![Simulation of dynamic quenching](https://github.com/Fluorescence-Tools/quest/blob/master/doc/img/readme_screenshot_3.png)
 
 Alternatively, QuEst can be used a library for potential integration
-into other simulations and/or data analysis pipelines (see [Jupyter Notebook](https://github.com/Fluorescence-Tools/quest/blob/master/notebooks/quenching_and_fret.ipynb))
+into other simulations and/or data analysis pipelines (see 
+[Jupyter Notebook](https://github.com/Fluorescence-Tools/quest/blob/master/notebooks/quenching_and_fret.ipynb))
 
 ## Potential use-cases
 
 * Design of labeling positions for FRET experiments
-* Calibration of accessible contact volume ([ACVs](https://doi.org/10.1016/j.sbi.2016.11.012)) using the fluorescence lifetime of the donor
+* Calibration of accessible contact volume 
+([ACVs](https://doi.org/10.1016/j.sbi.2016.11.012)) using the 
+fluorescence lifetime of the donor
 
-# Building and installation
+## Installation
 
-## Versions
+### Versions
 
 There are two QuEST versions:
   1. GUI-QuEST a end-user software with graphical user interface for Windows 
+  ([setup.exe](https://github.com/Fluorescence-Tools/quest/releases/download/170301/windows_setup_17.03.01.exe), 
+  conda), Linux (conda), and macOS (conda). The conda installation is 
+  described below. 
   2. Command-QuEST a command line version for Windows, Linux and MacOS
 
-Both versions are documented in the Wiki of this repository [Wiki](https://github.com/Fluorescence-Tools/quest/wiki).
+Both versions are documented in the Wiki of this repository 
+[Wiki](https://github.com/Fluorescence-Tools/quest/wiki).
 
-## Windows GUI version
+### GUI version
 
-The windows GUI version can be installed using the setup files (see [releases](https://github.com/Fluorescence-Tools/quest/releases)).
-
-## Conda
-
-Add the fluorescence tools repository to your conda installation and
-install quest via conda
+The windows GUI version can be installed using either a setup file 
+([setup.exe](https://github.com/Fluorescence-Tools/quest/releases/download/170301/windows_setup_17.03.01.exe))
+or conda. To install QuEst using conda use the conda repository ``tpeulen``
 
 ```bash
-conda config --add channels fluorescence-tools
-conda install quest
+conda install -c tpeulen quest
 ```
 
-# Usage
+Following the installation via conda, quest can be started from 
+a command line interface
 
-## GUI-QuEST
+```bash
+quest
+```
 
-## Command-QuEST
+
+## Usage
+
+### GUI-QuEST
+
+### Command-QuEST
 
 1) Go to the folder of the program in the command line (by clicking on shell.bat)
 2) run: "python estimate_qy.py xxxxxx" xxxx are the parameter
@@ -125,7 +136,7 @@ For more informations on accessible contact volumes (ACVs) see:
 > Dimura, M., Peulen, T.O., Hanke, C.A., Prakash, A., Gohlke, H. and Seidel, C.A., 2016. Quantitative FRET studies and integrative modeling unravel the structure and dynamics of biomolecular systems. Current opinion in structural biology, 40, pp.163-185.
 
 
-# Contribute
+## Contribute
 
 To improve our dye models we need a larger set of experimental data.
 If you are interested in using, and improving experimental coarse-
@@ -138,7 +149,7 @@ are a developer of not, you can contribute by
 If you are interested, sign up on GitHub, contact the developers, and
 put a star on this project.
 
-# Info
+## Info
 
 _Author(s)_: Thomas-Otavio Peulen
 
