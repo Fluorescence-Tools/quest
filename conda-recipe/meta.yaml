@@ -1,0 +1,45 @@
+{% set name = "quest" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ GIT_DESCRIBE_TAG }}
+
+source:
+  git_url: https://github.com/Fluorescence-Tools/quest.git
+
+build:
+  number: {{ GIT_DESCRIBE_NUMBER|int }}
+  string: np{{ CONDA_NPY }}py{{ CONDA_PY }}_{{ GIT_BUILD_STR }}
+  entry_points:
+    - quest=quest.quest_gui:start_gui
+
+requirements:
+  build:
+    - python
+    - setuptools
+    - cython
+    - numpy
+  run:
+    - python
+    - pyqt>=5.6.0
+    - numpy
+    - numexpr
+    - guiqwt
+    - pyopengl
+    - pymol-open-source
+    - libstdcxx-ng # [linux]
+    - labellib
+
+about:
+  home: https://github.com/Fluorescence-Tools/ChiSurf
+  license: MIT
+  license_file: LICENSE
+  summary: QuEst is a protein structure based fluorescence quenching estimator
+  description:
+    QuEst is a structure based fluorescence quenching estimator that simulates dynamic
+    quenching of fluorescence decays of dyes that are coupled to the surface of a proteins.
+    Dynamic fluorescence quenching is simulated by modelling (i) the diffusion of the dye
+    and (ii) the quenching of the dye by surface exposed aromatic amino-acids.
+extra:
+  recipe-maintainers:
+    - tpeulen

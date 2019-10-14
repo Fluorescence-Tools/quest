@@ -21,7 +21,15 @@ class PDBSelector(QtWidgets.QWidget):
 
     def __init__(self, show_labels=True, update=None):
         QtWidgets.QWidget.__init__(self)
-        uic.loadUi('./lib/ui/pdb_widget.ui', self)
+        uic.loadUi(
+            os.path.join(
+                os.path.dirname(
+                    __file__
+                ),
+                'pdb_widget.ui'
+            ),
+            self
+        )
         self._pdb = None
         self.comboBox.currentIndexChanged.connect(self.onChainChanged)
         self.comboBox_2.currentIndexChanged.connect(self.onResidueChanged)

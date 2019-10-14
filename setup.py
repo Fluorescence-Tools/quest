@@ -6,6 +6,8 @@ from distutils.core import setup
 from Cython.Build import build_ext
 import numpy
 
+name = "quest"
+
 
 def make_extension(ext):
     """generate an Extension object from its dotted name
@@ -63,14 +65,40 @@ setup(
         'Topic :: Scientific/Engineering',
     ],
     keywords='fluorescence quenching',
-    packages=find_packages(),
+    packages=find_packages(
+        include=(name + "*",)
+    ),
     package_data={
-        '': ['*.json', '*.yaml', '*.ui', '*.png', '*.svg', '*.css', '*.so', '*.dll'],
+        '': [
+            '*.json',
+            '*.yaml',
+            '*.ui',
+            '*.png',
+            '*.svg',
+            '*.css',
+            '*.so',
+            '*.dll'
+        ],
     },
-    install_requires=['numpy'],
+    install_requires=[
+        'numpy',
+        'sip',
+        'PyQt5',
+        'numba',
+        'scipy',
+        'PyYAML',
+        'tables',
+        'numexpr',
+        'matplotlib',
+        'qtconsole',
+        'numexpr'
+    ],
     ext_modules=extensions,
     cmdclass={
         'build_ext': build_ext
+    },
+    entry_points={
+        "gui_scripts": ["quest=quest.quest_gui:start_gui"]
     }
 )
 

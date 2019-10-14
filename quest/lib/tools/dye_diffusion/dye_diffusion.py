@@ -4,6 +4,7 @@ from collections import OrderedDict
 import gc
 import json
 import tempfile
+import inspect
 
 import numpy as np
 import numexpr as ne
@@ -561,9 +562,29 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
 
     name = "Lifetime-Calculator"
 
-    def __init__(self, verbose=False, settings_file='./settings/dye_diffusion.json'):
+    def __init__(
+            self,
+            verbose=False,
+            settings_file=None
+    ):
         super(TransientDecayGenerator, self).__init__()
-        uic.loadUi('./lib/ui/dye_diffusion2.ui', self)
+        uic.loadUi(
+            os.path.join(
+                os.path.dirname(
+                    __file__
+                ),
+                'dye_diffusion2.ui'
+            ),
+            self
+        )
+        if settings_file is None:
+            settings_file = os.path.join(
+                os.path.dirname(
+                    __file__
+                ),
+                'dye_diffusion.json'
+            )
+
         self.pdb_selector = PDBSelector()
         self.verticalLayout_10.addWidget(self.pdb_selector)
         self._settings_file = None
