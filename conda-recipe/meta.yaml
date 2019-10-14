@@ -5,7 +5,7 @@ package:
   version: {{ GIT_DESCRIBE_TAG }}
 
 source:
-  git_url: https://github.com/Fluorescence-Tools/quest.git
+  git_url: ..
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER|int }}
@@ -40,6 +40,7 @@ about:
     quenching of fluorescence decays of dyes that are coupled to the surface of a proteins.
     Dynamic fluorescence quenching is simulated by modelling (i) the diffusion of the dye
     and (ii) the quenching of the dye by surface exposed aromatic amino-acids.
+
 extra:
   recipe-maintainers:
     - tpeulen
