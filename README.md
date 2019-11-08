@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/Fluorescence-Tools/quest.svg?branch=master)](https://travis-ci.org/Fluorescence-Tools/ques)
+
 # QuEst - Quenching Estimator
 
 ## General description
