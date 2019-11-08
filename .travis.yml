@@ -47,14 +47,14 @@ before_install:
 install:
   - conda install quest
 
-script:
-  - | # osx does not have xvfb server for testing gui
-    if [[ "$TRAVIS_OS_NAME" == "linux" ]];
-    then
-      conda install nose coverage
-      python setup.py build_ext --inplace --force
-      xvfb-run --server-args="-screen 0 1280x1024x24 +extension GLX" -a nosetests --with-coverage test/test_*.py;
-    fi
+#script:
+#  - | # osx does not have xvfb server for testing gui
+#    if [[ "$TRAVIS_OS_NAME" == "linux" ]];
+#    then
+#      conda install nose coverage
+#      python setup.py build_ext --inplace --force
+#      xvfb-run --server-args="-screen 0 1280x1024x24 +extension GLX" -a nosetests --with-coverage test/test_*.py;
+#    fi
 
 after_success:
   - OS=$TRAVIS_OS_NAME-64
