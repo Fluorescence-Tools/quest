@@ -57,7 +57,8 @@ script:
 #      coverage xml
 #      python-codacy-coverage -r coverage.xml
 #    fi
-  - quest
+  - quest&
+  - sleep 120
   - pgrep -f quest | awk '{print "kill -9 " $1}' | sh
 
 after_success:
