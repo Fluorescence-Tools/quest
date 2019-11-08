@@ -1,8 +1,10 @@
 {% set name = "quest" %}
+{% set version = "latest" %}
 
 package:
   name: {{ name|lower }}
-  version: {{ GIT_DESCRIBE_TAG }}
+  version: {{ version|lower }}
+  # version: {{ GIT_DESCRIBE_TAG }}
 
 source:
   git_url: ..
