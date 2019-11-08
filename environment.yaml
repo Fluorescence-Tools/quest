@@ -2,6 +2,7 @@ name: quest
 
 channels:
     - conda-forge
+    - tpeulen
 
 dependencies:
     - python=3.7
@@ -12,3 +13,4 @@ dependencies:
     - pyopengl
     - pymol
     - labellib
+    - pymol-open-source
