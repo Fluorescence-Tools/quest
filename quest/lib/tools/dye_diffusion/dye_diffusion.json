@@ -1,5 +1,4 @@
-{"D": null,
-    "all_quencher_atoms": true,
+{   "all_quencher_atoms": true,
     "attachment_atom": null,
     "attachment_chain": null,
     "attachment_residue": null,
@@ -28,6 +27,6 @@
     "t_max": 2000.0,
     "t_step": 0.016,
     "tau0": 4.2,
-    "D": 7.0,
+    "diffusion_coefficient": 7.0,
     "verbose": false
 }

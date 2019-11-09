@@ -1,11 +1,12 @@
 #!/usr/bin/python
-from __future__ import print_function
-from lib.structure import Structure
+
+from __future__ import annotations
+from quest.lib.structure import Structure
 import itertools
 import argparse
 import numpy as np
 import json
-import quest_gui
+import quest.quest_gui
 
 parser = argparse.ArgumentParser(description='Queching estimation by PDB file.')
 parser.add_argument('-gui', '--gui', action='store_true', dest='gui')
@@ -35,7 +36,7 @@ parser.add_argument('-avnp', metavar='av_npoints', type=int, help='Threshold bel
 args = parser.parse_args()
 
 if args.gui:
-    quest_gui.start_gui()
+    quest.quest_gui.start_gui()
 else:
     pass
     # print("")

@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import os
 import pickle
 import random
-from PyQt5 import QtGui, QtCore, uic, QtWidgets
-from lib.structure import Structure
+from qtpy import QtGui, QtCore, uic, QtWidgets
+from quest.lib.structure import Structure
 import numpy as np
-import lib
+import quest.lib
 
 
 def clearLayout(layout):
@@ -117,3 +119,56 @@ class PDBSelector(QtWidgets.QWidget):
         chain_ids = [str(c) for c in chain_ids]
         self.comboBox.addItems(chain_ids)
 
+
+class MyMessageBox(
+    QtWidgets.QMessageBox
+):
+
+    def __init__(
+            self,
+            label: str = None,
+            info: str = None,
+            details: str = None
+    ):
+        """This Widget can be used to provide an output for warnings
+        and exceptions. It can also display fortune cookies.
+
+        :param label:
+        :param info:
+        :param show_fortune: if True than a fortune cookie is displayed.
+        """
+        super().__init__()
+        self.Icon = 1
+        self.setSizeGripEnabled(True)
+        self.setIcon(
+            QtWidgets.QMessageBox.Information
+        )
+        if label is not None:
+            self.setWindowTitle(label)
+        if details is not None:
+            self.setDetailedText(details)
+        else:
+            self.close()
+
+    def event(self, e):
+        result = QtWidgets.QMessageBox.event(self, e)
+
+        self.setMinimumHeight(0)
+        self.setMaximumHeight(16777215)
+        self.setMaximumWidth(16777215)
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Expanding
+        )
+        text_edit = self.findChild(QtWidgets.QTextEdit)
+        if text_edit is not None:
+            text_edit.setMinimumHeight(0)
+            text_edit.setMaximumHeight(16777215)
+            text_edit.setMinimumWidth(0)
+            text_edit.setMaximumWidth(16777215)
+            text_edit.setSizePolicy(
+                QtWidgets.QSizePolicy.Expanding,
+                QtWidgets.QSizePolicy.Expanding
+            )
+
+        return result

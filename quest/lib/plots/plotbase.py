@@ -1,11 +1,13 @@
-from PyQt5 import QtGui, QtCore, uic, QtWidgets
+from __future__ import annotations
 
-from lib import Genealogy
+from qtpy import QtGui, QtCore, uic, QtWidgets
 
 
-class Plot(QtWidgets.QWidget, Genealogy):
+
+class Plot(QtWidgets.QWidget):
+
     def __init__(self, parent=None):
-        Genealogy.__init__(self)
+
         QtWidgets.QWidget.__init__(self, parent)
         parent = parent
         self.widgets = []

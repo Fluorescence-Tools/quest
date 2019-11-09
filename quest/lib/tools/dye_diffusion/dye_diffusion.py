@@ -1,28 +1,33 @@
+from __future__ import annotations
+import typing
+
 import time
 import os
-from collections import OrderedDict
-import gc
 import json
 import tempfile
-import inspect
 
 import numpy as np
 import numexpr as ne
-from PyQt5 import QtGui, QtCore, uic, QtWidgets
+
+from qtpy import uic, QtWidgets, QtCore
 from guiqwt.plot import CurveDialog
 from guiqwt.builder import make
 
+import quest.lib.io
+import quest.lib.fps as fps
+import quest.lib.plots
+import quest.lib.math.functions
+
 from . import photon
-import lib.io.PDB as PDB
-from lib import Structure
-import lib.fps as fps
-from lib.plots.MolView import MolQtWidget
-from lib.math.functions import autocorr
-from lib.widgets import PDBSelector
-from lib.fps import AV, write_xyz
+import quest.lib.widgets
+from quest.lib.fps import AV
 
 
-def selection2atom_idx(pdb, res_types, verbose=False):
+def selection2atom_idx(
+        pdb,
+        res_types,
+        verbose: bool = False
+):
     """
     Lookup atom-idx using residues:
      a = {'TRP': 'CA'}
@@ -35,7 +40,7 @@ def selection2atom_idx(pdb, res_types, verbose=False):
     """
     if verbose:
         print("selection2atom_idx")
-    atom_idx = OrderedDict()
+    atom_idx = dict()
     for residue_key in res_types:
         atoms = []
         for atom_name in res_types[residue_key]:
@@ -47,7 +52,12 @@ def selection2atom_idx(pdb, res_types, verbose=False):
     return atom_idx
 
 
-def save_hist(filename, x, y, verbose=False):
+def save_hist(
+        filename: str,
+        x: np.ndarray,
+        y: np.ndarray,
+        verbose: bool = False
+):
     """
     Saves data x, y to file in histogram-format (csv). x and y
     should have the same lenght.
@@ -65,7 +75,11 @@ def save_hist(filename, x, y, verbose=False):
     fp.close()
 
 
-def is_quenched(distance2, critical_distance, verbose=False):
+def is_quenched(
+        distance2: np.ndarray,
+        critical_distance: float,
+        verbose: bool = False
+):
     """
     square of distance to quencher
     """
@@ -80,7 +94,12 @@ def is_quenched(distance2, critical_distance, verbose=False):
     return np.asarray(re, dtype=np.uint8)
 
 
-def get_quencher_coordinates(pdb, quencher, verbose=True, all_atoms=True):
+def get_quencher_coordinates(
+        atoms: np.ndarray,
+        quencher,
+        verbose: bool = True,
+        all_atoms: bool = True
+):
     """
     returns coordinates and indices of all atoms of certain
     residue type.
@@ -89,10 +108,10 @@ def get_quencher_coordinates(pdb, quencher, verbose=True, all_atoms=True):
     if verbose:
         print("Finding quenchers")
     print(quencher)
-    atom_idx = selection2atom_idx(pdb, quencher)
-    coordinates = OrderedDict()
+    atom_idx = selection2atom_idx(atoms, quencher)
+    coordinates = dict()
     for res_key in quencher:
-        coordinates[res_key] = pdb['coord'][atom_idx[res_key]]
+        coordinates[res_key] = atoms['coord'][atom_idx[res_key]]
     if verbose:
         print("Quencher atom-indeces: \n %s" % atom_idx)
         print("Quencher coordinates: \n %s" % coordinates)
@@ -102,13 +121,17 @@ def get_quencher_coordinates(pdb, quencher, verbose=True, all_atoms=True):
 class SimulateDiffusion(object):
 
     @property
-    def mean(self):
+    def mean(self) -> np.ndarray:
+        """The mean dye position
+        """
         traj = self._traj
         mean = traj.mean(axis=0)
         return mean
 
     @property
-    def distance_to_mean(self):
+    def distance_to_mean(self) -> np.ndarray:
+        """The distance to the mean dye position
+        """
         mean = self.mean
         dm = np.linalg.norm(self._traj - mean, axis=1)
         return dm
@@ -124,8 +147,20 @@ class SimulateDiffusion(object):
         return self._traj, self._is_quenched
 
     @property
-    def critical_distance(self):
+    def critical_distance(self) -> float:
         return self._critical_distance
+
+    @critical_distance.setter
+    def critical_distance(
+            self,
+            v: float
+    ):
+        self._critical_distance = v
+        self._is_quenched = is_quenched(
+            self.quencher_distances,
+            self._critical_distance,
+            self.verbose
+        )
 
     @property
     def quencher_distances(self):
@@ -133,23 +168,35 @@ class SimulateDiffusion(object):
             raise ValueError("Set quencher first.")
         return self._quencher_distances
 
-    @critical_distance.setter
-    def critical_distance(self, v):
-        self._critical_distance = v
-        self._is_quenched = is_quenched(self.quencher_distances, self._critical_distance, self.verbose)
-
     @property
     def quenched(self):
         if self._is_quenched is None:
             raise ValueError("Run simulation first and set critical distance")
         return self._is_quenched
 
-    def save_trajectory(self, filename, skip):
-        write_xyz(filename, (self._traj)[::skip])
+    def save_trajectory(
+            self,
+            filename: str,
+            stride: int
+    ) -> None:
+        quest.lib.io.write_xyz(
+            filename=filename,
+            points=self._traj[::stride]
+        )
 
-    def __init__(self, av, quencher, output_file='out', verbose=False,
-                 critical_distance=None, asa_calc=False, asa_n_sphere_point=590, asa_probe_radius=0.5,
-                 trajectory_suffix='_traj.xyz', all_quencher_atoms=True):
+    def __init__(
+            self,
+            av,
+            quencher,
+            output_file: str = 'out',
+            verbose: bool = False,
+            critical_distance: float = None,
+            asa_calc: bool = False,
+            asa_n_sphere_point: int = 590,
+            asa_probe_radius: float = 0.5,
+            trajectory_suffix: float = '_traj.xyz',
+            all_quencher_atoms: bool = True
+    ):
         """
 
         :param av:
@@ -179,7 +226,7 @@ class SimulateDiffusion(object):
         self.asa_n_sphere_point = asa_n_sphere_point
         self.asa_probe_radius = asa_probe_radius
         self.asa_n_sphere_point = asa_n_sphere_point
-        self.asa_sphere_points = fps.spherePoints(asa_n_sphere_point) if asa_calc else None
+        self.asa_sphere_points = fps.fps.spherePoints(asa_n_sphere_point) if asa_calc else None
         self._asa = None
 
         self.pdb = av.structure.atoms
@@ -199,10 +246,15 @@ class SimulateDiffusion(object):
         self._is_quenched = None
         self._kQ = None
         self.quencher = quencher
+        self._quencher_distances = None
 
         self.trajectory_suffix = trajectory_suffix
 
-    def get_quencher_distance2(self, quencher_coordinates, verbose=False):
+    def get_quencher_distance2(
+            self,
+            quencher_coordinates: np.ndarray,
+            verbose: bool = False
+    ):
         """
         quencher_coordinates: a list or 2D array containing positions of the quenchers
         `critical_distance`: flurophoreq gets quenched below the critical distance
@@ -224,16 +276,22 @@ class SimulateDiffusion(object):
         return self._quencher
 
     @quencher.setter
-    def quencher(self, quencher):
+    def quencher(
+            self,
+            quencher
+    ):
         if self.all_quencher_atoms:
-            q_new = OrderedDict()
+            q_new = dict()
             pdb = self.pdb
             for residue_key in quencher:
                 atoms_idx = np.where(pdb['res_name'] == residue_key)[0]
                 q_new[residue_key] = list(set(pdb[atoms_idx]['atom_name']))
             quencher = q_new
         self._quencher = quencher
-        self._quencher_atom_indices = selection2atom_idx(self.pdb, quencher)
+        self._quencher_atom_indices = selection2atom_idx(
+            self.pdb,
+            quencher
+        )
         if self.verbose:
             print("_quencher_atom_indices")
             print(self._quencher_atom_indices)
@@ -248,13 +306,18 @@ class SimulateDiffusion(object):
             print(self._quencher_atom_indices)
 
         quencher_atom_index_array = np.hstack([v.flatten() for v in list(self._quencher_atom_indices.values())])
-        asa_v = fps.asa(self.av.structure.atoms['coord'], self.av.structure.atoms['radius'], quencher_atom_index_array,
-                        self.asa_sphere_points, self.asa_probe_radius)
+        asa_v = fps.fps.asa(
+            self.av.structure.atoms['coord'],
+            self.av.structure.atoms['radius'],
+            quencher_atom_index_array,
+            self.asa_sphere_points,
+            self.asa_probe_radius
+        )
 
         asa_it = (x for x in asa_v)
-        asa = OrderedDict()
+        asa = dict()
         for res_key in self._quencher_atom_indices:
-            asa[res_key] = [next(asa_it) for idx in self._quencher_atom_indices[res_key]]
+            asa[res_key] = [next(asa_it) for _ in self._quencher_atom_indices[res_key]]
         self._asa = asa
         if self.verbose:
             print("Accessible surface area:")
@@ -269,12 +332,10 @@ class SimulateDiffusion(object):
         return self._kQ
 
     @property
-    def quencher_atom_indices(self):
-        return self._quencher_atom_indices
-
-    @property
-    def quencher_coordinates(self):
-        return np.vstack(list(self._quencher_coordinates.values()))
+    def quencher_coordinates(self) -> np.ndarray:
+        return np.vstack(
+            list(self._quencher_coordinates.values())
+        )
 
     @property
     def quencher_asa(self):
@@ -292,10 +353,20 @@ class SimulateDiffusion(object):
         atom_indices = np.array(self._quencher_atom_indices, dtype=np.uint32)
         self._quencher_atom_indeces = atom_indices
 
-    def run(self, D=40.0, slow_fact=0.01, t_step=0.002, t_max=10000, save_traj=False, save_j=50, verbose=True, **kwargs):
+    def run(
+            self,
+            diffusion_coefficient: float = 40.0,
+            slow_fact: float = 0.01,
+            t_step: float = 0.002,
+            t_max: float = 10000,
+            save_traj: bool = False,
+            save_j: int = 50,
+            verbose: bool = True,
+            **kwargs
+    ):
         """
 
-        :param D: float
+        :param diffusion_coefficient: float
             diffusion coefficient of dye in Ang**2/ns
         :param slow_fact: float
             The diffusion coefficient of the dye within the slow-accessible volume is slower by a factor of slow_fact.
@@ -313,50 +384,108 @@ class SimulateDiffusion(object):
         self.t_step = t_step
         dg = self.dg
         density, slow_density = self.av_fast, self.av_slow
+        n_av_points = len(self.av.points.T)
+        if n_av_points == 0:
+            quest.lib.widgets.MyMessageBox(
+                info="The accessible volume is empty cannot compute fluorescence properties"
+            )
+            return None
+
         if verbose:
             print("Simulate dye-trajectory")
             print("Simulation time [us]: %.2f" % (t_max / 1000))
             print("Time-step [ps]: %.2f" % (t_step * 1000))
             print("Number of steps: %.2f" % int((t_max / t_step)))
             print("AV-grid parameter [Ang]: %.2f" % dg)
-            print("Diff coeff. [Ang/ns2]: %.2f" % D)
-            print("Shape-AV slow (x,y,z): %s %s %s" % (slow_density.shape))
-            print("Shape-AV fast (x,y,z): %s %s %s" % (density.shape))
+            print("Diff coeff. [Ang/ns2]: %.2f" % diffusion_coefficient)
+            print("Shape-AV slow (x,y,z): %s %s %s" % slow_density.shape)
+            print("Shape-AV fast (x,y,z): %s %s %s" % density.shape)
+            print("Number of points in AV: %s" % n_av_points)
             print("------")
+
         start = time.clock()
-        traj, a, n_accepted, n_rejected = fps.simulate_traj(density, slow_density, dg,
-                                                          slow_fact=slow_fact, t_step=t_step, t_max=t_max, D=D)
-        traj += self.x0
-        self._traj = traj
 
-        if verbose:
-            print("Accepted steps: %i" % n_accepted)
-            print("Rejected steps: %i" % n_rejected)
-        end = time.clock()
-        if verbose:
-            print("time spent: %.2gs" % (end-start))
-            print("n_accepted: %s" % n_accepted)
-            print("-----------------------")
-            print("Attachment point: %s" % self.x0)
-            print("Mean dye-position: %s" % self.mean)
+        if len(self.av.points) == 0:
+            quest.lib.widgets.MyMessageBox(
+                label="Failed to simulate",
+                details="There are no points in the accessible volume. "
+                        "Is the labeling site accessible?"
+            )
+            return None
 
-        if save_traj:
-            self.save_trajectory(self.output_file+self.trajectory_suffix, save_j)
-        self._quencher_distances = self.get_quencher_distance2(self.quencher_coordinates, verbose)
-        if verbose:
-            print("Quencher distances:")
-            print("Quencher distances shape: %s, %s" % self._quencher_distances.shape)
-            print(self._quencher_distances)
+        pos = None
+        max_initial_sample = 100000
+        for i in range(max_initial_sample):
+            rnd_idx = np.random.randint(0, density.shape[0], 3)
+            if density[rnd_idx[0], rnd_idx[1], rnd_idx[2]] > 0:
+                pos = np.array(rnd_idx, dtype=np.float64)
+                break
+
+        if pos is not None:
+            traj, a, n_accepted, n_rejected = fps.fps.simulate_traj(
+                density, slow_density, dg,
+                slow_fact=slow_fact,
+                t_step=t_step,
+                t_max=t_max,
+                D=diffusion_coefficient,
+                initial_position=pos
+            )
+            traj += self.x0
+            self._traj = traj
+            if verbose:
+                print("Accepted steps: %i" % n_accepted)
+                print("Rejected steps: %i" % n_rejected)
+            end = time.clock()
+            if verbose:
+                print("time spent: %.2gs" % (end-start))
+                print("n_accepted: %s" % n_accepted)
+                print("-----------------------")
+                print("Attachment point: %s" % self.x0)
+                print("Mean dye-position: %s" % self.mean)
+
+            if save_traj:
+                self.save_trajectory(self.output_file+self.trajectory_suffix, save_j)
+            self._quencher_distances = self.get_quencher_distance2(
+                self.quencher_coordinates,
+                verbose
+            )
+            if verbose:
+                print("Quencher distances:")
+                print("Quencher distances shape: %s, %s" % self._quencher_distances.shape)
+                print(self._quencher_distances)
+        else:
+            quest.lib.widgets.MyMessageBox(
+                label="Failed to simulate",
+                details="Failed to find starting position."
+            )
 
 
 class DonorDecay(object):
 
-    def __init__(self, tau0=None, kQ=1.0, nph=0, verbose=False, auto_update=False, pdb=None,
-                 attachment_residue=None, attachment_atom=None, attachment_chain=None, dg=0.5, sticky_mode='quencher',
-                 save_avs=True, D=None, slow_fact=0.05, critical_distance=None, output_file='out',
-                 av_parameter={'linker_length': 20.0, 'linker_width': 0.5, 'radius1': 5.0},
-                 quencher={'TRP': ['CB'], 'TYR': ['CB'], 'HIS': ['CB']}, t_max=10000.0, t_step=0.004,
-                 slow_radius=10.0, all_quencher_atoms=True):
+    def __init__(
+            self,
+            tau0 = None,
+            kQ: float = 1.0,
+            nph: int = 0,
+            verbose: bool = False,
+            auto_update: bool = False,
+            pdb = None,
+            attachment_residue = None,
+            attachment_atom = None,
+            attachment_chain: str = None,
+            dg: float = 0.5,
+            sticky_mode: str = 'quencher',
+            save_avs: bool = True,
+            diffusion_coefficient = None,
+            slow_fact: float = 0.05,
+            critical_distance = None,
+            output_file: str = 'out',
+            av_parameter: typing.Dict = None,
+            quencher: typing.Dict = None,
+            t_max: float = 10000.0,
+            t_step: float = 0.004,
+            slow_radius: float = 10.0,
+            all_quencher_atoms: bool = True):
         """
         quenching trajectory as calculated by SimulateDiffusion.quenched
         :param tau0: float
@@ -371,7 +500,7 @@ class DonorDecay(object):
         :param dg: float
         :param sticky_mode:
         :param save_avs: bool
-        :param D: float
+        :param diffusion_coefficient: float
         :param slow_fact: float
         :param critical_distance: float
         :param output_file: string
@@ -383,6 +512,19 @@ class DonorDecay(object):
         :param all_quencher_atoms:
         """
         self.verbose = verbose
+        if av_parameter is None:
+            av_parameter = {
+                'linker_length': 20.0,
+                'linker_width': 0.5,
+                'radius1': 5.0
+            }
+        if quencher is None:
+            quencher = {
+                'TRP': ['CB'],
+                'TYR': ['CB'],
+                'HIS': ['CB']
+            }
+
         self._av = None
         self._diffusion = None
         self.tau0 = tau0
@@ -394,7 +536,7 @@ class DonorDecay(object):
         self.attachment_residue = attachment_residue
         self.attachment_atom = attachment_atom
         self.attachment_chain = attachment_chain
-        self.diffusion_coefficient = D
+        self.diffusion_coefficient = diffusion_coefficient
         self.slow_fact = slow_fact
         self.dg = dg
         self.save_avs = save_avs
@@ -427,22 +569,32 @@ class DonorDecay(object):
         return self._diffusion
 
     @property
-    def slow_center(self):
+    def slow_center(
+            self
+    ) -> np.ndarray:
         if self.sticky_mode == 'quencher':
             coordinates = get_quencher_coordinates(self.structure.atoms, self.quencher)
-            s = [np.vstack(coordinates[res_key]) for res_key in coordinates if len(coordinates[res_key]) > 0]
+            s = [
+                np.vstack(coordinates[res_key]) for res_key in coordinates if len(coordinates[res_key]) > 0
+            ]
             coordinates = np.vstack(s)
-        elif self.sticky_mode == 'surface':
+        else: #elif self.sticky_mode == 'surface':
             slow_atoms = np.where(self.structure.atoms['atom_name'] == 'CB')[0]
             coordinates = self.structure.atoms['coord'][slow_atoms]
         return coordinates
 
     @property
-    def av(self):
+    def av(
+            self
+    ) -> AV:
         if self._av is None:
             self.calc_av()
-            self._av.calc_slow_av(save=self.save_avs, slow_centers=self.slow_center,
-                                  slow_radius=self.slow_radius, verbose=self.verbose)
+            self._av.calc_slow_av(
+                save=self.save_avs,
+                slow_centers=self.slow_center,
+                slow_radius=self.slow_radius,
+                verbose=self.verbose
+            )
         return self._av
 
     @property
@@ -460,36 +612,77 @@ class DonorDecay(object):
         return self._structure
 
     @structure.setter
-    def structure(self, v):
-        self._structure = Structure(v, make_coarse=False)
-        tf = tempfile.NamedTemporaryFile(suffix=".pdb")
-        self._tmp_file = tf.name
-        tf.close()
-        self._structure.write(self._tmp_file)
+    def structure(
+            self,
+            pdb_filename: str
+    ):
+        self._structure = quest.lib.structure.Structure(
+            pdb_filename,
+            make_coarse=False
+        )
+        with tempfile.NamedTemporaryFile(suffix=".pdb") as tf:
+            self._tmp_file = tf.name
+            tf.close()
+            self._structure.write(self._tmp_file)
 
-    def calc_av(self, verbose=False):
+    def calc_av(
+            self,
+            verbose: bool = False
+    ):
         verbose = verbose or self.verbose
+        if verbose:
+            print("Calculating normal-AV")
         dg = self.dg
         residue = self.attachment_residue
         attachment_atom = self.attachment_atom
         chain = self.attachment_chain
         structure = self.structure
-        av = AV(structure, residue_seq_number=residue, atom_name=attachment_atom, chain_identifier=chain,
-                simulation_grid_resolution=dg, save_av=self.save_avs, verbose=verbose,
-                output_file=self.output_file, **self.av_parameter)
+        av = AV(
+            structure=structure,
+            residue_seq_number=residue,
+            atom_name=attachment_atom,
+            chain_identifier=chain,
+            simulation_grid_resolution=dg,
+            save_av=self.save_avs,
+            verbose=verbose,
+            output_file=self.output_file,
+            **self.av_parameter
+        )
         self._av = av
 
-    def simulate_diffusion(self, verbose=False, plot_traj=False):
+    def simulate_diffusion(
+            self,
+            verbose: bool = False,
+            plot_traj: bool = False
+    ):
         all_quencher_atoms = self.all_quencher_atoms
         verbose = verbose or self.verbose
+        if verbose:
+            print("Simulating diffusion")
         av = self.av
-        D = self.diffusion_coefficient
-        slow_fact = self.slow_fact
-        diffusion = SimulateDiffusion(av, quencher=self.quencher, verbose=verbose, all_quencher_atoms=all_quencher_atoms)
-        diffusion.run(D=D, slow_fact=slow_fact, t_max=self.t_max, t_step=self.t_step)
-        self._diffusion = diffusion
+        if len(av.points) > 0:
+            diffusion_coefficient = self.diffusion_coefficient
+            slow_fact = self.slow_fact
+            diffusion = SimulateDiffusion(
+                av,
+                quencher=self.quencher,
+                verbose=verbose,
+                all_quencher_atoms=all_quencher_atoms
+            )
+            diffusion.run(
+                diffusion_coefficient=diffusion_coefficient,
+                slow_fact=slow_fact,
+                t_max=self.t_max,
+                t_step=self.t_step
+            )
+            self._diffusion = diffusion
 
-    def calc_photons(self, verbose=False, donor_traj=None, kQ=None):
+    def calc_photons(
+            self,
+            verbose: bool = False,
+            donor_traj=None,
+            kQ = None
+    ):
         """
         `n_ph`: number of generated photons
         `pq`: quenching probability if distance of fluorphore is below the `critical_distance`
@@ -514,7 +707,13 @@ class DonorDecay(object):
         t_step = donor_traj.t_step
         #dts, phs = photon.simulate_photon_trace(n_ph=n_photons, collided=is_collided,
         #                                        quenching_prob=kQ, t_step=t_step, tau0=tau0)
-        dts, phs = photon.simulate_photon_trace_kQ(n_ph=n_photons, collided=is_collided, kQ=kQ, t_step=t_step, tau0=tau0)
+        dts, phs = photon.simulate_photon_trace_kQ(
+            n_ph=n_photons,
+            collided=is_collided,
+            kQ=kQ,
+            t_step=t_step,
+            tau0=tau0
+        )
 
         #kQ = donor_traj.kQ
         #dts, phs = photon.simulate_photon_trace(n_ph=n_photons, kQ=kQ, t_step=t_step, tau0=tau0)
@@ -522,52 +721,72 @@ class DonorDecay(object):
         n_photons = phs.shape[0]
         n_f = phs.sum()
         if verbose or self.verbose:
-            print("Number of absorbed photons: %s" % (n_photons))
-            print("Number of fluorescent photons: %s" % (n_f))
+            print("Number of absorbed photons: %s" % n_photons)
+            print("Number of fluorescent photons: %s" % n_f)
             print("Quantum yield: %.2f" % (float(n_f) / n_photons))
         self._photon_trace = dts, phs
 
-    def get_histogram(self, nbins=4096, range=(0, 50)):
+    def get_histogram(
+            self,
+            nbins: int = 4096,
+            range: typing.Tuple[int, int] = (0, 50)
+    ) -> typing.Tuple[np.ndarray, np.ndarray]:
         dts, nph = self.photon_trace
-        y, x = np.histogram(dts, range=range, bins=nbins)
+        y, x = np.histogram(
+            dts,
+            range=range,
+            bins=nbins
+        )
         return x, y
 
-    def save_histogram(self, filename='hist.txt', verbose=False, nbins=4096, range=(0, 50)):
+    def save_histogram(
+            self,
+            filename: str = 'hist.txt',
+            verbose: bool = False,
+            nbins: int = 4096,
+            range: typing.Tuple[int, int] = (0, 50)
+    ):
         verbose = verbose or self.verbose
         x, y, = self.get_histogram(nbins, range)
         save_hist(filename, x, y, verbose)
 
-    def update_all(self, verbose=False):
+    def update_all(
+            self,
+            verbose: bool = False
+    ) -> bool:
         verbose = verbose or self.verbose
-        gc.collect()
         if verbose:
             print("Updating simulation")
-            print("Calculating normal-AV")
         self.calc_av(verbose=verbose)
-        if verbose:
-            print("Calculating slow-AV")
-        self._av.calc_slow_av(save=self.save_avs, slow_radius=self.slow_radius, slow_centers=self.slow_center)
-        if verbose:
-            print("Simulating diffusion")
-        self.simulate_diffusion(verbose=verbose)
-        if verbose:
-            print("Determining quencher distances.")
-        self.diffusion.critical_distance = self.critical_distance
-        if verbose:
-            print("Simulating decay")
-        self.calc_photons(verbose=verbose)
+        if len(self.av.points.T) > self.av.min_points:
+            self._av.calc_slow_av(
+                save=self.save_avs,
+                slow_radius=self.slow_radius,
+                slow_centers=self.slow_center,
+                verbose=verbose
+            )
+            self.simulate_diffusion(
+                verbose=verbose
+            )
+            if verbose:
+                print("Determining quencher distances.")
+            self.diffusion.critical_distance = self.critical_distance
+            if verbose:
+                print("Simulating decay")
+            self.calc_photons(verbose=verbose)
+            return True
+        else:
+            return False
 
 
 class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
 
-    name = "Lifetime-Calculator"
-
     def __init__(
             self,
-            verbose=False,
-            settings_file=None
+            verbose: bool = False,
+            settings_file: str = None
     ):
-        super(TransientDecayGenerator, self).__init__()
+        super().__init__()
         uic.loadUi(
             os.path.join(
                 os.path.dirname(
@@ -585,7 +804,7 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
                 'dye_diffusion.json'
             )
 
-        self.pdb_selector = PDBSelector()
+        self.pdb_selector = quest.lib.widgets.PDBSelector()
         self.verticalLayout_10.addWidget(self.pdb_selector)
         self._settings_file = None
         self.settings_file = settings_file
@@ -635,17 +854,23 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         self.verticalLayout_6.addWidget(fd)
 
         ## Protein Structure
-        self.molview = MolQtWidget(self, enableUi=False)
+        self.molview = quest.lib.plots.MolQtWidget(self, enableUi=False)
         self.verticalLayout_4.addWidget(self.molview)
 
         self.diff_file = None
         self.av_slow_file = None
         self.av_fast_file = None
 
-    def onSaveHist(self, verbose=False):
+    def onSaveHist(
+            self,
+            verbose: bool = False
+    ) -> None:
         verbose = self.verbose or verbose
-        filename = QtWidgets.QFileDialog.getSaveFileName(self, 'Save File', '.')
-        self.save_histogram(filename=filename, verbose=verbose)
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, 'Save File', '.')[0]
+        self.save_histogram(
+            filename=filename,
+            verbose=verbose
+        )
 
     def molview_highlight_quencher(self):
         quencher = self.quencher
@@ -664,14 +889,20 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         return self._settings_file
 
     @settings_file.setter
-    def settings_file(self, v):
+    def settings_file(
+            self,
+            v: str
+    ):
         self.lineEdit_2.setText(v)
 
     @property
     def load_3d_av(self):
         return bool(self.checkBox_3.isChecked())
 
-    def update_3D(self, load_av=False):
+    def update_3D(
+            self,
+            load_av: bool = False
+    ):
         load_av = load_av or self.load_3d_av
         self.molview.reset()
         if self.pdb_filename is not None:
@@ -698,7 +929,7 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         y = self.diffusion.distance_to_mean
         x = np.linspace(0, self.t_max, y.shape[0])
         self.diffusion_curve.set_data(x, y)
-        auto_corr = autocorr(y)
+        auto_corr = quest.lib.math.functions.autocorr(y)
         self.diffusion_autocorrelation.set_data(x, auto_corr)
         self.plot_autocorr.do_autoscale()
         self.plot_diffusion.do_autoscale()
@@ -711,29 +942,51 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         self.unquenched_curve.set_data(x, yu + 1.0)
         self.plot_decay.do_autoscale()
 
-    def update_all(self, verbose=False):
-        DonorDecay.update_all(self)
-        self.doubleSpinBox_16.setValue(self.quantum_yield)
-        self.doubleSpinBox_15.setValue(self.collisions * 100.0)
-        diff_file, av_slow_file, av_fast_file = self.onSaveAV(directory=self.tmp_dir)
-        self.diff_file = diff_file
-        self.av_slow_file = av_slow_file
-        self.av_fast_file = av_fast_file
-        self.update_3D()
-        self.update_decay_histogram()
-        self.update_trajectory_curve()
+    def update_all(
+            self,
+            verbose: bool = False
+    ):
+        u = super().update_all()
+        print(u)
+        if u is False:
+            message_box = quest.lib.widgets.MyMessageBox(
+                label="Accessible volume empty."
+            )
+            message_box.show()
+        else:
+            self.doubleSpinBox_16.setValue(self.quantum_yield)
+            self.doubleSpinBox_15.setValue(self.collisions * 100.0)
 
-    def onSaveAV(self, verbose=False, directory=None):
+            diff_file, av_slow_file, av_fast_file = self.onSaveAV(
+                verbose=verbose,
+                directory=self.tmp_dir
+            )
+
+            self.diff_file = diff_file
+            self.av_slow_file = av_slow_file
+            self.av_fast_file = av_fast_file
+            self.update_3D()
+            self.update_decay_histogram()
+            self.update_trajectory_curve()
+
+    def onSaveAV(
+            self,
+            verbose: bool = False,
+            directory: str = None
+    ):
         verbose = self.verbose or verbose
+
         if verbose:
             print("\nWriting AVs to directory")
             print("-------------------------")
         if directory is None:
             directory = str(QtWidgets.QFileDialog.getExistingDirectory(self, 'Choose directory', '.'))
+
         if verbose:
             print("Directory: %s" % directory)
             print("Filename-Prefix: %s" % str(self.filename_prefix))
         diff_file = os.path.join(directory, self.filename_prefix+self.diffusion.trajectory_suffix)
+
         if verbose:
             print("Saving trajectory...")
             print("Trajectory filename: %s" % diff_file)
@@ -744,36 +997,37 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         if verbose:
             print("\nSaving slow AV...")
             print("Trajectory filename: %s" % av_slow_file)
-        write_xyz(av_slow_file, self.av.points_slow)
+        quest.lib.io.write_xyz(av_slow_file, self.av.points_slow)
 
         av_fast_file = os.path.join(directory, self.filename_prefix + '_av_fast.xyz')
+
         if verbose:
-            print("\nSaving slow AV...")
+            print("\nSaving fast AV...")
             print("Trajectory filename: %s" % av_fast_file)
-        write_xyz(av_fast_file, self.av.points_fast)
+        quest.lib.io.write_xyz(av_fast_file, self.av.points_fast)
         return diff_file, av_slow_file, av_fast_file
 
     @property
-    def all_quencher_atoms(self):
+    def all_quencher_atoms(self) -> bool:
         return not bool(self.groupBox_5.isChecked())
 
     @all_quencher_atoms.setter
-    def all_quencher_atoms(self, v):
+    def all_quencher_atoms(self, v: bool):
         try:
             self.groupBox_5.setChecked(not v)
         except AttributeError:
             pass
 
     @property
-    def filename_prefix(self):
+    def filename_prefix(self) -> str:
         return str(self.lineEdit_5.text())
 
     @property
-    def skip_frame(self):
+    def skip_frame(self) -> int:
         return int(self.spinBox_3.value())
 
     @property
-    def n_frames(self):
+    def n_frames(self) -> int:
         return int(self.spinBox.value())
 
     def onSimulationDtChanged(self):
@@ -784,45 +1038,53 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         time_steps = self.t_max / self.t_step
         self.spinBox.setValue(int(time_steps))
 
-    def onLoadPDB(self):
-        self.pdb_filename = str(QtWidgets.QFileDialog.getOpenFileName(None, 'Open PDB-File', '', 'PDB-files (*.pdb)')[0])
+    def onLoadPDB(
+            self,
+            event: QtCore.QEvent = None,
+            pdb_filename: str = None
+    ):
+        if pdb_filename is None:
+            pdb_filename = str(
+                QtWidgets.QFileDialog.getOpenFileName(None, 'Open PDB-File', '', 'PDB-files (*.pdb)')[0]
+            )
+        self.pdb_filename = pdb_filename
         self.structure = self.pdb_filename
         self.pdb_selector.atoms = self.structure.atoms
         self.tmp_dir = tempfile.gettempdir()
         self.update_3D()
 
     @property
-    def dg(self):
+    def dg(self) -> float:
         return float(self.doubleSpinBox_17.value())
 
     @dg.setter
-    def dg(self, v):
+    def dg(self, v: float):
         try:
             self.doubleSpinBox_17.setValue(float(v))
         except AttributeError:
             pass
 
     @property
-    def slow_radius(self):
+    def slow_radius(self) -> float:
         return float(self.doubleSpinBox_10.value())
 
     @slow_radius.setter
-    def slow_radius(self, v):
+    def slow_radius(self, v: float):
         try:
             self.doubleSpinBox_10.setValue(v)
         except AttributeError:
             pass
 
     @property
-    def nBins(self):
+    def nBins(self) -> int:
         return int(self.spinBox_2.value())
 
     @property
-    def n_photons(self):
+    def n_photons(self) -> int:
         return int(self.doubleSpinBox_11.value() * 1e6)
 
     @n_photons.setter
-    def n_photons(self, v):
+    def n_photons(self, v: int):
         try:
             self.doubleSpinBox_11.setValue(v / 1e6)
         except AttributeError:
@@ -833,7 +1095,7 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         """
         dict of atom names, dict keys are residue types
         """
-        p = OrderedDict()
+        p = dict()
         for qn in str(self.lineEdit_3.text()).split():
             p[qn] = ['CB']
         return p
@@ -849,14 +1111,14 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
             pass
 
     @property
-    def sticky_mode(self):
+    def sticky_mode(self) -> str:
         if self.radioButton.isChecked():
             return 'surface'
         elif self.radioButton_2.isChecked():
             return 'quencher'
 
     @sticky_mode.setter
-    def sticky_mode(self, v):
+    def sticky_mode(self, v: str):
         try:
             print("set sticky: ")
             if v == 'surface':
@@ -872,7 +1134,7 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
 
     @property
     def av_parameter(self):
-        p = OrderedDict()
+        p = dict()
         p['linker_length'] = float(self.doubleSpinBox.value())
         p['linker_width'] = float(self.doubleSpinBox_2.value())
         p['radius1'] = float(self.doubleSpinBox_3.value())
@@ -888,36 +1150,36 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
             pass
 
     @property
-    def critical_distance(self):
+    def critical_distance(self) -> float:
         return float(self.doubleSpinBox_12.value())
 
     @critical_distance.setter
-    def critical_distance(self, v):
+    def critical_distance(self, v: float):
         try:
             self.doubleSpinBox_12.setValue(float(v))
         except AttributeError:
             pass
 
     @property
-    def slow_fact(self):
+    def slow_fact(self) -> float:
         return float(self.doubleSpinBox_5.value())
 
     @slow_fact.setter
-    def slow_fact(self, v):
+    def slow_fact(self, v: float):
         try:
             self.doubleSpinBox_5.setValue(float(v))
         except AttributeError:
             pass
 
     @property
-    def t_max(self):
+    def t_max(self) -> float:
         """
         simulation time in nano-seconds
         """
         return float(self.doubleSpinBox_6.value()) * 1000.0
 
     @t_max.setter
-    def t_max(self, v):
+    def t_max(self, v: float):
         try:
             self.onSimulationTimeChanged()
             self.doubleSpinBox_6.setValue(float(v / 1000.0))
@@ -925,14 +1187,14 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
             pass
 
     @property
-    def t_step(self):
+    def t_step(self) -> float:
         """
         time-step in nano-seconds
         """
         return float(self.doubleSpinBox_7.value()) / 1000.0
 
     @t_step.setter
-    def t_step(self, v):
+    def t_step(self, v: float):
         try:
             self.onSimulationTimeChanged()
             self.doubleSpinBox_7.setValue(float(v * 1000.0))
@@ -940,51 +1202,51 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
             pass
 
     @property
-    def diffusion_coefficient(self):
+    def diffusion_coefficient(self) -> float:
         return float(self.doubleSpinBox_4.value())
 
     @diffusion_coefficient.setter
-    def diffusion_coefficient(self, v):
+    def diffusion_coefficient(self, v: float):
         try:
             self.doubleSpinBox_4.setValue(v)
         except AttributeError:
             pass
 
     @property
-    def kQ(self):
+    def kQ(self) -> float:
         return float(self.doubleSpinBox_9.value())
 
     @kQ.setter
-    def kQ(self, v):
+    def kQ(self, v: float):
         try:
             self.doubleSpinBox_9.setValue(float(v))
         except AttributeError:
             pass
 
     @property
-    def tau0(self):
+    def tau0(self) -> float:
         return float(self.doubleSpinBox_8.value())
 
     @tau0.setter
-    def tau0(self, v):
+    def tau0(self, v: float):
         try:
             self.doubleSpinBox_8.setValue(float(v))
         except AttributeError:
             pass
 
     @property
-    def attachment_chain(self):
+    def attachment_chain(self) -> str:
         return self.pdb_selector.chain_id
 
     @attachment_chain.setter
-    def attachment_chain(self, v):
+    def attachment_chain(self, v: str):
         try:
             self.pdb_selector.chain_id = v
         except AttributeError:
             pass
 
     @property
-    def attachment_residue(self):
+    def attachment_residue(self) -> int:
         return self.pdb_selector.residue_id
 
     @attachment_residue.setter

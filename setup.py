@@ -36,9 +36,6 @@ if args.count("build_ext") > 0 and args.count("--inplace") == 0:
 # and build up the set of Extension objects
 extension_list = [
     ['./quest/lib/fps/fps.pyx', './quest/lib/fps/mt19937cok.cpp'],
-    ['./quest/lib/math/functions/rdf.pyx'],
-    ['./quest/lib/math/functions/small.pyx'],
-    ['./quest/lib/math/linalg/vector.pyx'],
     ['./quest/lib/structure/cStructure.pyx'],
     ['./quest/lib/tools/dye_diffusion/photon.pyx', './quest/lib/tools/dye_diffusion/mt19937cok.cpp'],
 ]

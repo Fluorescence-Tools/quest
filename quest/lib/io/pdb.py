@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import os
 import locale
 import numpy as np
-import lib.common as common
+import quest.lib.common as common
 
 
 keys = ['i', 'chain', 'res_id', 'res_name',
@@ -70,7 +72,6 @@ def sequence(structure, use_atoms=False):
         for c in list(chain_dict.keys()):
             chain_dict[c] = [l[17:20] for l in atoms if l[21] == c]
     return chain_dict
-
 
 
 def parse_string_pdb(string, assignCharge=False, **kwargs):
@@ -165,7 +166,11 @@ def assign_element_to_atom_name(
     return atom_name
 
 
-def read(filename, assignCharge=False, **kwargs):
+def read(
+        filename: str,
+        assignCharge=False,
+        **kwargs
+):
     """ Open pdb_file and read each line into pdb (a list of lines)
 
     :param filename:
@@ -188,18 +193,21 @@ def read(filename, assignCharge=False, **kwargs):
     ])
     """
     verbose = kwargs.get('verbose', True)
-    with open(filename, 'r') as f:
-        string = f.read()
-        if verbose:
-            path, baseName = os.path.split(filename)
-            print("======================================")
-            print("Filename: %s" % filename)
-            print("Path: %s" % path)
-        if filename.endswith('.pdb'):
-            atoms = parse_string_pdb(string, assignCharge, **kwargs)
-        elif filename.endswith('.pqr'):
-            atoms = parse_string_pqr(string, **kwargs)
-    return atoms
+    if os.path.isfile(filename):
+        with open(filename, 'r') as f:
+            string = f.read()
+            if verbose:
+                path, baseName = os.path.split(filename)
+                print("======================================")
+                print("Filename: %s" % filename)
+                print("Path: %s" % path)
+            if filename.endswith('.pdb'):
+                atoms = parse_string_pdb(string, assignCharge, **kwargs)
+            elif filename.endswith('.pqr'):
+                atoms = parse_string_pqr(string, **kwargs)
+        return atoms
+    else:
+        return np.zeros(0, dtype={'names': keys, 'formats': formats})
 
 
 def write(filename, atoms=None, append=False):

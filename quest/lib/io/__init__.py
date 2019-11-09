@@ -1,4 +1,14 @@
-def write_xyz(filename, points, verbose=False):
+from __future__ import annotations
+
+import numpy as np
+import quest.lib.io.pdb
+
+
+def write_xyz(
+        filename: str,
+        points: np.ndarray,
+        verbose: bool = False
+):
     """
     Writes the points as xyz-format file. The xyz-format file can be opened and displayed for instance
     in PyMol

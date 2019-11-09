@@ -1,8 +1,6 @@
 __author__ = 'thomas'
 import numpy as np
 
-from . import datatools
-
 
 def autocorr(x, axis=0, fast=False):
     """

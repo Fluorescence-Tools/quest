@@ -1,46 +1,42 @@
-__author__ = 'thomas'
+from __future__ import annotations
+
 import os
 import sys
+import pymol2
 
-from PyQt5 import QtGui, QtCore, uic, QtWidgets
+from qtpy import QtGui, QtCore, uic, QtWidgets, QtOpenGL
+from qtpy.QtCore import Qt
 from OpenGL.GL import *
-from PyQt5.QtOpenGL import *
-from PyQt5.Qt import Qt
 
-from lib.plots.plotbase import Plot
-
-try:
-    import pymol2
-except ImportError:
-    pass
+from quest.lib.plots.plotbase import Plot
 
 
-class EmittingStream(QtCore.QObject):
+class MolQtWidget(
+    QtOpenGL.QGLWidget
+):
 
-    textWritten = QtCore.pyqtSignal(str)
+    _buttonMap = {
+        Qt.LeftButton: 0,
+        Qt.MidButton: 1,
+        Qt.RightButton: 2
+    }
 
-    def write(self, text):
-        self.textWritten.emit(str(text))
-
-
-class MolQtWidget(QGLWidget):
-    """
-    http://www.mail-archive.com/pymol-users@lists.sourceforge.net/msg09609.html
-    maybe later use this...: http://www.plosone.org/article/info:doi/10.1371/journal.pone.0021931
-    """
-    _buttonMap = {Qt.LeftButton:0,
-                  Qt.MidButton:1,
-                  Qt.RightButton:2}
-
-    def __init__(self, parent, enableUi=True, File="", play=False, sequence=False):
-        f = QGLFormat()
+    def __init__(
+            self,
+            parent,
+            enableUi: bool = True,
+            File: str = "",
+            play: bool = False,
+            sequence: bool = False
+    ):
+        f = QtOpenGL.QGLFormat()
         f.setStencil(True)
         f.setRgba(True)
         f.setDepth(True)
         f.setDoubleBuffer(True)
         self.play = play
         self.nFrames = 0
-        QGLWidget.__init__(self, f, parent=parent)
+        QtOpenGL.QGLWidget.__init__(self, f, parent=parent)
         self.setMinimumSize(200, 150)
         self._enableUi = enableUi
         self.pymol = pymol2.PyMOL()# _pymolPool.getInstance()
@@ -253,7 +249,7 @@ class ControlWidget(QtWidgets.QWidget):
 
     def onExeCommand(self):
         print("onExeCommand")
-        sys.stdout = EmittingStream(textWritten=self.normalOutputWritten)
+        #sys.stdout = EmittingStream(textWritten=self.normalOutputWritten)
         c = str(self.lineEdit.text())
         print("%s" % c)
         self.parent.pymolWidget.pymol.cmd.do(c)

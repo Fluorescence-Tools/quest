@@ -1,0 +1,27 @@
+PDB: 5fwl, chain K, res 202, atom cb
+
+Simulation time [us]: 2.00
+Time-step [ps]: 16.00
+Number of steps: 125000.00
+AV-grid parameter [Ang]: 0.50
+Diff coeff. [Ang/ns2]: 7.00
+Shape-AV slow (x,y,z): 92 92 92
+Shape-AV fast (x,y,z): 92 92 92
+------
+Traceback (most recent call last):
+  File "/Users/tpeulen/miniconda3/envs/quest/lib/python3.7/site-packages/quest/lib/tools/dye_diffusion/dye_diffusion.py", line 715, in update_all
+    DonorDecay.update_all(self)
+  File "/Users/tpeulen/miniconda3/envs/quest/lib/python3.7/site-packages/quest/lib/tools/dye_diffusion/dye_diffusion.py", line 552, in update_all
+    self.simulate_diffusion(verbose=verbose)
+  File "/Users/tpeulen/miniconda3/envs/quest/lib/python3.7/site-packages/quest/lib/tools/dye_diffusion/dye_diffusion.py", line 489, in simulate_diffusion
+    diffusion.run(D=D, slow_fact=slow_fact, t_max=self.t_max, t_step=self.t_step)
+  File "/Users/tpeulen/miniconda3/envs/quest/lib/python3.7/site-packages/quest/lib/tools/dye_diffusion/dye_diffusion.py", line 328, in run
+    slow_fact=slow_fact, t_step=t_step, t_max=t_max, D=D)
+  File "quest/lib/fps/fps.pyx", line 193, in quest.lib.fps.fps.simulate_traj
+  File "mtrand.pyx", line 630, in numpy.random.mtrand.RandomState.randint
+  File "bounded_integers.pyx", line 1228, in numpy.random.bounded_integers._rand_int64
+ValueError: low >= high
+Abort trap: 6
+
+---------
+
