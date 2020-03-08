@@ -6,7 +6,8 @@ from distutils.core import setup
 from Cython.Build import build_ext
 import numpy
 
-name = "quest"
+__name__ = "quest"
+__version__ = "19.8.13"
 
 
 def make_extension(ext):
@@ -44,13 +45,13 @@ extensions = [make_extension(extension) for extension in extension_list]
 
 long_description = "QuEst is a Quenching Estimator"
 setup(
-    version="19.8.13",
+    version=__version__,
+    name=__name__,
     description="QuEst estimates the fluorescence quenching of dyes tethered to proteins",
     long_description=long_description,
     author="Thomas-Otavio Peulen",
     author_email='thomas.otavio.peulen@gmail.com',
     url='https://github.com/Fluorescence-Tools/quest',
-    name="quest",
     classifiers=[
         'Environment :: X11 Applications :: Qt',
         'Intended Audience :: Science/Research',

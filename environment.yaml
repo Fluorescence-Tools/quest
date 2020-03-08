@@ -1,12 +1,12 @@
 name: quest
 
 channels:
-    - conda-forge
     - tpeulen
+    - conda-forge
 
 dependencies:
-    - python=3.7
-    - pyqt>=5.6.0
+    - python =3.7
+    - pyqt >=5.6.0
     - numpy
     - numexpr
     - guiqwt
