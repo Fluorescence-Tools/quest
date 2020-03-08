@@ -25,7 +25,8 @@ def make_extension(ext):
         extra_link_args=[],
         libraries=[],
         library_dirs=["."],
-        language="c++")
+        language="c++"
+    )
 
 
 args = sys.argv[1:]
@@ -64,7 +65,7 @@ setup(
     ],
     keywords='fluorescence quenching',
     packages=find_packages(
-        include=(name + "*",)
+        include=(__name__ + "*",)
     ),
     package_data={
         '': [
