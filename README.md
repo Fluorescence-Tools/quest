@@ -27,7 +27,7 @@ to calculate the dye's fluorescence decay.
 In QUEST the dyes are approximated by a sphere diffusing within their 
 accessible volume (AV) (see [labellib](https://github.com/Fluorescence-Tools/LabelLib)). 
 
-PET-quenching of the dye by MET, PRO, TYR and TRP residues is 
+PET-quenching of the dye by MET, HIS, TYR and TRP residues is 
 approximated by a step function where the dye is quenched with a 
 provided rate contestant if it is closer than a given threshold 
 distance.
