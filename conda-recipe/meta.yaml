@@ -26,14 +26,17 @@ requirements:
     - numpy
   run:
     - python {{ python }}
-    - pyqt>=5.6.0
+    - pyqt
     - numpy
     - numexpr
     - guiqwt
+    - guidata <=1.7.6 # broken guidata.qt in higher version
     - pyopengl
     - pymol-open-source
     - libstdcxx-ng # [linux]
     - labellib
+    - pytables
+    - pyyaml
 
 about:
   home: https://github.com/Fluorescence-Tools/quest

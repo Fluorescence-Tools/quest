@@ -1,0 +1,69 @@
+
+stages:
+  - build
+  - test
+  - deploy
+
+# Change pip's cache directory to be inside the project directory since we can
+# only cache local items.
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  CONDA_PACKAGE: "quest"
+  PROGAM_CALL: "cs.quest"
+
+build:linux:
+  stage: build
+  tags:
+    - linux
+  image: condaforge/mambaforge
+  before_script:
+    - apt-get update -qy && apt-get install -y build-essential
+  script:
+    - conda config --add channels tpeulen
+    - mamba install -y python=${PYTHON_DEFAULT_VERSION} boa
+    - conda mambabuild conda-recipe --output-folder bld-dir
+  artifacts:
+    expire_in: 7 days
+    paths:
+      - bld-dir/
+
+test:linux:
+  stage: test
+  image: continuumio/miniconda3:latest
+  tags:
+    - linux
+  dependencies:
+    - build:linux
+  before_script:
+    # Issue with OpenGL and X11 display
+    # See: https://stackoverflow.com/questions/65675765/is-it-possible-to-run-x11-on-gitlab-ci
+    # See: https://github.com/conda-forge/pygridgen-feedstock/issues/10
+    # procps is used to grep the process by name to kill it when needed
+    - apt update -yq && apt install -yq xorg-dev libglu1-mesa libgl1-mesa-dev xvfb libxinerama1 libxcursor1 libgl1-mesa-glx procps
+  script:
+    - source activate
+    - conda config --add channels tpeulen
+    - conda config --add channels conda-forge
+    - conda config --add channels "file://`pwd`/bld-dir"
+    - conda config --set channel_priority strict
+    - conda install mamba -c conda-forge
+    - mamba create -n test ${CONDA_PACKAGE}
+    - conda activate test
+    # Run GUI with xvfb - no X11 screen
+    - |
+      xvfb-run -a -s "-screen 0 1400x900x24 +extension RANDR" -- ${PROGAM_CALL} &
+      sleep 10
+      pgrep -f ${PROGAM_CALL} | awk '{print "kill -9 " $1}' | sh
+
+deploy:linux:
+  stage: deploy
+  image: continuumio/miniconda3:latest
+  tags:
+    - linux
+  dependencies:
+    - build:linux
+  script:
+    - source activate
+    - conda install anaconda-client
+    - if [[ "$CI_COMMIT_REF_NAME" == "master" ]]; then DEPLOY_LABEL=main; else DEPLOY_LABEL=nightly; fi
+    - anaconda -t ${ANACONDA_API_TOKEN} upload -l ${DEPLOY_LABEL} -u ${CONDA_USER} --force bld-dir/linux-64/*.tar.bz2

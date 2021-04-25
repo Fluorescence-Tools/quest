@@ -5,25 +5,18 @@ CMakeLists.txt.user
 CMakeLists.txt.user.*
 cmake-build-*
 _*-darwin.so
+_64-linux-gnu.so
+__pycache__
 
-# JetBrains
-# User-specific stuff
-.idea/**/workspace.xml
-.idea/**/tasks.xml
-.idea/**/usage.statistics.xml
-.idea/**/dictionaries
-.idea/**/shelf
-# Generated files
-.idea/**/contentModel.xml
-# Sensitive or high-churn files
-.idea/**/dataSources/
-.idea/**/dataSources.ids
-.idea/**/dataSources.local.xml
-.idea/**/sqlDataSources.xml
-.idea/**/dynamic.xml
-.idea/**/uiDesigner.xml
-.idea/**/dbnavigator.xml
-/chisurf.egg-info/
-/dist/
-/chisurf/fluorescence/fps/dll/v1.2/.idea/
-/scratch/
+quest/lib/fps/fps.cpp
+quest/lib/math/functions/rdf.cpp
+quest/lib/math/functions/small.cpp
+quest/lib/math/functions/rdf.cpython-39-x86_64-linux-gnu.so
+quest/lib/fps/fps.cpython-39-x86_64-linux-gnu.so
+quest/lib/math/functions/small.cpython-39-x86_64-linux-gnu.so
+quest/lib/math/linalg/vector.cpp
+quest/lib/tools/dye_diffusion/photon.cpython-39-x86_64-linux-gnu.so
+quest/lib/tools/dye_diffusion/photon.cpp
+quest/lib/structure/cStructure.cpython-39-x86_64-linux-gnu.so
+quest/lib/structure/cStructure.cpp
+quest/lib/math/linalg/vector.cpython-39-x86_64-linux-gnu.so

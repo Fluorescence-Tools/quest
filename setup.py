@@ -84,13 +84,8 @@ setup(
         'numpy',
         'sip',
         'PyQt5',
-        'numba',
-        'scipy',
         'PyYAML',
         'tables',
-        'numexpr',
-        'matplotlib',
-        'qtconsole',
         'numexpr'
     ],
     ext_modules=extensions,
@@ -98,7 +93,7 @@ setup(
         'build_ext': build_ext
     },
     entry_points={
-        "gui_scripts": ["quest=quest.quest_gui:start_gui"]
+        "gui_scripts": ["cs.quest=quest.quest_gui:start_gui"]
     }
 )
 
