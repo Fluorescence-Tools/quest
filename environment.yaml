@@ -5,12 +5,11 @@ channels:
     - tpeulen
 
 dependencies:
-    - python=3.7
-    - pyqt>=5.6.0
+    - python
+    - pyqt
     - numpy
     - numexpr
     - guiqwt
     - pyopengl
-    - pymol
     - labellib
     - pymol-open-source
