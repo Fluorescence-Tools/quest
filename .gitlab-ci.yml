@@ -56,6 +56,7 @@ test:linux:
     # procps is used to grep the process by name to kill it when needed
     - apt update -yq
     - apt install -yq xorg-dev libglu1-mesa libgl1-mesa-dev xvfb libxinerama1 libxcursor1 libgl1-mesa-glx procps
+    - git clone https://gitlab.peulen.xyz/build/tools/
   script:
     - source activate
     # Disable Numba JIT for correct coverage analysis
@@ -80,6 +81,7 @@ deploy:conda:
     - build:windows
     - build:osx
   before_script:
+    - git clone https://gitlab.peulen.xyz/build/tools/
     - git submodule update --init --recursive --remote
   script:
     - ./tools/deploy.sh
