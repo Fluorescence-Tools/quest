@@ -3,13 +3,6 @@ stages:
   - test
   - deploy
 
-# Change pip's cache directory to be inside the project directory since we can
-# only cache local items.
-variables:
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-  CONDA_PACKAGE: "quest"
-  PROGAM_CALL: "cs.quest"
-
 build:linux:
   stage: build
   tags:
@@ -25,44 +18,69 @@ build:linux:
     paths:
       - bld-dir/
 
+build:windows:
+  stage: build
+  tags:
+    - win
+  before_script:
+    - git clone https://gitlab.peulen.xyz/build/tools/
+    - git submodule update --init --recursive --remote
+  script:
+    - .\tools\build.bat
+  artifacts:
+    paths:
+      - bld-dir/
+
+build:osx:
+  stage: build
+  tags:
+    - osx
+  before_script:
+    - git clone https://gitlab.peulen.xyz/build/tools/
+    - git submodule update --init --recursive --remote
+  script:
+    - ./tools/build.sh
+  artifacts:
+    paths:
+      - bld-dir/
 
 test:linux:
   stage: test
-  image: continuumio/miniconda3:latest
   tags:
     - linux
-  dependencies:
-    - build:linux
+  image: condaforge/mambaforge:latest
   before_script:
     # Issue with OpenGL and X11 display
     # See: https://stackoverflow.com/questions/65675765/is-it-possible-to-run-x11-on-gitlab-ci
     # See: https://github.com/conda-forge/pygridgen-feedstock/issues/10
     # procps is used to grep the process by name to kill it when needed
-    - apt update -yq && apt install -yq xorg-dev libglu1-mesa libgl1-mesa-dev xvfb libxinerama1 libxcursor1 libgl1-mesa-glx procps
+    - apt update -yq
+    - apt install -yq xorg-dev libglu1-mesa libgl1-mesa-dev xvfb libxinerama1 libxcursor1 libgl1-mesa-glx procps
   script:
     - source activate
-    - conda config --add channels tpeulen
-    - conda config --add channels conda-forge
+    # Disable Numba JIT for correct coverage analysis
+    - export NUMBA_DISABLE_JIT=1
+    - cp tools/.condarc ~/.condarc
     - conda config --add channels "file://`pwd`/bld-dir"
-    - conda config --set channel_priority strict
-    - conda install mamba -c conda-forge
-    - mamba create -n test ${CONDA_PACKAGE}
+    - mamba create -n test python quest
     - conda activate test
     # Run GUI with xvfb - no X11 screen
     - |
-      xvfb-run -a -s "-screen 0 1400x900x24 +extension RANDR" -- ${PROGAM_CALL} &
+      xvfb-run -a -s "-screen 0 1400x900x24 +extension RANDR" -- cs.quest &
       sleep 10
-      pgrep -f ${PROGAM_CALL} | awk '{print "kill -9 " $1}' | sh
+      pgrep -f cs.quest | awk '{print "kill -9 " $1}' | sh
 
-deploy:linux:
+deploy:conda:
   stage: deploy
-  image: continuumio/miniconda3:latest
+  image: condaforge/mambaforge:latest
   tags:
     - linux
   dependencies:
     - build:linux
+    - build:windows
+    - build:osx
+  before_script:
+    - git submodule update --init --recursive --remote
   script:
-    - source activate
-    - conda install anaconda-client
-    - if [[ "$CI_COMMIT_REF_NAME" == "master" ]]; then DEPLOY_LABEL=main; else DEPLOY_LABEL=nightly; fi
-    - anaconda -t ${ANACONDA_API_TOKEN} upload -l ${DEPLOY_LABEL} -u ${CONDA_USER} --force bld-dir/linux-64/*.tar.bz2
+    - ./tools/deploy.sh
+
