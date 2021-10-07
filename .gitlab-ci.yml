@@ -1,4 +1,3 @@
-
 stages:
   - build
   - test
@@ -15,17 +14,16 @@ build:linux:
   stage: build
   tags:
     - linux
-  image: condaforge/mambaforge
+  image: condaforge/mambaforge:latest
   before_script:
-    - apt-get update -qy && apt-get install -y build-essential
+    - apt update -yq && apt -yq install build-essential
+    - git submodule update --init --recursive --remote
   script:
-    - conda config --add channels tpeulen
-    - mamba install -y python=${PYTHON_DEFAULT_VERSION} boa
-    - conda mambabuild conda-recipe --output-folder bld-dir
+    - ./tools/build.sh
   artifacts:
-    expire_in: 7 days
     paths:
       - bld-dir/
+
 
 test:linux:
   stage: test
