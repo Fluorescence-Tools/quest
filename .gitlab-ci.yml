@@ -18,6 +18,7 @@ build:linux:
   before_script:
     - apt update -yq && apt -yq install build-essential
     - git submodule update --init --recursive --remote
+    - git clone https://gitlab.peulen.xyz/build/tools/
   script:
     - ./tools/build.sh
   artifacts:
