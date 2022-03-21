@@ -1,5 +1,10 @@
 import tempfile
-import sip
+try:
+    # new location for sip
+    # https://www.riverbankcomputing.com/static/Docs/PyQt5/incompatibilities.html#pyqt-v5-11
+    from PyQt5 import sip
+except ImportError:
+    import sip
 sip.setapi('QDate', 2)
 sip.setapi('QDateTime', 2)
 sip.setapi('QString', 2)
