@@ -31,9 +31,10 @@ requirements:
     - pyopengl
     - labellib
     - pyyaml
-    - pyqt <2.0
+    - pyqt
     - pytables
     - guiqwt
+    - qtpy <2.0.0
     - guidata <=1.7.6 # broken guidata.qt in higher version
     - pymol-open-source
     - libstdcxx-ng # [linux]
