@@ -323,16 +323,21 @@ class SimulateDiffusion(object):
             print("Shape-AV slow (x,y,z): %s %s %s" % (slow_density.shape))
             print("Shape-AV fast (x,y,z): %s %s %s" % (density.shape))
             print("------")
-        start = time.clock()
-        traj, a, n_accepted, n_rejected = fps.simulate_traj(density, slow_density, dg,
-                                                          slow_fact=slow_fact, t_step=t_step, t_max=t_max, D=D)
+        start = time.process_time()
+        traj, a, n_accepted, n_rejected = fps.simulate_traj(
+            density, slow_density, dg,
+            slow_fact=slow_fact, t_step=t_step, t_max=t_max, D=D
+        )
+        if n_accepted < 0:
+            self._traj = None
+            return
         traj += self.x0
         self._traj = traj
 
         if verbose:
             print("Accepted steps: %i" % n_accepted)
             print("Rejected steps: %i" % n_rejected)
-        end = time.clock()
+        end = time.process_time()
         if verbose:
             print("time spent: %.2gs" % (end-start))
             print("n_accepted: %s" % n_accepted)
@@ -488,6 +493,8 @@ class DonorDecay(object):
         diffusion = SimulateDiffusion(av, quencher=self.quencher, verbose=verbose, all_quencher_atoms=all_quencher_atoms)
         diffusion.run(D=D, slow_fact=slow_fact, t_max=self.t_max, t_step=self.t_step)
         self._diffusion = diffusion
+        success = diffusion._traj is not None
+        return success
 
     def calc_photons(self, verbose=False, donor_traj=None, kQ=None):
         """
@@ -549,13 +556,19 @@ class DonorDecay(object):
         self._av.calc_slow_av(save=self.save_avs, slow_radius=self.slow_radius, slow_centers=self.slow_center)
         if verbose:
             print("Simulating diffusion")
-        self.simulate_diffusion(verbose=verbose)
-        if verbose:
-            print("Determining quencher distances.")
-        self.diffusion.critical_distance = self.critical_distance
-        if verbose:
-            print("Simulating decay")
-        self.calc_photons(verbose=verbose)
+        success = self.simulate_diffusion(verbose=verbose)
+        print("success:", success)
+        if success:
+            if verbose:
+                print("Determining quencher distances.")
+            self.diffusion.critical_distance = self.critical_distance
+            if verbose:
+                print("Simulating decay")
+            self.calc_photons(verbose=verbose)
+            return True
+        else:
+            print("Trajectory calculation failed.")
+            return False
 
 
 class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
@@ -712,16 +725,25 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         self.plot_decay.do_autoscale()
 
     def update_all(self, verbose=False):
-        DonorDecay.update_all(self)
-        self.doubleSpinBox_16.setValue(self.quantum_yield)
-        self.doubleSpinBox_15.setValue(self.collisions * 100.0)
-        diff_file, av_slow_file, av_fast_file = self.onSaveAV(directory=self.tmp_dir)
-        self.diff_file = diff_file
-        self.av_slow_file = av_slow_file
-        self.av_fast_file = av_fast_file
-        self.update_3D()
-        self.update_decay_histogram()
-        self.update_trajectory_curve()
+        success = DonorDecay.update_all(self)
+        if success:
+            self.doubleSpinBox_16.setValue(self.quantum_yield)
+            self.doubleSpinBox_15.setValue(self.collisions * 100.0)
+            diff_file, av_slow_file, av_fast_file = self.onSaveAV(directory=self.tmp_dir)
+            self.diff_file = diff_file
+            self.av_slow_file = av_slow_file
+            self.av_fast_file = av_fast_file
+            self.update_3D()
+            self.update_decay_histogram()
+            self.update_trajectory_curve()
+        else:
+            # Display a message box in case of failure
+            msg_box = QtWidgets.QMessageBox()
+            msg_box.setIcon(QtWidgets.QMessageBox.Warning)
+            msg_box.setWindowTitle("Trajectory Calculation Failed")
+            msg_box.setText("The trajectory calculation failed. Possible reason: Inaccessible labeling location.")
+            msg_box.setStandardButtons(QtWidgets.QMessageBox.Ok)
+            msg_box.exec_()
 
     def onSaveAV(self, verbose=False, directory=None):
         verbose = self.verbose or verbose

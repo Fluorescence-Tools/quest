@@ -186,10 +186,14 @@ def simulate_traj(np.ndarray[dtype=np.uint8_t, ndim=3] d, np.ndarray[dtype=np.ui
     slow_fact = np.sqrt(slow_fact)
 
     # find random point with density > 0 in density_av
-    # take random points and use lookup-table wether point is really
+    # take random points and use lookup-table to check if point is really
     # within the accessible volume
     while True:
         op = np.array(np.where(d > 0))
+        # No point in AV found return (-1 indicates error)
+        if op[0].shape[0] == 0:
+            return (pos - (ng - 1) / 2) * dg, -1, -1, -1
+
         rnd_idx = np.random.randint(0, op[0].shape[0], 3)
         pos[0, 0] = op[0, rnd_idx[0]]
         pos[0, 1] = op[1, rnd_idx[1]]
