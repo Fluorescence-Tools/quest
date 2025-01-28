@@ -13,7 +13,7 @@ from lib.io import write_xyz
 
 
 def density2points_ll(nx, ny, nz, g, dx, dy, dz, ox, oy, oz):
-    points = np.empty((nx*ny*nz, 3), dtype=np.float)
+    points = np.empty((nx*ny*nz, 3), dtype=np.float64)
     iat = 0
     for iz in range(nz):
         for iy in range(ny):
