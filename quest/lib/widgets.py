@@ -31,6 +31,7 @@ class PDBSelector(QtWidgets.QWidget):
             self
         )
         self._pdb = None
+        self._setup_editable_combos()
         self.comboBox.currentIndexChanged.connect(self.onChainChanged)
         self.comboBox_2.currentIndexChanged.connect(self.onResidueChanged)
         if not show_labels:
@@ -116,4 +117,17 @@ class PDBSelector(QtWidgets.QWidget):
         chain_ids = list(set(self.atoms['chain'][:]))
         chain_ids = [str(c) for c in chain_ids]
         self.comboBox.addItems(chain_ids)
+
+    def _setup_editable_combos(self):
+        for cb in (self.comboBox, self.comboBox_2, self.comboBox_3):
+            cb.setEditable(True)
+            cb.setInsertPolicy(QtWidgets.QComboBox.NoInsert)
+            completer = QtWidgets.QCompleter(cb.model(), cb)
+            completer.setCompletionMode(QtWidgets.QCompleter.PopupCompletion)
+            completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+            try:
+                completer.setFilterMode(QtCore.Qt.MatchContains)
+            except AttributeError:
+                pass
+            cb.setCompleter(completer)
 
