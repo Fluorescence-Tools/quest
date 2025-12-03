@@ -9,8 +9,7 @@ import inspect
 import numpy as np
 import numexpr as ne
 from PyQt5 import QtGui, QtCore, uic, QtWidgets
-from guiqwt.plot import CurveDialog
-from guiqwt.builder import make
+import pyqtgraph as pg
 
 from . import photon
 import lib.io.PDB as PDB
@@ -621,31 +620,30 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         print("Temporary Directory: %s" % self.tmp_dir)
 
         ## Decay-Curve
-        fd = CurveDialog(edit=False, toolbar=True)
-        self.plot_decay = fd.get_plot()
-        self.hist_curve = make.curve([1],  [1], color="r", linewidth=1)
-        self.unquenched_curve = make.curve([1],  [1], color="b", linewidth=1)
-        self.plot_decay.add_item(self.hist_curve)
-        self.plot_decay.add_item(self.unquenched_curve)
-        self.plot_decay.set_scales('lin', 'log')
-        self.verticalLayout_2.addWidget(fd)
+        decay_plot = pg.PlotWidget(title="Decay")
+        decay_plot.setLabel('bottom', 'time [ns]')
+        decay_plot.setLabel('left', 'counts')
+        decay_plot.setLogMode(False, True)
+        self.hist_curve = decay_plot.plot([], [], pen=pg.mkPen(color='r', width=1))
+        self.unquenched_curve = decay_plot.plot([], [], pen=pg.mkPen(color='b', width=1))
+        self.plot_decay = decay_plot
+        self.verticalLayout_2.addWidget(decay_plot)
 
         ## Diffusion-Trajectory-Curve
-        options = dict(title="Trajectory", xlabel="time [ns]", ylabel=("|R-<R>|"))
-        fd = CurveDialog(edit=False, toolbar=True, options=options)
-        self.plot_diffusion = fd.get_plot()
-        self.diffusion_curve = make.curve([1],  [1], color="b", linewidth=1)
-        self.plot_diffusion.add_item(self.diffusion_curve)
-        self.plot_diffusion.set_scales('lin', 'lin')
-        self.verticalLayout_6.addWidget(fd)
+        traj_plot = pg.PlotWidget(title="Trajectory")
+        traj_plot.setLabel('bottom', 'time [ns]')
+        traj_plot.setLabel('left', '|R-<R>|')
+        self.diffusion_curve = traj_plot.plot([], [], pen=pg.mkPen(color='b', width=1))
+        self.plot_diffusion = traj_plot
+        self.verticalLayout_6.addWidget(traj_plot)
 
-        options = dict(xlabel="corr. time [ns]", ylabel=("A.Corr.(|R-<R>|)"))
-        fd = CurveDialog(edit=False, toolbar=True, options=options)
-        self.plot_autocorr = fd.get_plot()
-        self.diffusion_autocorrelation = make.curve([1],  [1], color="r", linewidth=1)
-        self.plot_autocorr.add_item(self.diffusion_autocorrelation)
-        self.plot_autocorr.set_scales('log', 'lin')
-        self.verticalLayout_6.addWidget(fd)
+        auto_plot = pg.PlotWidget(title="Auto-correlation")
+        auto_plot.setLabel('bottom', 'corr. time [ns]')
+        auto_plot.setLabel('left', 'A.Corr.(|R-<R>|)')
+        auto_plot.setLogMode(True, False)
+        self.diffusion_autocorrelation = auto_plot.plot([], [], pen=pg.mkPen(color='r', width=1))
+        self.plot_autocorr = auto_plot
+        self.verticalLayout_6.addWidget(auto_plot)
 
         ## Protein Structure
         self.molview = MolQtWidget(self, enableUi=False)
@@ -710,19 +708,22 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
     def update_trajectory_curve(self):
         y = self.diffusion.distance_to_mean
         x = np.linspace(0, self.t_max, y.shape[0])
-        self.diffusion_curve.set_data(x, y)
+        self.diffusion_curve.setData(x, y)
         auto_corr = autocorr(y)
-        self.diffusion_autocorrelation.set_data(x, auto_corr)
-        self.plot_autocorr.do_autoscale()
-        self.plot_diffusion.do_autoscale()
+        self.diffusion_autocorrelation.setData(x, auto_corr)
+        self.plot_autocorr.enableAutoRange(True, True)
+        self.plot_autocorr.autoRange()
+        self.plot_diffusion.enableAutoRange(True, True)
+        self.plot_diffusion.autoRange()
 
     def update_decay_histogram(self):
         x, y = self.get_histogram(nbins=self.nBins)
         y[y < 0.001] = 0.001
-        self.hist_curve.set_data(x[1:], y + 1.0)
+        self.hist_curve.setData(x[1:], y + 1.0)
         yu = np.exp(-x/self.tau0) * y[1]
-        self.unquenched_curve.set_data(x, yu + 1.0)
-        self.plot_decay.do_autoscale()
+        self.unquenched_curve.setData(x, yu + 1.0)
+        self.plot_decay.enableAutoRange(True, True)
+        self.plot_decay.autoRange()
 
     def update_all(self, verbose=False):
         success = DonorDecay.update_all(self)

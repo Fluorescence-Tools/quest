@@ -9,7 +9,7 @@ dependencies:
     - pyqt
     - numpy
     - numexpr
-    - guiqwt
+    - pyqtgraph
     - pyopengl
     - labellib
     - pymol-open-source

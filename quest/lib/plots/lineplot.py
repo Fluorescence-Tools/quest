@@ -1,10 +1,32 @@
 from PyQt5 import QtGui, QtCore, uic, QtWidgets
 import numpy as np
-from guiqwt.plot import CurveDialog
-from guiqwt.builder import make
+import pyqtgraph as pg
 
 from lib.plots.plotbase import Plot
 from lib.math.functions import autocorr
+
+
+class _PGPlotAdapter:
+    def __init__(self, title=None, xlabel=None, ylabel=None):
+        self.widget = pg.PlotWidget(title=title)
+        if xlabel:
+            self.widget.setLabel('bottom', xlabel)
+        if ylabel:
+            self.widget.setLabel('left', ylabel)
+        self._plot_item = self.widget.getPlotItem()
+
+    def add_item(self, item):
+        self._plot_item.addItem(item)
+
+    def create_curve(self, pen=None, name=None):
+        return self._plot_item.plot([], [], pen=pen, name=name)
+
+    def set_scales(self, x_scale, y_scale):
+        self.widget.setLogMode(x_scale == 'log', y_scale == 'log')
+
+    def do_autoscale(self):
+        self._plot_item.enableAutoRange(True, True)
+        self._plot_item.autoRange()
 
 
 class linePlotWidget(QtWidgets.QWidget):
@@ -97,77 +119,73 @@ class LinePlot(Plot):
         splitter1.addWidget(bottom)
         self.layout.addWidget(splitter1)
 
-        # Data-Fit dialog
-        fd = CurveDialog(edit=False, toolbar=True)
-        #self.get_itemlist_panel().show()
-        plot = fd.get_plot()
-        self.data_curve = make.curve([1],  [1], color="b", linewidth=1)
-        self.irf_curve = make.curve([1],  [1], color="r", linewidth=1)
-        self.model_curve = make.curve([1],  [1], color="g", linewidth=4)
-        plot.add_item(self.data_curve)
-        plot.add_item(self.irf_curve)
-        plot.add_item(self.model_curve)
-        self.dataPlot = plot
-        botl.addWidget(fd)
+        # Data-Fit plot
+        fd = _PGPlotAdapter()
+        pen_data = pg.mkPen(color='b', width=1)
+        pen_irf = pg.mkPen(color='r', width=1)
+        pen_model = pg.mkPen(color='g', width=4)
+        self.data_curve = fd.create_curve(pen=pen_data, name="data")
+        self.irf_curve = fd.create_curve(pen=pen_irf, name="irf")
+        self.model_curve = fd.create_curve(pen=pen_model, name="model")
+        self.dataPlot = fd
+        botl.addWidget(fd.widget)
 
         splitter1 = QtGui.QSplitter(QtCore.Qt.Horizontal)
         topl.addWidget(splitter1)
 
-        # Residual dialog
-        win = CurveDialog(edit=False, toolbar=True)
-        plot = win.get_plot()
-        plot.do_autoscale(True)
-        self.residual_curve = make.curve([1],  [1], color="r", linewidth=2)
-        plot.add_item(self.residual_curve)
-        self.chi2_label = make.label("", "R", (-10, 27), "R")
-        plot.add_item(self.chi2_label)
-        title = make.label("w.res.", "R", (0, -40), "R")
-        plot.add_item(title)
-        self.residualPlot = plot
-        splitter1.addWidget(plot)
+        # Residual plot
+        win = _PGPlotAdapter()
+        self.residual_curve = win.create_curve(pen=pg.mkPen(color='r', width=2))
+        self.chi2_label = pg.TextItem("")
+        self.chi2_label.setAnchor((1, 0))
+        self.chi2_label.setPos(0, 0)
+        win.add_item(self.chi2_label)
+        title = pg.TextItem("w.res.")
+        title.setPos(0, 0)
+        win.add_item(title)
+        self.residualPlot = win
+        splitter1.addWidget(win.widget)
 
-        win = CurveDialog(edit=False, toolbar=True)
-        plot = win.get_plot()
-        plot.do_autoscale(True)
-        self.autocorr_curve = make.curve([1],  [1], color="r", linewidth=2)
-        plot.add_item(self.autocorr_curve)
-        title = make.label("auto.cor.", "R", (0, -40), "R")
-        plot.add_item(title)
-        self.autoCorrPlot = plot
-        splitter1.addWidget(plot)
+        win = _PGPlotAdapter()
+        self.autocorr_curve = win.create_curve(pen=pg.mkPen(color='r', width=2))
+        title = pg.TextItem("auto.cor.")
+        title.setPos(0, 0)
+        win.add_item(title)
+        self.autoCorrPlot = win
+        splitter1.addWidget(win.widget)
 
         self.pltControl = linePlotWidget(self, d_scalex, d_scaley, r_scalex, r_scaley)
 
     def updateAll(self):
         print("TCSPCPlot:update")
         fit = self.fit
-        self.chi2_label.set_text("<b>&Chi;<sup>2</sup>=%.4f</b>" % fit.chi2r)
+        self.chi2_label.setText("χ²=%.4f" % fit.chi2r)
         if fit is not None:
 
             data_x, data_y = fit.data.x, fit.data.y
             idx = np.where(data_y > 0.0)[0] if self.pltControl.data_logy else list(range(len(data_x)))
-            self.data_curve.set_data(data_x[idx],  data_y[idx])
+            self.data_curve.setData(data_x[idx],  data_y[idx])
 
             try:
                 irf = fit.model.convolve.irf
                 irf_y = irf.y
                 idx = np.where(irf_y > 0.0)[0] if self.pltControl.data_logy else list(range(len(data_x)))
-                self.irf_curve.set_data(irf.x[idx],  irf_y[idx])
+                self.irf_curve.setData(irf.x[idx],  irf_y[idx])
             except AttributeError:
                 print("No instrument response to plot.")
             try:
                 model_x, model_y = fit[:]
                 idx = np.where(model_y > 0.0)[0] if self.pltControl.data_logy else list(range(len(data_x)))
                 if len(idx) > 0:
-                    self.model_curve.set_data(model_x[idx],  model_y[idx])
+                    self.model_curve.setData(model_x[idx],  model_y[idx])
             except ValueError:
                 print("No model/no fitted model to plot")
             try:
                 wres_y = fit.weighted_residuals
-                self.residual_curve.set_data(model_x, wres_y)
+                self.residual_curve.setData(model_x, wres_y)
                 if len(wres_y) > 0:
                     ac = autocorr(wres_y)
-                    self.autocorr_curve.set_data(model_x[1::], ac[1:])
+                    self.autocorr_curve.setData(model_x[1::], ac[1:])
 
             except (TypeError, AttributeError):
                 pass
