@@ -1,9 +1,9 @@
-from PyQt5 import QtGui, QtCore, uic, QtWidgets
+from qtpy import QtGui, QtCore, QtWidgets, uic
 import numpy as np
 import pyqtgraph as pg
 
 from lib.plots.plotbase import Plot
-from lib.math.functions import autocorr
+from lib.math import autocorr
 
 
 class _PGPlotAdapter:

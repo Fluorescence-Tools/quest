@@ -1,7 +1,7 @@
 import os
 import pickle
 import random
-from PyQt5 import QtGui, QtCore, uic, QtWidgets
+from qtpy import QtGui, QtCore, QtWidgets, uic
 from lib.structure import Structure
 import numpy as np
 import lib

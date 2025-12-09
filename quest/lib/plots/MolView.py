@@ -2,28 +2,82 @@ __author__ = 'thomas'
 import os
 import sys
 
-from PyQt5 import QtGui, QtCore, uic, QtWidgets
+from qtpy import QtGui, QtCore, QtWidgets, uic
+from qtpy.QtWidgets import QOpenGLWidget
+from qtpy.QtCore import Qt
 from OpenGL.GL import *
-from PyQt5.QtOpenGL import *
-from PyQt5.Qt import Qt
 
 from lib.plots.plotbase import Plot
 
 try:
     import pymol2
-except ImportError:
-    pass
+    _HAVE_PYMOL2 = True
+except Exception:
+    pymol2 = None
+    _HAVE_PYMOL2 = False
+
+
+_PYMOL_MISSING_HINT = (
+    "PyMOL is not available in this ChiSurf environment, so the QuEst 3D viewer "
+    "is disabled.\n\n"
+    "Install ChiSurf (which bundles PyMOL) via the ChiSurf Package Manager "
+    "(Help → Updates and Packages → Package Manager) or run\n"
+    "  conda install chisurf -c conda-forge -c tpeulen\n"
+    "to enable this panel."
+)
+
+
+class _PymolCmdStub:
+
+    def __getattr__(self, _name):
+        def _noop(*_, **__):
+            return None
+
+        return _noop
+
+    def count_states(self, *_, **__):
+        return 0
+
+    def do(self, *_, **__):
+        return None
+
+
+class _PymolStub:
+
+    def __init__(self):
+        self.cmd = _PymolCmdStub()
+
+    def start(self):
+        return None
+
+    def idle(self):
+        return False
+
+    def draw(self):
+        return None
+
+    def reshape(self, *_, **__):
+        return None
+
+    def drag(self, *_, **__):
+        return None
+
+    def button(self, *_, **__):
+        return None
+
+    def reinitialize(self):
+        return None
 
 
 class EmittingStream(QtCore.QObject):
 
-    textWritten = QtCore.pyqtSignal(str)
+    textWritten = QtCore.Signal(str)
 
     def write(self, text):
         self.textWritten.emit(str(text))
 
 
-class MolQtWidget(QGLWidget):
+class MolQtWidget(QOpenGLWidget):
     """
     http://www.mail-archive.com/pymol-users@lists.sourceforge.net/msg09609.html
     maybe later use this...: http://www.plosone.org/article/info:doi/10.1371/journal.pone.0021931
@@ -33,20 +87,29 @@ class MolQtWidget(QGLWidget):
                   Qt.RightButton:2}
 
     def __init__(self, parent, enableUi=True, File="", play=False, sequence=False):
-        f = QGLFormat()
-        f.setStencil(True)
-        f.setRgba(True)
-        f.setDepth(True)
-        f.setDoubleBuffer(True)
         self.play = play
         self.nFrames = 0
-        QGLWidget.__init__(self, f, parent=parent)
+        QOpenGLWidget.__init__(self, parent=parent)
         self.setMinimumSize(200, 150)
         self._enableUi = enableUi
-        self.pymol = pymol2.PyMOL()# _pymolPool.getInstance()
+
+        if not _HAVE_PYMOL2:
+            self.pymol = _PymolStub()
+            self.cmd = self.pymol.cmd
+            layout = QtWidgets.QVBoxLayout(self)
+            layout.setContentsMargins(16, 16, 16, 16)
+            layout.setSpacing(12)
+            label = QtWidgets.QLabel(_PYMOL_MISSING_HINT, self)
+            label.setWordWrap(True)
+            label.setAlignment(QtCore.Qt.AlignCenter)
+            layout.addStretch(1)
+            layout.addWidget(label)
+            layout.addStretch(1)
+            return
+
+        self.pymol = pymol2.PyMOL()
         self.pymol.start()
         self.cmd = self.pymol.cmd
-        # self.toPymolName = self.pymol.toPymolName ### Attribute Error
         self._pymolProcess()
 
         if not self._enableUi:

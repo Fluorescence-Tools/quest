@@ -1,5 +1,5 @@
-import sys
-from quest.quest_gui import start_gui
+from .cli import cli
+
 
 if __name__ == "__main__":
-    start_gui()
+    cli()

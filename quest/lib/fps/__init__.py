@@ -4,12 +4,248 @@ import os
 from collections import OrderedDict
 
 import numpy as np
-from PyQt5 import QtGui, QtCore, uic, QtWidgets
-from lib.fps.fps import subav, simulate_traj, RDAMeanE, RDAMean, dRmp, density2points, spherePoints, asa
+from numba import njit, prange
+from qtpy import QtGui, QtCore, QtWidgets, uic
 from lib.io import PDB
 from lib.structure import Structure
-import LabelLib as ll
 from lib.io import write_xyz
+
+try:
+    import LabelLib as ll
+    HAS_LABELLIB = True
+except Exception:  # pragma: no cover - optional dependency
+    HAS_LABELLIB = False
+
+from quest.lib.imp_av import (
+    HAS_IMP_BFF,
+    build_imp_accessible_volume,
+)
+
+
+# Numba-accelerated kernels (flattened from fps.py)
+@njit(cache=True)
+def _density2points(n, npm, dg, density, r0, ng):
+    r = np.empty((n, 3), dtype=np.float64)
+    gd = np.arange(-npm, npm, dtype=np.float64) * dg
+    n_out = 0
+    for ix in range(-npm, npm):
+        offset = ng * (ng * (ix + npm)) + npm
+        for iy in range(-npm, npm):
+            for iz in range(-npm, npm):
+                if density[iz + offset] > 0:
+                    r[n_out, 0] = gd[ix + npm] + r0[0]
+                    r[n_out, 1] = gd[iy + npm] + r0[1]
+                    r[n_out, 2] = gd[iz + npm] + r0[2]
+                    n_out += 1
+            offset += ng
+    return r[:n_out]
+
+
+def density2points(n, npm, dg, density, r0, ng):
+    return _density2points(
+        int(n),
+        int(npm),
+        float(dg),
+        np.asarray(density, dtype=np.float64),
+        np.asarray(r0, dtype=np.float64),
+        int(ng),
+    )
+
+
+@njit(cache=True, parallel=True)
+def _ran_dist(av1_points, av2_points, distances, n_samples):
+    lp1 = av1_points.shape[0]
+    lp2 = av2_points.shape[0]
+    for i in prange(n_samples):
+        i1 = int(np.random.random() * lp1)
+        i2 = int(np.random.random() * lp2)
+        d0 = av1_points[i1, 0] - av2_points[i2, 0]
+        d1 = av1_points[i1, 1] - av2_points[i2, 1]
+        d2 = av1_points[i1, 2] - av2_points[i2, 2]
+        distances[i] = np.sqrt(d0 * d0 + d1 * d1 + d2 * d2)
+
+
+def RDAMeanE(av1, av2, R0: float = 52.0, nSamples: int = 50_000):
+    distances = np.empty(nSamples, dtype=np.float64)
+    _ran_dist(av1.points, av2.points, distances, nSamples)
+    Esum = np.mean(1.0 / (1.0 + (distances / R0) ** 6.0))
+    return (1.0 / Esum - 1.0) ** (1.0 / 6.0) * R0
+
+
+def RDAMean(av1, av2, nSamples: int = 50_000):
+    distances = np.empty(nSamples, dtype=np.float64)
+    _ran_dist(av1.points, av2.points, distances, nSamples)
+    return float(np.mean(distances))
+
+
+def dRmp(av1, av2):
+    return float(np.sqrt(((av1.Rmp - av2.Rmp) ** 2).sum()))
+
+
+@njit(cache=True, parallel=True)
+def _subav(density, ng, slow_radius, rs, r0, dg):
+    subav_density = density.copy()
+    n_slow_center = rs.shape[0]
+    for ix in prange(ng):
+        for iy in range(ng):
+            for iz in range(ng):
+                if subav_density[ix, iy, iz] == 0:
+                    continue
+                is_slow = 0
+                for isa in range(n_slow_center):
+                    ix0 = int(((rs[isa, 0] - r0[0]) / dg)) + (ng - 1) // 2
+                    iy0 = int(((rs[isa, 1] - r0[1]) / dg)) + (ng - 1) // 2
+                    iz0 = int(((rs[isa, 2] - r0[2]) / dg)) + (ng - 1) // 2
+                    slow_radius_idx = int(slow_radius[isa] / dg)
+                    dx = ix - ix0
+                    dy = iy - iy0
+                    dz = iz - iz0
+                    if dx * dx + dy * dy + dz * dz < slow_radius_idx * slow_radius_idx:
+                        is_slow = 1
+                        break
+                if is_slow == 0:
+                    subav_density[ix, iy, iz] = 0
+    return subav_density
+
+
+def subav(density, ng, dg, slow_radius, rs, r0):
+    return _subav(
+        np.asarray(density, dtype=np.uint8),
+        int(ng),
+        np.asarray(slow_radius, dtype=np.float64),
+        np.asarray(rs, dtype=np.float64),
+        np.asarray(r0, dtype=np.float64),
+        float(dg),
+    )
+
+
+@njit(cache=True, parallel=True)
+def _simulate_traj(d, ds, dg, t_max, t_step, D, slow_fact):
+    n_samples = int(t_max / t_step)
+    ng = d.shape[0]
+    sigma = np.sqrt(2 * D * 3 * t_step) / dg
+    pos = np.zeros((n_samples, 3), dtype=np.float64)
+    accepted = np.zeros(n_samples, dtype=np.uint8)
+    r = np.random.normal(0.0, sigma, size=(n_samples, 3))
+    slow_fact_sqrt = np.sqrt(slow_fact)
+
+    # pick a starting point in AV
+    found = False
+    for _ in range(1000):
+        x_idx = np.random.randint(0, ng)
+        y_idx = np.random.randint(0, ng)
+        z_idx = np.random.randint(0, ng)
+        if d[x_idx, y_idx, z_idx] > 0:
+            pos[0, 0] = x_idx
+            pos[0, 1] = y_idx
+            pos[0, 2] = z_idx
+            found = True
+            break
+    if not found:
+        return pos, accepted, 0, 0
+
+    n_accepted = 1
+    n_rejected = 0
+    i_accepted = 0
+    for i in range(n_samples):
+        x_idx = int(pos[i_accepted, 0])
+        y_idx = int(pos[i_accepted, 1])
+        z_idx = int(pos[i_accepted, 2])
+        if ds[x_idx, y_idx, z_idx] > 0:
+            r[i, 0] *= slow_fact_sqrt
+            r[i, 1] *= slow_fact_sqrt
+            r[i, 2] *= slow_fact_sqrt
+
+        pos[i, 0] = pos[i_accepted, 0] + r[i, 0]
+        pos[i, 1] = pos[i_accepted, 1] + r[i, 1]
+        pos[i, 2] = pos[i_accepted, 2] + r[i, 2]
+
+        x_idx = int(pos[i, 0])
+        y_idx = int(pos[i, 1])
+        z_idx = int(pos[i, 2])
+        if 0 <= x_idx < ng and 0 <= y_idx < ng and 0 <= z_idx < ng and d[x_idx, y_idx, z_idx] > 0:
+            i_accepted = i
+            n_accepted += 1
+            accepted[i] = 1
+        else:
+            n_rejected += 1
+            accepted[i] = 0
+    return (pos - (ng - 1) / 2.0) * dg, accepted, n_accepted, n_rejected
+
+
+def simulate_traj(d, ds, dg, t_max, t_step, D, slow_fact):
+    return _simulate_traj(
+        np.asarray(d, dtype=np.uint8),
+        np.asarray(ds, dtype=np.uint8),
+        float(dg),
+        float(t_max),
+        float(t_step),
+        float(D),
+        float(slow_fact),
+    )
+
+
+def spherePoints(nSphere: int):
+    inc = np.pi * (3.0 - np.sqrt(5.0))
+    offset = 2.0 / float(nSphere)
+    k_vals = np.arange(nSphere, dtype=np.float32)
+    y = k_vals * offset - 1.0 + (offset / 2.0)
+    rd = np.sqrt(1.0 - y * y)
+    phi = k_vals * inc
+    x = np.cos(phi) * rd
+    z = np.sin(phi) * rd
+    return np.stack([x, y, z], axis=1).astype(np.float32)
+
+
+@njit(cache=True)
+def _asa(r, vdw, probe_atom_indices, sphere_points, probe, radius):
+    nSphere = sphere_points.shape[0]
+    n_probe_atoms = probe_atom_indices.shape[0]
+    n_atoms = r.shape[0]
+    if n_probe_atoms == 0 or nSphere == 0 or n_atoms == 0:
+        return np.zeros(n_probe_atoms, dtype=np.float32)
+
+    neighbor_indices = np.zeros(n_atoms, dtype=np.uint32)
+    probe_atom_asa = np.zeros(n_probe_atoms, dtype=np.float32)
+    c = 4.0 * np.pi / float(nSphere)
+    for i in range(n_probe_atoms):
+        probe_atom_index = probe_atom_indices[i]
+        n_neighbor = 0
+        aX, aY, aZ = r[probe_atom_index]
+        for atom_index in range(n_atoms):
+            if probe_atom_index != atom_index:
+                bX, bY, bZ = r[atom_index]
+                dist2 = (aX - bX) ** 2 + (aY - bY) ** 2 + (aZ - bZ) ** 2
+                if dist2 < 2 * (vdw[probe_atom_index] + probe):
+                    neighbor_indices[n_neighbor] = atom_index
+                    n_neighbor += 1
+
+        n_accessible_point = 0
+        for j in range(nSphere):
+            is_accessible = True
+            aX = sphere_points[j, 0] * radius + r[probe_atom_index, 0]
+            aY = sphere_points[j, 1] * radius + r[probe_atom_index, 1]
+            aZ = sphere_points[j, 2] * radius + r[probe_atom_index, 2]
+            for k in range(n_neighbor):
+                bX, bY, bZ = r[neighbor_indices[k]]
+                dist2 = (aX - bX) ** 2 + (aY - bY) ** 2 + (aZ - bZ) ** 2
+                if dist2 < (radius + probe) * (radius + probe):
+                    is_accessible = False
+                    break
+            if is_accessible:
+                n_accessible_point += 1
+        probe_atom_asa[i] = c * n_accessible_point * vdw[probe_atom_index] ** 2
+    return probe_atom_asa
+
+
+def asa(r, vdw, probe_atom_indices, sphere_points, probe=1.0, radius=2.5):
+    r = np.asarray(r, dtype=np.float32)
+    vdw = np.asarray(vdw, dtype=np.float32)
+    probe_atom_indices = np.asarray(probe_atom_indices, dtype=np.uint32)
+    if sphere_points is None or np.asarray(sphere_points).ndim != 2:
+        sphere_points = spherePoints(590)
+    sphere_points = np.asarray(sphere_points, dtype=np.float32)
+    return _asa(r, vdw, probe_atom_indices, sphere_points, float(probe), float(radius))
 
 
 def density2points_ll(nx, ny, nz, g, dx, dy, dz, ox, oy, oz):
@@ -215,6 +451,15 @@ class AV(object):
             print("Residue name: %s" % residue_name)
             print("Atom name: %s" % atom_name)
 
+        def _decode(value):
+            if isinstance(value, bytes):
+                return value.decode().strip()
+            if isinstance(value, np.bytes_):
+                return value.tobytes().decode().strip()
+            if isinstance(value, np.str_):
+                return str(value).strip()
+            return str(value).strip()
+
         if attachment_atom_index is None:
             if residue_seq_number is None or atom_name is None:
                 raise ValueError("either attachment_atom number or residue and atom_name have to be provided.")
@@ -233,6 +478,15 @@ class AV(object):
                 attachment_atom_index = attachment_atom_index[0]
             if verbose:
                 print("Atom index: %s" %attachment_atom_index)
+        else:
+            if residue_seq_number is None:
+                residue_seq_number = int(atoms['res_id'][attachment_atom_index])
+            if atom_name is None:
+                atom_name = _decode(atoms['atom_name'][attachment_atom_index])
+            if chain_identifier is None:
+                chain_identifier = _decode(atoms['chain'][attachment_atom_index])
+            self.attachment_residue = residue_seq_number
+            self.attachment_atom = atom_name
 
         if verbose:
             print("Calculating initial-AV")
@@ -241,16 +495,62 @@ class AV(object):
             print("Linker-radius  : %.2f" % radius1)
             print("Attachment-atom: %i" % attachment_atom_index)
             print("AV-resolution  : %.2f" % simulation_grid_resolution)
-        if simulation_type == 'AV3':
-            points, density, ng, x0 = calculate3R(linker_length, linker_width, radius1, radius2, radius3,
-                                                  attachment_atom_index, x, y, z, vdw, dg=simulation_grid_resolution, verbose=verbose,
-                                                  linkersphere=allowed_sphere_radius)
+        if HAS_IMP_BFF:
+            av_result = build_imp_accessible_volume(
+                structure=structure,
+                residue_seq_number=residue_seq_number,
+                atom_name=atom_name,
+                chain_identifier=chain_identifier,
+                linker_length=linker_length,
+                linker_width=linker_width,
+                radii=(radius1, radius2, radius3),
+                allowed_sphere_radius=allowed_sphere_radius,
+                simulation_grid_resolution=simulation_grid_resolution,
+            )
+            points = av_result.points if av_result.points.size else np.zeros((0, 3), dtype=np.float64)
+            density = av_result.density
+            ng = av_result.grid_size
+            x0 = av_result.attachment_point
+        elif HAS_LABELLIB:
+            if simulation_type == 'AV3':
+                points, density, ng, x0 = calculate3R(
+                    linker_length,
+                    linker_width,
+                    radius1,
+                    radius2,
+                    radius3,
+                    attachment_atom_index,
+                    x,
+                    y,
+                    z,
+                    vdw,
+                    dg=simulation_grid_resolution,
+                    verbose=verbose,
+                    linkersphere=allowed_sphere_radius,
+                )
+            else:
+                points, density, ng, x0 = calculate1R(
+                    linker_length,
+                    linker_width,
+                    radius1,
+                    attachment_atom_index,
+                    x,
+                    y,
+                    z,
+                    vdw,
+                    verbose=verbose,
+                    linkersphere=allowed_sphere_radius,
+                    dg=simulation_grid_resolution,
+                )
         else:
-            points, density, ng, x0 = calculate1R(linker_length, linker_width, radius1, attachment_atom_index, x, y, z, vdw, verbose=verbose,
-                                                  linkersphere=allowed_sphere_radius, dg=simulation_grid_resolution)
+            raise RuntimeError(
+                "Neither IMP.bff nor LabelLib are available to compute accessible volumes. "
+                "Install IMP.bff (preferred) or LabelLib."
+            )
+
         self.ng = ng
         self.points = points
-        self.points_fast = points
+        self.points_fast = points.copy()
         self.density_fast = density
         self.density_slow = None
         self.density = density
@@ -294,14 +594,14 @@ class AV(object):
             print("Calculating slow AV")
             print("slow centers: \n%s" % slow_centers)
 
-        ng = self.ng
-        npm = (ng - 1) / 2
+        ng = int(self.ng)
+        npm = int((ng - 1) // 2)
         density = self.density_fast
         dg = self.dg
         x0 = self.x0
         slow_density = subav(density, ng, dg, slow_radii, slow_centers, x0)
         n = slow_density.sum()
-        points = fps.density2points(n, npm, dg, slow_density.reshape(ng*ng*ng), x0, ng)
+        points = density2points(n, npm, dg, slow_density.reshape(ng*ng*ng), x0, ng)
         if verbose or self.verbose:
             print("Points in slow-AV: %i" % n)
         if save:

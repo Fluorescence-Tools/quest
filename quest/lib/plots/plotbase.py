@@ -1,4 +1,4 @@
-from PyQt5 import QtGui, QtCore, uic, QtWidgets
+from qtpy import QtGui, QtCore, QtWidgets, uic
 
 from lib import Genealogy
 

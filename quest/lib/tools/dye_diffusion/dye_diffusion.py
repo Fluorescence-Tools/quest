@@ -4,21 +4,145 @@ from collections import OrderedDict
 import gc
 import json
 import tempfile
+from pathlib import Path
 import inspect
 
 import numpy as np
 import numexpr as ne
-from PyQt5 import QtGui, QtCore, uic, QtWidgets
+from qtpy import QtGui, QtCore, QtWidgets, uic
 import pyqtgraph as pg
 
 from . import photon
+
 import lib.io.PDB as PDB
 from lib import Structure
 import lib.fps as fps
 from lib.plots.MolView import MolQtWidget
-from lib.math.functions import autocorr
+from lib.math import autocorr
 from lib.widgets import PDBSelector
 from lib.fps import AV, write_xyz
+import os
+from pathlib import Path
+
+# Optional Chimol viewer (fallback to PyMOL if unavailable or disabled).
+# ChiSurf setting: gui.mol_viewer in settings_chisurf.yaml (pymol|chimol).
+try:
+    import chisurf.settings as _cs_settings  # type: ignore
+except Exception:
+    _cs_settings = None
+
+_quest_viewer_pref = None
+if _cs_settings is not None:
+    try:
+        _quest_viewer_pref = (
+            str(_cs_settings.gui.get("mol_viewer", "pymol"))  # type: ignore[attr-defined]
+            .lower()
+            .strip()
+        )
+    except Exception:
+        _quest_viewer_pref = None
+if not _quest_viewer_pref or _quest_viewer_pref not in ("pymol", "chimol"):
+    _quest_viewer_pref = "pymol"
+
+try:
+    if _quest_viewer_pref == "chimol":
+        from chisurf.plugins.chimol.chimol.renderer.view import MolView as _ChimolMolView
+        from chisurf.plugins.chimol.chimol.io import load_structure_payload as _chimol_load_structure_payload
+
+        _HAS_CHIMOL = True
+    else:
+        _ChimolMolView = None
+        _chimol_load_structure_payload = None
+        _HAS_CHIMOL = False
+except Exception:
+    _ChimolMolView = None
+    _chimol_load_structure_payload = None
+    _HAS_CHIMOL = False
+
+
+class _ChimolCmdShim:
+    """Minimal shim to satisfy .pymol.cmd.do/orient calls."""
+
+    def __init__(self, adapter):
+        self._adapter = adapter
+
+    def do(self, command: str):
+        cmd = (command or "").strip().lower()
+        if cmd == "orient":
+            try:
+                self._adapter.orient()
+            except Exception:
+                pass
+        # Other PyMOL commands are ignored in Chimol mode.
+
+    # Compatibility for pymol.cmd.set(...) used nowhere else here.
+    def set(self, *_, **__):
+        return None
+
+    def delete(self, *_, **__):
+        return None
+
+
+class _ChimolAdapter(QtWidgets.QWidget):
+    """Lightweight adapter exposing the subset of PyMOL-like API we need."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.viewer = _ChimolMolView(self)
+        self._cmd = _ChimolCmdShim(self)
+        self._objects: list[str] = []
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.viewer)
+
+    @property
+    def pymol(self):
+        return self
+
+    @property
+    def cmd(self):
+        return self._cmd
+
+    def reset(self):
+        for obj_id in list(getattr(self.viewer, "_objects", {}).keys()):
+            try:
+                self.viewer.remove_object(obj_id)
+            except Exception:
+                pass
+        self._objects.clear()
+
+    def orient(self):
+        try:
+            self.viewer.reset_view()
+        except Exception:
+            pass
+
+    def openFile(self, path, frame=None, mode=None, object_name=None, verbose=False):
+        try:
+            structure, coords = _chimol_load_structure_payload(Path(path))
+        except Exception:
+            structure, coords = None, None
+        name = object_name or Path(path).stem
+        obj_id = None
+        try:
+            if structure is not None:
+                obj_id = self.viewer.add_structure(structure, name=name, source_path=str(path))
+            elif coords is not None:
+                obj_id = self.viewer.add_coordinates(coords, name=name, source_path=str(path))
+        except Exception:
+            obj_id = None
+
+        if obj_id:
+            self._objects.append(obj_id)
+        return obj_id
+
+    # PyMOL API compatibility
+    @property
+    def cmd(self):
+        return self.cmd
+
 
 
 def selection2atom_idx(pdb, res_types, verbose=False):
@@ -412,6 +536,15 @@ class DonorDecay(object):
         self.slow_radius = slow_radius
         self.all_quencher_atoms = all_quencher_atoms
         self._structure = None
+        self.fret_enabled = False
+        self.fret_R0 = None
+        self.acceptor_chain = None
+        self.acceptor_residue = None
+        self.acceptor_atom = None
+        self.fret_av_parameter = None
+        self._acceptor_av = None
+        self._photon_trace_fret = None
+        self._fret_efficiency = None
 
     def __str__(self):
         s = ''
@@ -543,6 +676,96 @@ class DonorDecay(object):
         x, y, = self.get_histogram(nbins, range)
         save_hist(filename, x, y, verbose)
 
+    def calc_acceptor_av(self, verbose=False):
+        verbose = verbose or self.verbose
+        if self._structure is None:
+            return None
+        residue = self.acceptor_residue
+        atom = self.acceptor_atom
+        chain = self.acceptor_chain
+        if residue is None or atom is None:
+            return None
+        params = self.fret_av_parameter if self.fret_av_parameter is not None else self.av_parameter
+        av = AV(self.structure, residue_seq_number=residue, atom_name=atom, chain_identifier=chain,
+                simulation_grid_resolution=self.dg, save_av=self.save_avs, verbose=verbose,
+                output_file=self.output_file + '_A', **params)
+        av.calc_slow_av(save=self.save_avs, slow_centers=self.slow_center,
+                        slow_radius=self.slow_radius, verbose=verbose)
+        self._acceptor_av = av
+        return av
+
+    def calc_fret_rate(self, verbose=False, n_samples=50000):
+        if not getattr(self, "fret_enabled", False):
+            return None
+        verbose = verbose or self.verbose
+        donor_av = self.av
+        acceptor_av = self._acceptor_av if self._acceptor_av is not None else self.calc_acceptor_av(verbose=verbose)
+        if acceptor_av is None:
+            return None
+        R0 = self.fret_R0 if self.fret_R0 is not None else 52.0
+        try:
+            r_eff = float(fps.RDAMeanE(donor_av, acceptor_av, R0, n_samples))
+        except Exception:
+            return None
+        if r_eff <= 0:
+            return None
+        k_fret = (1.0 / self.tau0) * (R0 / r_eff) ** 6
+        self._fret_efficiency = 1.0 / (1.0 + (r_eff / R0) ** 6)
+        return k_fret
+
+    def calc_photons_fret(self, verbose=False):
+        verbose = verbose or self.verbose
+        if not getattr(self, "fret_enabled", False):
+            self._photon_trace_fret = None
+            return
+        k_fret = self.calc_fret_rate(verbose=verbose)
+        if k_fret is None:
+            self._photon_trace_fret = None
+            return
+        donor_traj = self.diffusion
+        collided = donor_traj.quenched
+        t_step = donor_traj.t_step
+        n_photons = self.n_photons
+        k_total = np.where(collided > 0, self.kQ + k_fret, k_fret).astype(np.float32)
+        dts, phs = photon.simulate_photon_trace_rate(n_ph=n_photons, kQ=k_total, t_step=t_step, tau0=self.tau0)
+        self._photon_trace_fret = dts, phs
+
+    @property
+    def photon_trace_fret(self):
+        if self._photon_trace_fret is None:
+            self.calc_photons_fret()
+        return self._photon_trace_fret
+
+    @property
+    def quantum_yield_fret(self):
+        if self._photon_trace_fret is None:
+            self.calc_photons_fret()
+        if self._photon_trace_fret is None:
+            return 0.0
+        dt, n = self._photon_trace_fret
+        n_ph = self.n_photons
+        n_f = n.sum()
+        return float(n_f) / n_ph
+
+    @property
+    def fret_efficiency(self):
+        if self._fret_efficiency is not None:
+            return self._fret_efficiency
+        qy_d = self.quantum_yield
+        qy_da = self.quantum_yield_fret
+        if qy_d <= 0:
+            return 0.0
+        return 1.0 - qy_da / qy_d
+
+    def get_histogram_fret(self, nbins=4096, range=(0, 50)):
+        if self._photon_trace_fret is None:
+            self.calc_photons_fret()
+        if self._photon_trace_fret is None:
+            return None, None
+        dts, nph = self._photon_trace_fret
+        y, x = np.histogram(dts, range=range, bins=nbins)
+        return x, y
+
     def update_all(self, verbose=False):
         verbose = verbose or self.verbose
         gc.collect()
@@ -597,8 +820,127 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
                 'dye_diffusion.json'
             )
 
+        # Donor and acceptor label controls side-by-side
+        self.donor_groupbox = QtWidgets.QGroupBox("Donor", self.groupBox)
+        donor_layout = QtWidgets.QGridLayout(self.donor_groupbox)
+
+        # Donor attachment selector (chain / residue / atom)
         self.pdb_selector = PDBSelector()
-        self.verticalLayout_10.addWidget(self.pdb_selector)
+        donor_layout.addWidget(self.pdb_selector, 0, 0, 1, 2)
+
+        # Move donor AV parameter widgets (Length/Width/Radius/dg) into the Donor box.
+        # These widgets are created by dye_diffusion2.ui and originally live in
+        # the right-hand column of the Label group; reparenting them here keeps
+        # behavior identical but with a cleaner layout.
+        try:
+            donor_layout.addWidget(self.label_4, 1, 0)
+            donor_layout.addWidget(self.doubleSpinBox, 1, 1)
+
+            donor_layout.addWidget(self.label_5, 2, 0)
+            donor_layout.addWidget(self.doubleSpinBox_2, 2, 1)
+
+            donor_layout.addWidget(self.label_6, 3, 0)
+            donor_layout.addWidget(self.doubleSpinBox_3, 3, 1)
+
+            donor_layout.addWidget(self.label_23, 4, 0)
+            donor_layout.addWidget(self.doubleSpinBox_17, 4, 1)
+
+            # Donor photophysics: tau0 and diffusion coefficient D
+            donor_layout.addWidget(self.label_12, 5, 0)
+            donor_layout.addWidget(self.doubleSpinBox_8, 5, 1)
+
+            donor_layout.addWidget(self.label_7, 6, 0)
+            donor_layout.addWidget(self.doubleSpinBox_4, 6, 1)
+        except AttributeError:
+            # If any of these widgets are missing, leave the original layout.
+            pass
+
+        # FRET acceptor: checkable group box with its own PDB selector and AV params
+        self.fret_groupbox = QtWidgets.QGroupBox("FRET acceptor", self.groupBox)
+        self.fret_groupbox.setCheckable(True)
+        self.fret_groupbox.setChecked(False)
+
+        fret_layout = QtWidgets.QGridLayout(self.fret_groupbox)
+
+        # Acceptor attachment selector (chain / residue / atom)
+        self.acceptor_selector = PDBSelector(show_labels=False)
+        fret_layout.addWidget(self.acceptor_selector, 0, 0, 1, 2)
+
+        # Acceptor AV parameters: length / width / radius, mirroring donor UI
+        label_len = QtWidgets.QLabel("Length", self.fret_groupbox)
+        self.fret_len_spin = QtWidgets.QDoubleSpinBox(self.fret_groupbox)
+        self.fret_len_spin.setMinimum(1.0)
+        self.fret_len_spin.setMaximum(100.0)
+        self.fret_len_spin.setSingleStep(0.5)
+        self.fret_len_spin.setValue(float(self.doubleSpinBox.value()))
+        fret_layout.addWidget(label_len, 1, 0)
+        fret_layout.addWidget(self.fret_len_spin, 1, 1)
+
+        label_wid = QtWidgets.QLabel("Width", self.fret_groupbox)
+        self.fret_wid_spin = QtWidgets.QDoubleSpinBox(self.fret_groupbox)
+        self.fret_wid_spin.setMinimum(0.1)
+        self.fret_wid_spin.setMaximum(10.0)
+        self.fret_wid_spin.setSingleStep(0.1)
+        self.fret_wid_spin.setValue(float(self.doubleSpinBox_2.value()))
+        fret_layout.addWidget(label_wid, 2, 0)
+        fret_layout.addWidget(self.fret_wid_spin, 2, 1)
+
+        label_rad = QtWidgets.QLabel("Radius", self.fret_groupbox)
+        self.fret_rad_spin = QtWidgets.QDoubleSpinBox(self.fret_groupbox)
+        self.fret_rad_spin.setMinimum(0.1)
+        self.fret_rad_spin.setMaximum(50.0)
+        self.fret_rad_spin.setSingleStep(0.25)
+        self.fret_rad_spin.setValue(float(self.doubleSpinBox_3.value()))
+        fret_layout.addWidget(label_rad, 3, 0)
+        fret_layout.addWidget(self.fret_rad_spin, 3, 1)
+
+        # Acceptor dg: share the same grid parameter as the donor (doubleSpinBox_17)
+        label_dg = QtWidgets.QLabel("dg", self.fret_groupbox)
+        self.fret_dg_spin = QtWidgets.QDoubleSpinBox(self.fret_groupbox)
+        self.fret_dg_spin.setMinimum(self.doubleSpinBox_17.minimum())
+        self.fret_dg_spin.setMaximum(self.doubleSpinBox_17.maximum())
+        self.fret_dg_spin.setSingleStep(self.doubleSpinBox_17.singleStep())
+        self.fret_dg_spin.setValue(float(self.doubleSpinBox_17.value()))
+        fret_layout.addWidget(label_dg, 4, 0)
+        fret_layout.addWidget(self.fret_dg_spin, 4, 1)
+        try:
+            self.fret_dg_spin.valueChanged.connect(self.onFretDgChanged)
+        except Exception:
+            pass
+
+        # Acceptor diffusion coefficient D_A (independent of donor D)
+        label_D = QtWidgets.QLabel("D [A2/ns]", self.fret_groupbox)
+        self.fret_D_spin = QtWidgets.QDoubleSpinBox(self.fret_groupbox)
+        try:
+            self.fret_D_spin.setDecimals(self.doubleSpinBox_4.decimals())
+            self.fret_D_spin.setMinimum(self.doubleSpinBox_4.minimum())
+            self.fret_D_spin.setMaximum(self.doubleSpinBox_4.maximum())
+            self.fret_D_spin.setSingleStep(self.doubleSpinBox_4.singleStep())
+            self.fret_D_spin.setValue(float(self.doubleSpinBox_4.value()))
+        except AttributeError:
+            pass
+        fret_layout.addWidget(label_D, 5, 0)
+        fret_layout.addWidget(self.fret_D_spin, 5, 1)
+
+        # Place donor and acceptor group boxes next to each other
+        donor_acceptor_layout = QtWidgets.QHBoxLayout()
+        donor_acceptor_layout.addWidget(self.donor_groupbox)
+        donor_acceptor_layout.addWidget(self.fret_groupbox)
+        self.verticalLayout_10.addLayout(donor_acceptor_layout)
+
+        # The original "Dye" group box only contained tau0 and donor D, which
+        # are now moved into the Donor group box; hide the empty container.
+        try:
+            self.groupBox_3.hide()
+        except AttributeError:
+            pass
+
+        # Backwards-compatible alias: existing code checks self.fret_checkbox.isChecked()
+        self.fret_checkbox = self.fret_groupbox
+        try:
+            self.fret_groupbox.toggled.connect(self.onFretToggled)
+        except AttributeError:
+            pass
         self._settings_file = None
         self.settings_file = settings_file
         fp = open(settings_file)
@@ -624,8 +966,10 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         decay_plot.setLabel('bottom', 'time [ns]')
         decay_plot.setLabel('left', 'counts')
         decay_plot.setLogMode(False, True)
+        # Histogram (measured decay) in red, donor-only in cyan, FRET in magenta
         self.hist_curve = decay_plot.plot([], [], pen=pg.mkPen(color='r', width=1))
-        self.unquenched_curve = decay_plot.plot([], [], pen=pg.mkPen(color='b', width=1))
+        self.unquenched_curve = decay_plot.plot([], [], pen=pg.mkPen(color='c', width=1))
+        self.fret_curve = decay_plot.plot([], [], pen=pg.mkPen(color='m', width=1))
         self.plot_decay = decay_plot
         self.verticalLayout_2.addWidget(decay_plot)
 
@@ -646,12 +990,38 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         self.verticalLayout_6.addWidget(auto_plot)
 
         ## Protein Structure
-        self.molview = MolQtWidget(self, enableUi=False)
+        self.viewer_backend = (_quest_viewer_pref if _HAS_CHIMOL else "pymol")
+        self.molview = self._build_molview_widget()
         self.verticalLayout_4.addWidget(self.molview)
+        self._chimol_object_id = None
 
         self.diff_file = None
         self.av_slow_file = None
         self.av_fast_file = None
+        self.acceptor_av_slow_file = None
+        self.acceptor_av_fast_file = None
+
+        try:
+            self.label_fret = QtWidgets.QLabel("E(FRET)", self.groupBox_7)
+            self.doubleSpinBox_fret = QtWidgets.QDoubleSpinBox(self.groupBox_7)
+            self.doubleSpinBox_fret.setReadOnly(True)
+            self.doubleSpinBox_fret.setMaximum(1.0)
+            self.gridLayout_7.addWidget(self.label_fret, 3, 0)
+            self.gridLayout_7.addWidget(self.doubleSpinBox_fret, 3, 1)
+        except AttributeError:
+            pass
+
+        try:
+            self.actionSave_project.triggered.connect(self.onSaveProject)
+            self.actionLoad_project.triggered.connect(self.onLoadProject)
+        except AttributeError:
+            pass
+
+    def _build_molview_widget(self):
+        """Construct 3D viewer based on ChiSurf setting (pymol|chimol)."""
+        if self.viewer_backend == "chimol" and _HAS_CHIMOL:
+            return _ChimolAdapter(self)
+        return MolQtWidget(self, enableUi=False)
 
     def onSaveHist(self, verbose=False):
         verbose = self.verbose or verbose
@@ -691,6 +1061,15 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         self.molview.pymol.cmd.do("show spheres, p")
         self.molview.pymol.cmd.do("color gray, p")
 
+        # Remove previously drawn AV objects to prevent stale visuals
+        try:
+            self.molview.pymol.cmd.delete("av")
+            self.molview.pymol.cmd.delete("sticky_av")
+            self.molview.pymol.cmd.delete("acceptor_av")
+            self.molview.pymol.cmd.delete("acceptor_av_slow")
+        except Exception:
+            pass
+
         if self.diff_file is not None:
             self.molview.openFile(self.diff_file, frame=1, object_name='trajectory')
             self.molview.pymol.cmd.do("color green, trajectory")
@@ -698,9 +1077,23 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         if load_av:
             if self.av_slow_file is not None:
                 self.molview.openFile(self.av_slow_file, frame=1, object_name='sticky_av')
+                self.molview.pymol.cmd.do("color cyan, sticky_av")
+                self.molview.pymol.cmd.do("show spheres, sticky_av")
 
             if self.av_fast_file is not None:
                 self.molview.openFile(self.av_fast_file, frame=1, object_name='av')
+                self.molview.pymol.cmd.do("color cyan, av")
+                self.molview.pymol.cmd.do("show spheres, av")
+
+            if self.acceptor_av_slow_file is not None:
+                self.molview.openFile(self.acceptor_av_slow_file, frame=1, object_name='acceptor_av_slow')
+                self.molview.pymol.cmd.do("color magenta, acceptor_av_slow")
+                self.molview.pymol.cmd.do("show spheres, acceptor_av_slow")
+
+            if self.acceptor_av_fast_file is not None:
+                self.molview.openFile(self.acceptor_av_fast_file, frame=1, object_name='acceptor_av')
+                self.molview.pymol.cmd.do("color magenta, acceptor_av")
+                self.molview.pymol.cmd.do("show spheres, acceptor_av")
         self.molview.pymol.cmd.orient()
 
         self.molview_highlight_quencher()
@@ -722,6 +1115,13 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         self.hist_curve.setData(x[1:], y + 1.0)
         yu = np.exp(-x/self.tau0) * y[1]
         self.unquenched_curve.setData(x, yu + 1.0)
+        if getattr(self, "fret_checkbox", None) is not None and self.fret_checkbox.isChecked():
+            xf, yf = self.get_histogram_fret(nbins=self.nBins)
+            if xf is not None:
+                yf[yf < 0.001] = 0.001
+                self.fret_curve.setData(xf[1:], yf + 1.0)
+        else:
+            self.fret_curve.setData([], [])
         self.plot_decay.enableAutoRange(True, True)
         self.plot_decay.autoRange()
 
@@ -730,6 +1130,38 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         if success:
             self.doubleSpinBox_16.setValue(self.quantum_yield)
             self.doubleSpinBox_15.setValue(self.collisions * 100.0)
+            if getattr(self, "fret_checkbox", None) is not None and self.fret_checkbox.isChecked():
+                self.fret_enabled = True
+                self.acceptor_chain = getattr(self.acceptor_selector, "chain_id", None)
+                self.acceptor_residue = getattr(self.acceptor_selector, "residue_id", None)
+                self.acceptor_atom = getattr(self.acceptor_selector, "atom_name", None)
+                # Sync acceptor AV parameters from the FRET group box controls
+                try:
+                    self.fret_av_parameter = {
+                        'linker_length': float(self.fret_len_spin.value()),
+                        'linker_width': float(self.fret_wid_spin.value()),
+                        'radius1': float(self.fret_rad_spin.value()),
+                    }
+                except AttributeError:
+                    self.fret_av_parameter = None
+                self.calc_acceptor_av(verbose=verbose)
+                self.acceptor_av_slow_file, self.acceptor_av_fast_file = self.save_av(
+                    'acceptor',
+                    self._acceptor_av,
+                    directory=self.tmp_dir,
+                    verbose=verbose,
+                )
+                self.calc_photons_fret(verbose=verbose)
+                try:
+                    if hasattr(self, "doubleSpinBox_fret") and self.fret_efficiency is not None:
+                        self.doubleSpinBox_fret.setValue(self.fret_efficiency)
+                except AttributeError:
+                    pass
+            else:
+                self.fret_enabled = False
+                self._photon_trace_fret = None
+                self.acceptor_av_slow_file = None
+                self.acceptor_av_fast_file = None
             diff_file, av_slow_file, av_fast_file = self.onSaveAV(directory=self.tmp_dir)
             self.diff_file = diff_file
             self.av_slow_file = av_slow_file
@@ -737,6 +1169,11 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
             self.update_3D()
             self.update_decay_histogram()
             self.update_trajectory_curve()
+            # After a successful simulation, show the Decay tab (index 1)
+            try:
+                self.tabWidget.setCurrentIndex(1)
+            except Exception:
+                pass
         else:
             # Display a message box in case of failure
             msg_box = QtWidgets.QMessageBox()
@@ -745,6 +1182,25 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
             msg_box.setText("The trajectory calculation failed. Possible reason: Inaccessible labeling location.")
             msg_box.setStandardButtons(QtWidgets.QMessageBox.Ok)
             msg_box.exec_()
+
+    def save_av(self, dye_name, av_obj, verbose=False, directory=None):
+        if av_obj is None:
+            return None, None
+        verbose = self.verbose or verbose
+        if directory is None:
+            directory = self.tmp_dir if hasattr(self, "tmp_dir") and self.tmp_dir else tempfile.gettempdir()
+        safe_name = (dye_name or "").strip().lower()
+        suffix = f"_{safe_name}" if safe_name else ""
+        base = os.path.join(directory, f"{self.filename_prefix}{suffix}")
+        slow_file = base + '_av_slow.xyz'
+        fast_file = base + '_av_fast.xyz'
+        if verbose:
+            print(f"Saving {dye_name or 'AV'} files to {directory}")
+            print("  slow AV ->", slow_file)
+            print("  fast AV ->", fast_file)
+        write_xyz(slow_file, av_obj.points_slow)
+        write_xyz(fast_file, av_obj.points_fast)
+        return slow_file, fast_file
 
     def onSaveAV(self, verbose=False, directory=None):
         verbose = self.verbose or verbose
@@ -763,18 +1219,299 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
             print("Skipping every %i frame." % self.skip_frame)
         self.diffusion.save_trajectory(diff_file, self.skip_frame)
 
-        av_slow_file = os.path.join(directory, self.filename_prefix + '_av_slow.xyz')
-        if verbose:
-            print("\nSaving slow AV...")
-            print("Trajectory filename: %s" % av_slow_file)
-        write_xyz(av_slow_file, self.av.points_slow)
+        donor_slow, donor_fast = self.save_av('donor', self.av, verbose=verbose, directory=directory)
+        return diff_file, donor_slow, donor_fast
 
-        av_fast_file = os.path.join(directory, self.filename_prefix + '_av_fast.xyz')
-        if verbose:
-            print("\nSaving slow AV...")
-            print("Trajectory filename: %s" % av_fast_file)
-        write_xyz(av_fast_file, self.av.points_fast)
-        return diff_file, av_slow_file, av_fast_file
+    def to_project_dict(self):
+        project = OrderedDict()
+
+        # Input data
+        project['pdb'] = self.pdb_filename or None
+        project['attachment'] = {
+            'chain': self.attachment_chain,
+            'residue': self.attachment_residue,
+            'atom': self.attachment_atom,
+        }
+
+        # Accessible volume / dye parameters
+        project['av_parameter'] = self.av_parameter
+        project['dg'] = self.dg
+        project['slow_radius'] = self.slow_radius
+
+        # Simulation settings
+        project['t_max'] = self.t_max
+        project['t_step'] = self.t_step
+        project['n_photons'] = self.n_photons
+        project['n_bins'] = self.nBins
+        project['skip_frame'] = self.skip_frame
+
+        # Photophysics / quenching
+        project['tau0'] = self.tau0
+        project['kQ'] = self.kQ
+        project['slow_fact'] = self.slow_fact
+        project['critical_distance'] = self.critical_distance
+        project['quencher'] = self.quencher
+
+        # Output / bookkeeping
+        project['output_file'] = self.filename_prefix
+        project['save_avs'] = self.save_avs
+        project['all_quencher_atoms'] = self.all_quencher_atoms
+        project['sticky_mode'] = self.sticky_mode
+
+        fret = OrderedDict()
+        fret['enabled'] = bool(getattr(self, "fret_checkbox", None) is not None and self.fret_checkbox.isChecked())
+
+        dyes = []
+
+        donor = OrderedDict()
+        donor_attachment = OrderedDict()
+        donor_attachment['chain'] = self.attachment_chain
+        donor_attachment['residue'] = self.attachment_residue
+        donor_attachment['atom'] = self.attachment_atom
+        donor['name'] = 'D0'
+        donor['role'] = 'donor'
+        donor['attachment'] = donor_attachment
+        donor['av_parameter'] = self.av_parameter
+        # Store donor diffusion coefficient explicitly with the donor dye
+        donor['D'] = float(self.diffusion_coefficient)
+        dyes.append(donor)
+
+        acceptor = OrderedDict()
+        acceptor_attachment = OrderedDict()
+        if hasattr(self, "acceptor_selector"):
+            acceptor_attachment['chain'] = self.acceptor_selector.chain_id
+            acceptor_attachment['residue'] = self.acceptor_selector.residue_id
+            acceptor_attachment['atom'] = self.acceptor_selector.atom_name
+        else:
+            acceptor_attachment['chain'] = None
+            acceptor_attachment['residue'] = None
+            acceptor_attachment['atom'] = None
+        acceptor['name'] = 'A0'
+        acceptor['role'] = 'acceptor'
+        acceptor['attachment'] = acceptor_attachment
+
+        # Ensure FRET AV parameters reflect the current UI when FRET is enabled
+        if getattr(self, "fret_checkbox", None) is not None and self.fret_checkbox.isChecked():
+            try:
+                self.fret_av_parameter = {
+                    'linker_length': float(self.fret_len_spin.value()),
+                    'linker_width': float(self.fret_wid_spin.value()),
+                    'radius1': float(self.fret_rad_spin.value()),
+                }
+            except AttributeError:
+                self.fret_av_parameter = None
+        else:
+            self.fret_av_parameter = None
+
+        acceptor['av_parameter'] = self.fret_av_parameter if self.fret_av_parameter is not None else self.av_parameter
+
+        # Store acceptor diffusion coefficient; default to donor D if no
+        # separate value is provided.
+        acc_D = None
+        try:
+            if hasattr(self, "fret_D_spin"):
+                acc_D = float(self.fret_D_spin.value())
+        except Exception:
+            acc_D = None
+        if acc_D is None:
+            acc_D = float(self.diffusion_coefficient)
+        acceptor['D'] = acc_D
+        dyes.append(acceptor)
+
+        fret['dyes'] = dyes
+
+        if self.fret_R0 is not None:
+            R0_matrix = [
+                [None, self.fret_R0],
+                [self.fret_R0, None]
+            ]
+        else:
+            R0_matrix = [
+                [None, None],
+                [None, None]
+            ]
+        fret['R0_matrix'] = R0_matrix
+
+        project['fret'] = fret
+
+        return project
+
+    def load_project_dict(self, settings):
+        if settings is None:
+            return
+
+        # Input data
+        pdb_path = settings.get('pdb')
+        if pdb_path:
+            self.pdb_filename = pdb_path
+            try:
+                self.structure = pdb_path
+                self.pdb_selector.atoms = self.structure.atoms
+                if hasattr(self, "acceptor_selector"):
+                    try:
+                        self.acceptor_selector.atoms = self.structure.atoms
+                    except Exception:
+                        pass
+                self.tmp_dir = tempfile.gettempdir()
+                self.update_3D()
+            except Exception as e:
+                print("Failed to load PDB from project:", e)
+
+        attachment = settings.get('attachment', {})
+        try:
+            self.attachment_chain = attachment.get('chain', self.attachment_chain)
+            self.attachment_residue = attachment.get('residue', self.attachment_residue)
+            self.attachment_atom = attachment.get('atom', self.attachment_atom)
+        except Exception as e:
+            print("Failed to restore attachment from project:", e)
+
+        # Accessible volume / dye parameters
+        if 'av_parameter' in settings:
+            try:
+                self.av_parameter = settings['av_parameter']
+            except Exception as e:
+                print("Failed to restore av_parameter from project:", e)
+
+        self.dg = settings.get('dg', self.dg)
+        self.slow_radius = settings.get('slow_radius', self.slow_radius)
+
+        # Simulation settings
+        self.t_max = settings.get('t_max', self.t_max)
+        self.t_step = settings.get('t_step', self.t_step)
+        self.n_photons = settings.get('n_photons', self.n_photons)
+        try:
+            if 'n_bins' in settings:
+                self.spinBox_2.setValue(int(settings['n_bins']))
+        except AttributeError:
+            pass
+        try:
+            if 'skip_frame' in settings:
+                self.spinBox_3.setValue(int(settings['skip_frame']))
+        except AttributeError:
+            pass
+
+        # Photophysics / quenching
+        self.tau0 = settings.get('tau0', self.tau0)
+
+        # Donor diffusion coefficient: prefer per-dye value in fret.dyes[0]['D']
+        donor_D = None
+        fret_settings_for_D = settings.get('fret')
+        if isinstance(fret_settings_for_D, dict):
+            dyes_for_D = fret_settings_for_D.get('dyes')
+            if isinstance(dyes_for_D, (list, tuple)) and len(dyes_for_D) > 0:
+                donor_D = dyes_for_D[0].get('D', None)
+        if donor_D is None:
+            # Legacy projects may still store a top-level 'D'
+            donor_D = settings.get('D', self.diffusion_coefficient)
+        self.diffusion_coefficient = donor_D
+
+        self.kQ = settings.get('kQ', self.kQ)
+        self.slow_fact = settings.get('slow_fact', self.slow_fact)
+        self.critical_distance = settings.get('critical_distance', self.critical_distance)
+        if 'quencher' in settings:
+            self.quencher = settings['quencher']
+
+        # Output / bookkeeping
+        if 'output_file' in settings:
+            try:
+                self.lineEdit_5.setText(str(settings['output_file']))
+            except AttributeError:
+                pass
+        self.save_avs = settings.get('save_avs', self.save_avs)
+        self.all_quencher_atoms = settings.get('all_quencher_atoms', self.all_quencher_atoms)
+        self.sticky_mode = settings.get('sticky_mode', self.sticky_mode)
+
+        fret_settings = settings.get('fret')
+        if fret_settings:
+            try:
+                if getattr(self, "fret_checkbox", None) is not None:
+                    self.fret_checkbox.setChecked(bool(fret_settings.get('enabled', self.fret_checkbox.isChecked())))
+            except AttributeError:
+                pass
+
+            dyes = fret_settings.get('dyes')
+            R0_matrix = fret_settings.get('R0_matrix')
+
+            if isinstance(dyes, (list, tuple)) and len(dyes) >= 2:
+                acceptor = dyes[1]
+                acc_att = acceptor.get('attachment', {})
+                try:
+                    if hasattr(self, "acceptor_selector"):
+                        if 'chain' in acc_att:
+                            self.acceptor_selector.chain_id = acc_att.get('chain')
+                        if 'residue' in acc_att:
+                            self.acceptor_selector.residue_id = acc_att.get('residue')
+                        if 'atom' in acc_att:
+                            self.acceptor_selector.atom_name = acc_att.get('atom')
+                except Exception:
+                    pass
+                av_param_acc = acceptor.get('av_parameter')
+                if av_param_acc is not None:
+                    self.fret_av_parameter = av_param_acc
+                    try:
+                        self.fret_len_spin.setValue(float(av_param_acc.get('linker_length', self.doubleSpinBox.value())))
+                        self.fret_wid_spin.setValue(float(av_param_acc.get('linker_width', self.doubleSpinBox_2.value())))
+                        self.fret_rad_spin.setValue(float(av_param_acc.get('radius1', self.doubleSpinBox_3.value())))
+                    except AttributeError:
+                        pass
+
+                # Restore acceptor diffusion coefficient if present
+                try:
+                    acc_D = acceptor.get('D', None)
+                    if acc_D is not None and hasattr(self, "fret_D_spin"):
+                        self.fret_D_spin.setValue(float(acc_D))
+                except Exception:
+                    pass
+
+            if isinstance(R0_matrix, (list, tuple)) and len(R0_matrix) > 0:
+                row0 = R0_matrix[0]
+                if isinstance(row0, (list, tuple)) and len(row0) > 1:
+                    self.fret_R0 = row0[1]
+
+    def onSaveProject(self):
+        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            'Save project',
+            '.',
+            'QuEst project (*.quest.json);;JSON (*.json);;All files (*)'
+        )
+        if not filename:
+            return
+        project = self.to_project_dict()
+        try:
+            with open(filename, 'w') as fp:
+                json.dump(project, fp, indent=2, sort_keys=True)
+            print("Saved project to", filename)
+        except IOError as e:
+            msg_box = QtWidgets.QMessageBox(self)
+            msg_box.setIcon(QtWidgets.QMessageBox.Warning)
+            msg_box.setWindowTitle("Save project failed")
+            msg_box.setText("Could not write project file:\n%s" % e)
+            msg_box.exec_()
+
+    def onLoadProject(self):
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            'Load project',
+            '.',
+            'QuEst project (*.quest.json);;JSON (*.json);;All files (*)'
+        )
+        if not filename:
+            return
+        try:
+            with open(filename) as fp:
+                settings = json.load(fp, object_pairs_hook=OrderedDict)
+        except (IOError, ValueError) as e:
+            msg_box = QtWidgets.QMessageBox(self)
+            msg_box.setIcon(QtWidgets.QMessageBox.Warning)
+            msg_box.setWindowTitle("Load project failed")
+            msg_box.setText("Could not read project file:\n%s" % e)
+            msg_box.exec_()
+            return
+
+        self.load_project_dict(settings)
+        # Optionally, update all outputs based on loaded settings
+        # but do not run a full simulation automatically to keep CLI parity
 
     @property
     def all_quencher_atoms(self):
@@ -811,8 +1548,62 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         self.pdb_filename = str(QtWidgets.QFileDialog.getOpenFileName(None, 'Open PDB-File', '', 'PDB-files (*.pdb)')[0])
         self.structure = self.pdb_filename
         self.pdb_selector.atoms = self.structure.atoms
+        # Keep acceptor selector in sync with the donor when available
+        if hasattr(self, "acceptor_selector"):
+            try:
+                self.acceptor_selector.atoms = self.structure.atoms
+            except Exception:
+                pass
         self.tmp_dir = tempfile.gettempdir()
         self.update_3D()
+        # When a new PDB is opened, switch to the 3D view tab (index 2)
+        try:
+            self.tabWidget.setCurrentIndex(2)
+        except Exception:
+            pass
+
+    def onFretToggled(self, checked):
+        """Handle enabling/disabling of the FRET acceptor controls.
+
+        When enabled, ensure the acceptor selector is populated with the
+        current structure atoms so that chain/residue/atom choices match
+        the donor selector.
+        """
+
+        if not hasattr(self, "acceptor_selector"):
+            return
+
+        # Enable/disable the selector and AV parameter widgets
+        for w in (
+            getattr(self, "acceptor_selector", None),
+            getattr(self, "fret_len_spin", None),
+            getattr(self, "fret_wid_spin", None),
+            getattr(self, "fret_rad_spin", None),
+            getattr(self, "fret_dg_spin", None),
+            getattr(self, "fret_D_spin", None),
+        ):
+            if w is not None:
+                try:
+                    w.setEnabled(checked)
+                except Exception:
+                    pass
+
+        # When enabling, ensure the selector is populated once a structure
+        # is available so that the user can pick residues/atoms immediately.
+        if checked and getattr(self, "structure", None) is not None:
+            try:
+                if getattr(self.acceptor_selector, "atoms", None) is None:
+                    self.acceptor_selector.atoms = self.structure.atoms
+            except Exception:
+                pass
+
+    def onFretDgChanged(self, value):
+        """Keep donor and acceptor dg parameters in sync."""
+
+        try:
+            self.doubleSpinBox_17.setValue(float(value))
+        except Exception:
+            pass
 
     @property
     def dg(self):
@@ -821,7 +1612,10 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
     @dg.setter
     def dg(self, v):
         try:
-            self.doubleSpinBox_17.setValue(float(v))
+            v_f = float(v)
+            self.doubleSpinBox_17.setValue(v_f)
+            if hasattr(self, "fret_dg_spin"):
+                self.fret_dg_spin.setValue(v_f)
         except AttributeError:
             pass
 

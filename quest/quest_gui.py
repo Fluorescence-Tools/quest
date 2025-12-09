@@ -1,19 +1,6 @@
 import tempfile
-try:
-    # new location for sip
-    # https://www.riverbankcomputing.com/static/Docs/PyQt5/incompatibilities.html#pyqt-v5-11
-    from PyQt5 import sip
-except ImportError:
-    import sip
-sip.setapi('QDate', 2)
-sip.setapi('QDateTime', 2)
-sip.setapi('QString', 2)
-sip.setapi('QTextStream', 2)
-sip.setapi('QTime', 2)
-sip.setapi('QUrl', 2)
-sip.setapi('QVariant', 2)
 
-from PyQt5 import QtGui, QtWidgets
+from qtpy import QtGui, QtWidgets
 import lib
 import lib.ui.rescource_rc
 import sys
@@ -34,7 +21,26 @@ def start_gui():
         def __init__(self):
             QtWidgets.QMainWindow.__init__(self)
             dg = lib.tools.TransientDecayGenerator(tempfile.gettempdir())
+            self.dg = dg
             self.setCentralWidget(dg)
+            self._create_menus()
+
+        def _create_menus(self):
+            mbar = self.menuBar()
+            file_menu = mbar.addMenu("&File")
+
+            load_pdb_action = file_menu.addAction("Load PDB…")
+            load_pdb_action.triggered.connect(self.dg.onLoadPDB)
+
+            file_menu.addSeparator()
+            save_project_action = file_menu.addAction("Save project…")
+            save_project_action.triggered.connect(self.dg.onSaveProject)
+            load_project_action = file_menu.addAction("Load project…")
+            load_project_action.triggered.connect(self.dg.onLoadProject)
+
+            file_menu.addSeparator()
+            exit_action = file_menu.addAction("Exit")
+            exit_action.triggered.connect(self.close)
 
 
     app = QtWidgets.QApplication(sys.argv)

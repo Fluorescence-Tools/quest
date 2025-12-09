@@ -85,38 +85,65 @@ quest
 
 ### GUI-QuEST
 
-### Command-QuEST
+### Python API (scripts / notebooks)
 
-1) Go to the folder of the program in the command line (by clicking on shell.bat)
-2) run: "python estimate_qy.py xxxxxx" xxxx are the parameter
-3) mandatory parameters: the pdb-file, the chain id, the amino acid numbers
+You can use QuEst as a pure Python library without starting the GUI by
+working with the high-level functions provided in the `quest.core` (or
+`quest.api`, which re-exports the same objects) module. The typical workflow is:
 
-The command line tools are located in the folder `tools`.
+1. Prepare or save a QuEst project JSON file (e.g. from the GUI).
+2. Load the project dictionary via the API.
+3. Run the simulation to obtain donor-only and, optionally, donor+FRET
+   decay curves.
+4. Analyze or plot the returned arrays in standard scientific Python
+   environments (e.g. Jupyter notebooks).
 
-Example
--------
+Minimal headless example (works in notebooks or scripts):
+
+```python
+from pathlib import Path
+from quest.core import load_project, simulate_project  # or `from quest.api ...`
+
+project = load_project(Path("my_project.quest.json"))
+result = simulate_project(project)
+
+print(result.quantum_yield_donor)
+if result.fret_counts is not None:
+    print("FRET efficiency:", result.fret_efficiency)
+```
+
+The API is designed so that it does not depend on any GUI widgets and
+can therefore be safely imported and used in headless environments.
+
+Notebook examples:
+- `modules/quest/notebooks/quest_core_headless_demo.ipynb` – minimal headless API usage.
+- (Legacy) other notebooks for diffusion/quenching/FRET remain available in the same folder.
+
+### Command-QuEST (Click CLI)
+
+Run QuEst headlessly with the new Click-based CLI:
 
 ```bash
-python estimate_qy.py -f 3q5d_fixed.pdb -c " " -p 11 401
+# Validate a project file
+quest validate -p project.quest.json
+
+# Run a single simulation, overriding parameters
+quest simulate -p project.quest.json --set tau0=3.8 --set attachment.residue=42 -o decay.csv
+
+# Sweep multiple values (Cartesian product) and write tagged outputs
+quest simulate -p project.quest.json \
+  --grid attachment.residue=25,30,35 \
+  --grid linker.length=10.0,12.5 \
+  -o decay.csv
+
+# Emit a starter template
+quest template --with-fret > project.quest.json
 ```
-The argument `-f` corresponds to the PDB file, `-c` to the chain ID,
-`-p` tp the labeled residue number
 
-To get a list of the parameters run:
-
-```bash
-python estimate_qy.py -h
-```
-
-Additionally, there is a helper script which replaces the resname 
-of a given residue with "ALA". This might be usefull if you want to 
-exclude one of the quenchers.
-
-```bash
-python hide_quencher.py     123        3q5d_fixed.pdb   out.pdb
-```
-where the first argument is the resid to exclude, the second is the
-PDB file, and the third is the ouput PDB filename.
+Notes:
+- Use `--set key=value` to override any project field (dotted paths supported).
+- Use `--grid key=val1,val2` to sweep multiple values; outputs are tagged per run.
+- Output format chosen by extension (.csv or .json).
 
 ## Warnings
   1. QuEST determines precise values that are not necessary accurate.

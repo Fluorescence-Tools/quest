@@ -6,8 +6,6 @@ import tempfile
 import numpy as np
 
 import lib
-from lib.math.linalg import vector
-from lib.structure import cStructure
 from lib.io.PDB import Pdb
 
 import os.path
@@ -306,6 +304,99 @@ cartesian_formats = ['i4', '|S1', 'i4', '|S5', 'i4', '|S5', '|S1', '3f8', 'f4int
 internal_keys = ['i', 'ib', 'ia', 'id', 'b', 'a', 'd']
 internal_formats = ['i4', 'i4', 'i4', 'i4', 'f8', 'f8', 'f8']
 
+
+def _norm(vec):
+    return float(np.linalg.norm(vec))
+
+
+def _angle(a, b, c):
+    r12 = a - b
+    r23 = c - b
+    r12n = _norm(r12)
+    r23n = _norm(r23)
+    return float(np.arccos(np.dot(r12, r23) / (r12n * r23n)))
+
+
+def _dihedral(v1, v2, v3, v4):
+    b1 = v1 - v2
+    b2 = v2 - v3
+    b3 = v3 - v4
+    n1 = np.cross(b1, b2)
+    n2 = np.cross(b2, b3)
+    m1 = np.cross(b2, n1)
+    n1_inv = 1.0 / np.linalg.norm(n1)
+    n2_inv = 1.0 / np.linalg.norm(n2)
+    m1_inv = 1.0 / np.linalg.norm(m1)
+    cos_phi = np.dot(n1, n2) * (n1_inv * n2_inv)
+    sin_phi = np.dot(m1, n2) * (m1_inv * n2_inv)
+    cos_phi = np.clip(cos_phi, -1.0, 1.0)
+    sin_phi = np.clip(sin_phi, -1.0, 1.0)
+    return float(-np.arctan2(sin_phi, cos_phi))
+
+
+def _atom_dist(aDist, resLookUp, xyz, aID):
+    n_residues = resLookUp.shape[0]
+    for i in range(n_residues):
+        ia1 = resLookUp[i, aID]
+        if ia1 < 0:
+            continue
+        a1 = xyz[ia1, 0]
+        a2 = xyz[ia1, 1]
+        a3 = xyz[ia1, 2]
+        for j in range(i, n_residues):
+            ia2 = resLookUp[j, aID]
+            if ia2 < 0:
+                continue
+            b1 = xyz[ia2, 0] - a1
+            b2 = xyz[ia2, 1] - a2
+            b3 = xyz[ia2, 2] - a3
+            d12 = float(np.sqrt(b1 * b1 + b2 * b2 + b3 * b3))
+            aDist[i, j] = d12
+            aDist[j, i] = d12
+    return aDist
+
+
+def _internal_to_cartesian(internal_coordinates, r, startPoint=0):
+    b = internal_coordinates["b"]
+    a = internal_coordinates["a"]
+    d = internal_coordinates["d"]
+    ans = internal_coordinates["i"]
+    ib = internal_coordinates["ib"]
+    ia = internal_coordinates["ia"]
+    id_ = internal_coordinates["id"]
+
+    nAtoms = internal_coordinates.shape[0]
+    p = np.zeros((nAtoms, 3), dtype=float)
+    sin_theta = np.sin(a)
+    cos_theta = np.cos(a)
+    sin_phi = np.sin(d)
+    cos_phi = np.cos(d)
+    p[:, 0] = b * sin_theta * sin_phi
+    p[:, 1] = b * sin_theta * cos_phi
+    p[:, 2] = b * cos_theta
+
+    for i in range(nAtoms):
+        if ib[i] != 0 and ia[i] != 0 and id_[i] != 0:
+            ab = r[ib[i]] - r[ia[i]]
+            bc = r[ia[i]] - r[id_[i]]
+            nab = np.linalg.norm(ab)
+            nbc = np.linalg.norm(bc)
+            if nab == 0 or nbc == 0:
+                continue
+            ab /= nab
+            bc /= nbc
+            v = np.cross(ab, bc)
+            cos_alpha = np.dot(ab, bc)
+            sin_alpha = np.sqrt(max(1.0 - cos_alpha * cos_alpha, 0.0))
+            if sin_alpha == 0:
+                continue
+            v /= sin_alpha
+            u = np.cross(v, ab)
+            r[ans[i], 0] = r[ib[i], 0] + v[0] * p[i, 0] + u[0] * p[i, 1] - ab[0] * p[i, 2]
+            r[ans[i], 1] = r[ib[i], 1] + v[1] * p[i, 0] + u[1] * p[i, 1] - ab[1] * p[i, 2]
+            r[ans[i], 2] = r[ib[i], 2] + v[2] * p[i, 0] + u[2] * p[i, 1] - ab[2] * p[i, 2]
+    return r
+
 a2id = dict(internal_atom_numbers)
 id2a = dict([(a[1], a[0]) for a in internal_atom_numbers])
 res2id = dict([(aa, i) for i, aa in enumerate(residue_atoms_internal)])
@@ -319,9 +410,9 @@ def r2i(coord_i, a1, a2, a3, an, ai):
     v1 = a1['coord']
     v2 = a2['coord']
     v3 = a3['coord']
-    b = vector.norm(v3 - vn)
-    a = vector.angle(v2, v3, vn)
-    d = vector.dihedral(v1, v2, v3, vn)
+    b = _norm(v3 - vn)
+    a = _angle(v2, v3, vn)
+    d = _dihedral(v1, v2, v3, vn)
     coord_i[ai] = an['i'], a3['i'], a2['i'], a1['i'], b, a, d
     return ai + 1
 
@@ -354,11 +445,11 @@ def calc_internal_coordinates(structure):
             structure.coord_i[ai] = rn['N']['i'], 0, 0, 0, 0.0, 0.0, 0.0
             ai += 1
             structure.coord_i[ai] = rn['CA']['i'], rn['N']['i'], 0, 0, \
-                                    vector.norm(rn['N']['coord'] - rn['CA']['coord']), 0.0, 0.0
+                                    _norm(rn['N']['coord'] - rn['CA']['coord']), 0.0, 0.0
             ai += 1
             structure.coord_i[ai] = rn['C']['i'], rn['CA']['i'], rn['N']['i'], 0, \
-                                    vector.norm(rn['CA']['coord'] - rn['C']['coord']), \
-                                    vector.angle(rn['C']['coord'], rn['CA']['coord'], rn['N']['coord']), \
+                                    _norm(rn['CA']['coord'] - rn['C']['coord']), \
+                                    _angle(rn['C']['coord'], rn['CA']['coord'], rn['N']['coord']), \
                                     0.0
             ai += 1
         else:
