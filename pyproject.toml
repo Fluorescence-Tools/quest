@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quest"
+version = "19.8.13"
+description = "QuEst is a protein structure based fluorescence quenching estimator"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Thomas-Otavio Peulen", email = "thomas.otavio.peulen@gmail.com" }]
+dependencies = [
+  "numpy<2.0",
+  "numexpr",
+  "numba",
+  "click",
+  "pyyaml",
+  "pyqt5",
+  "pyqtgraph",
+  "pyopengl",
+  "tables",
+  "labellib",
+  "qtpy<2.0.0",
+  "pymol-open-source",
+]
+
+[project.scripts]
+quest = "quest.cli:cli"
+
+[project.gui-scripts]
+"cs.quest" = "quest.quest_gui:start_gui"
+
+[tool.setuptools.packages.find]
+include = ["quest*"]
+
+[tool.setuptools.package-data]
+"" = ["*.json", "*.yaml", "*.ui", "*.png", "*.svg", "*.css", "*.so", "*.dll"]
