@@ -822,6 +822,10 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
 
         # Donor and acceptor label controls side-by-side
         self.donor_groupbox = QtWidgets.QGroupBox("Donor", self.groupBox)
+        self.donor_groupbox.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Preferred
+        )
         donor_layout = QtWidgets.QGridLayout(self.donor_groupbox)
 
         # Donor attachment selector (chain / residue / atom)
@@ -857,6 +861,10 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
 
         # FRET acceptor: checkable group box with its own PDB selector and AV params
         self.fret_groupbox = QtWidgets.QGroupBox("FRET acceptor", self.groupBox)
+        self.fret_groupbox.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Preferred
+        )
         self.fret_groupbox.setCheckable(True)
         self.fret_groupbox.setChecked(False)
 
@@ -926,7 +934,16 @@ class TransientDecayGenerator(QtWidgets.QWidget, DonorDecay):
         donor_acceptor_layout = QtWidgets.QHBoxLayout()
         donor_acceptor_layout.addWidget(self.donor_groupbox)
         donor_acceptor_layout.addWidget(self.fret_groupbox)
+        donor_acceptor_layout.setStretch(0, 1)
+        donor_acceptor_layout.setStretch(1, 1)
         self.verticalLayout_10.addLayout(donor_acceptor_layout)
+        try:
+            self.gridLayout.setColumnStretch(0, 1)
+            self.gridLayout.setColumnStretch(1, 0)
+            self.gridLayout.setColumnStretch(2, 0)
+            self.gridLayout.setColumnStretch(3, 0)
+        except AttributeError:
+            pass
 
         # The original "Dye" group box only contained tau0 and donor D, which
         # are now moved into the Donor group box; hide the empty container.
