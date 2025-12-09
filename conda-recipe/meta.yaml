@@ -16,27 +16,25 @@ build:
     - quest=quest.quest_gui:start_gui
 
 requirements:
-  build:
-    - {{ compiler('c') }}
-    - {{ compiler('cxx') }}
   host:
     - python {{ python }}
     - setuptools
-    - cython
     - numpy
+    - numexpr
+    - click
   run:
     - python {{ python }}
     - numpy
     - numexpr
+    - click
     - pyopengl
     - labellib
     - pyyaml
     - pyqt
+    - pyqtgraph
     - pytables
-    - guiqwt
+    - numba
     - qtpy <2.0.0
-    - guidata <=1.7.6 # broken guidata.qt in higher version
-    - pymol-open-source
     - libstdcxx-ng # [linux]
 
 about:

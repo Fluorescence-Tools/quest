@@ -1,2 +1,3 @@
 #!/usr/bin/env bash
-$PYTHON setup.py install --single-version-externally-managed --record=record.txt
+# Build/install via PEP 517 (pyproject.toml)
+$PYTHON -m pip install . --no-deps -vv
