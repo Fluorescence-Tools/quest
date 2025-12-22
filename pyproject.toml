@@ -35,4 +35,4 @@ quest = "quest.cli:cli"
 include = ["quest*"]
 
 [tool.setuptools.package-data]
-"" = ["*.json", "*.yaml", "*.ui", "*.png", "*.svg", "*.css", "*.so", "*.dll"]
+"*" = ["*.json", "*.yaml", "*.ui", "*.png", "*.svg", "*.css", "*.so", "*.dll"]
