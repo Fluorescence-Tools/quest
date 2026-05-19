@@ -3,10 +3,14 @@ name: QuEst Conda CI
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     paths:
       - "modules/quest/**"
       - "modules/quest/.github/workflows/quest-conda.yml"
   pull_request:
+    branches:
+      - main
     paths:
       - "modules/quest/**"
       - "modules/quest/.github/workflows/quest-conda.yml"
