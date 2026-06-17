@@ -7,6 +7,7 @@ cmake-build-*
 _*-darwin.so
 _64-linux-gnu.so
 __pycache__
+*.egg-info/
 
 quest/lib/fps/fps.cpp
 quest/lib/math/functions/rdf.cpp
