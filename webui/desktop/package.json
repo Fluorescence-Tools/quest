@@ -1,0 +1,52 @@
+{
+  "name": "@quest/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron desktop shell for QuEst web UI.",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "build:frontend": "npm --prefix ../frontend run build",
+    "pack": "npm run build:frontend && electron-builder --dir --publish never",
+    "dist": "npm run build:frontend && electron-builder --publish never",
+    "prepare:python": "node scripts/prepare-python-env.mjs"
+  },
+  "dependencies": {
+    "electron-is-dev": "^3.0.1"
+  },
+  "devDependencies": {
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "org.fluorescence-tools.quest.desktop",
+    "productName": "quest-web",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/.next/standalone",
+        "to": "frontend/standalone"
+      },
+      {
+        "from": "../backend/app",
+        "to": "python/webui/backend/app"
+      },
+      {
+        "from": "../../quest",
+        "to": "python/quest"
+      },
+      {
+        "from": "python-env",
+        "to": "python-env"
+      }
+    ]
+  }
+}
