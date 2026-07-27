@@ -1,22 +1,149 @@
-build
+# ==========================================
+# Python build, distribution and packaging
+# ==========================================
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==========================================
+# Compiled binaries, shared libraries, Cython
+# ==========================================
+# Global ignores for dynamic libraries
+*.so
+*.dylib
+*.dll
+*.pyd
+*.o
+*.obj
+*.a
+*.lib
+
+# Cython generated C/C++ sources in quest package
+quest/**/*.c
+quest/**/*.cpp
+
+# Older specific compiled targets (kept for safety)
+_*-darwin.so
+_64-linux-gnu.so
+
+# ==========================================
+# Caches, testing, and coverage
+# ==========================================
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.nosetests
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ==========================================
+# WebUI & Frontend (Node, Next.js)
+# ==========================================
+# Next.js build output
+.next/
+out/
+*.tsbuildinfo
+
+# Node dependencies
+node_modules/
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# npm log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================================
+# Virtual environments
+# ==========================================
+.venv/
+venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+
+# ==========================================
+# IDEs, Editors, and OS-specific files
+# ==========================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
 *.pro.user
 *.pro.user.*
 CMakeLists.txt.user
 CMakeLists.txt.user.*
 cmake-build-*
-_*-darwin.so
-_64-linux-gnu.so
-__pycache__
 
-quest/lib/fps/fps.cpp
-quest/lib/math/functions/rdf.cpp
-quest/lib/math/functions/small.cpp
-quest/lib/math/functions/rdf.cpython-39-x86_64-linux-gnu.so
-quest/lib/fps/fps.cpython-39-x86_64-linux-gnu.so
-quest/lib/math/functions/small.cpython-39-x86_64-linux-gnu.so
-quest/lib/math/linalg/vector.cpp
-quest/lib/tools/dye_diffusion/photon.cpython-39-x86_64-linux-gnu.so
-quest/lib/tools/dye_diffusion/photon.cpp
-quest/lib/structure/cStructure.cpython-39-x86_64-linux-gnu.so
-quest/lib/structure/cStructure.cpp
-quest/lib/math/linalg/vector.cpython-39-x86_64-linux-gnu.so
+# ==========================================
+# Jupyter Notebooks
+# ==========================================
+.ipynb_checkpoints/
+
+# ==========================================
+# Project-specific ignores
+# ==========================================
+.kilocode/
+.omx/
+.webui-data/
+.antigravity/
+.antigravitycli/
+
+# Simulation output. `simulate_project` writes `jobs/<uuid>/` under the current
+# working directory whenever `save_outputs` is true, so anything run from the
+# repo root leaves a directory behind. Tests should pass `save_outputs=False`
+# or a temporary `project_dir` rather than rely on this.
+jobs/
+
+# Scratch left behind by manual runs and by the molecule viewer.
+/out.xyz
+/out_slow.xyz
+/test.pdb
+/test.cif
+/webui-viewer-testpdb.png
+tests/sim_test.log
+
+
+# ==========================================
+# Pixi
+# ==========================================
+# Environments are reproducible from pixi.toml + pixi.lock, both of which are
+# committed. The materialised environment is not.
+.pixi/
