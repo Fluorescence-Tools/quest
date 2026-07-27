@@ -85,6 +85,28 @@ checkout in automatically, deliberately **without installing** it, since the
 source tree is what is changing
 ([workflows/environment.md](/workflows/environment.md)).
 
+## `pytest -m notebooks` fails as one selection; the two files pass separately
+
+Run apart, `tests/test_notebooks.py` gives **9 passed** and
+`tests/test_examples.py` gives **7 passed** — the 16 the handover records. Run
+as one selection, `pytest tests -m notebooks` gives **6 failed, 10 passed**.
+
+The failure is a dylib conflict in the child process, not anything about the
+science: an example launched as a subprocess (or a notebook kernel) resolves
+`libimp_kernel.2.24.0.dylib` against `/Users/tpeulen/mambaforge/lib/libboost_filesystem.dylib`
+— the **base** environment's boost, not `arm64`'s — and dies with
+`Symbol not found: ..._ZN5boost10filesystem6detail15path_algorithms11filename_v3E...`.
+Whichever of the two files runs second is the one that fails.
+
+**Pre-existing**, verified 2026-07-28 by running the same selection in a
+worktree at `1807e72`, before the AV decisions: identical 6 failed / 10 passed.
+It is the same shape as the browser suite's exclusion already documented in
+`pyproject.toml` — a process that has loaded IMP is not a clean parent for a
+child that also needs it. *Fix:* give each file its own process (as the
+`test-notebooks` pixi task should), or scrub the inherited dynamic-loader
+environment before spawning. Until then **do not report "16 passed" from a
+single command** — it has never produced that.
+
 ## `pyproject.toml` requires `numpy>=2.0`; the working env has numpy 1.26.4
 
 The declared floor is not met by the interpreter QuEst actually runs on, and

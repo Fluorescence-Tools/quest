@@ -1,5 +1,62 @@
 # Update Log
 
+## 2026-07-28
+
+* **Decisions 1–3 implemented, one at a time, with a re-baseline between each**
+  — `1b997ec` (IMP.bff primary), `5b8fc2a` (keep HETATM, strip water),
+  `4f3dad2` (`allowed_sphere_radius` 2.1 Å), `ea74ca9` (pin against upstream).
+  Decision 4 is **blocked on packaging, not code**; see
+  [handover.md](handover.md).
+* **Promoting a backend nobody had run found three silent defects.** The worst
+  was a **transposed** density grid: IMP numbers voxels x-fastest, so the
+  C-order reshape exchanged x and z. An accessible volume is globular enough
+  that the transpose still overlapped the truth by **83 %** of its voxels — the
+  point count, the bounding box and the total volume were all correct, and only
+  the *shape* was mirrored, so the contact volume landed on the wrong side of
+  the protein and donors came out unquenched. The lesson for any grid: compare
+  the density and the point cloud **against each other**, and only when they
+  come from independent sources. The first version of the upstream test derived
+  one from the other and passed with the bug deliberately reintroduced.
+  The other two: a grid origin one voxel out whenever the edge length is even
+  (86 on the reference site), and no thread safety — a pooled scan, which the
+  web backend runs, died in SWIG exactly as `pdb.py` already locks against.
+* **A claim from decision 1 was wrong, and decision 3 disproved it.** Decision 1
+  recorded that most of the 43-vs-147 labelability gap between the backends was
+  `allowed_sphere_radius` rather than the algorithm. Raising the default from
+  0.5 to 2.1 Å left LabelLib at **exactly 43/151** — because
+  `calculate1R`/`calculate3R` accept a `linkersphere` argument and never pass it
+  on. LabelLib has no such parameter; it frees the attachment atom's own radius
+  and nothing else, so a CB hemmed in by CHARMM-sized neighbours has no route
+  out. Corrected in the constant, in
+  [subsystems/accessible-volume.md](subsystems/accessible-volume.md) and in the
+  commit message.
+* **Both imp-tricks AV backends now work** (`936a17c`, `b95c000`, unpushed).
+  The `imp_bff` branch had **never produced a volume in its life**: it read its
+  density by handing the source particle to an `IMP.em.SampledDensityMap`
+  needing a `Mass` it never set, so every call raised — and with a mass it would
+  have sampled a blob around the attachment atom rather than the path map. Plus
+  no `allowed_sphere_radius`, the AV decorated onto the source particle itself
+  with `shift_xyz=False` (map left at the coordinate origin), and the same
+  transpose. `TestComputeAvBackends` is new upstream; there had been no test
+  touching `compute_av` at all, which is why a backend that could not work
+  looked fine. Upstream and QuEst now agree point-for-point on 148l E118, E36
+  and E90 under both backends.
+* **Decisions have consequences at the edges, and they surfaced as errors.**
+  Admitting HETATM broke `to_coarse` (`KeyError: 'FGA'` — untemplated residues
+  are now kept whole, since a bound sugar has no backbone-plus-CB reduction) and
+  revealed that every hetero atom was named `"HET:"`, IMP's prefix truncated by
+  the `|U5` field. Both are in
+  [specs/structure-io.md](specs/structure-io.md).
+* **Two defects found and deliberately *not* fixed**, both recorded in
+  [references/known-issues.md](references/known-issues.md) because fixing either
+  changes numbers and deserves its own re-baseline: coarse-graining matches
+  residues by `res_id` alone, so in any multi-chain structure one chain's side
+  chains are folded into another's CB; and `pytest tests -m notebooks` fails as
+  a single selection (6 failed / 10 passed) while the two files pass separately
+  (9 + 7), from a dynamic-loader conflict in the child process. The second is
+  **pre-existing** — verified in a worktree at `1807e72` — and means the
+  previous handover's "16 passed" never came from that one command.
+
 ## 2026-07-27
 
 * **The work is committed, in nine pieces.** Everything that had accumulated in

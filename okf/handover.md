@@ -4,27 +4,41 @@ title: Session handover
 description: Where the tree stands, what is uncommitted, which decisions are open, and the traps that cost time — written to be the first thing a fresh session reads after the index.
 resource: okf/log.md
 tags: [handover, state, open-questions]
-timestamp: '2026-07-27T00:00:00Z'
+timestamp: '2026-07-28T00:00:00Z'
 ---
 
 # Read this, then [`log.md`](log.md)
 
-**QuEst is now committed** — the 138 paths described below landed as nine
-commits on `main` (`5962ce3`…`1fa4226`), and the working tree is clean.
-Nothing has been pushed. `~/dev/imp-tricks` is **still dirty**; its four files
-must be committed and released before decision 4 can be done. Both
-repositories are green.
+**Both repositories are committed and clean, and nothing has been pushed.**
+QuEst: the 138 accumulated paths landed as nine commits (`5962ce3`…`1fa4226`),
+then decisions 1-3 as four more (`1b997ec`, `5b8fc2a`, `4f3dad2`, `ea74ca9`).
+imp-tricks: two commits (`936a17c`, `b95c000`) fixing both of its AV backends.
+
+Decision 4 is the one thing left from the previous session's list, and it is
+blocked on **publishing imp-tricks**, not on any remaining code.
 
 # State
 
 | | tests | note |
 |---|---|---|
-| `arm64` (Qt + compiled IMP.bff) | **350 passed, 4 skipped** | canonical interpreter |
-| base + web backend | **313 passed, 25 skipped** | no Qt, no compiled `IMP.bff` |
-| browser e2e | **26 passed** | needs both servers up |
-| notebooks + examples | **16 passed** | `-m notebooks` |
-| ChiSurf `quenching_estimator` | **1 passed** | plugin still loads |
-| imp-tricks `tests/bff` | **191 passed, 5 failed** | the 5 predate this work — see below |
+| `arm64` (Qt + compiled IMP.bff) | **353 passed, 4 skipped** | canonical interpreter |
+| base + web backend | **314 passed, 27 skipped** | no Qt, no compiled `IMP.bff` |
+| notebooks | **9 passed** | `tests/test_notebooks.py` alone — see below |
+| examples | **7 passed** | `tests/test_examples.py` alone — see below |
+| imp-tricks `tests/bff` | **197 passed, 5 failed** | +6 new AV tests; the 5 predate this work |
+| browser e2e | 26 passed | *not re-run since the AV changes* |
+| ChiSurf `quenching_estimator` | 1 passed | *not re-run since the AV changes* |
+
+The notebooks and examples pass **one file per process**. Run as a single
+`pytest tests -m notebooks` they give 6 failed / 10 passed, from a dynamic
+loader conflict in the child process — pre-existing, verified at `1807e72`,
+and written up in [references/known-issues.md](references/known-issues.md).
+The previous handover's "16 passed" came from separate runs; that one command
+has never produced it.
+
+The two italicised rows are the previous session's numbers, carried forward.
+They were **not** re-run after decisions 1-3, which changed every accessible
+volume — treat them as unverified until they are.
 
 All runs above were on a **cold numba cache**. That matters; see Traps.
 
@@ -52,7 +66,7 @@ commit carries which:
    [specs/structure-io.md](specs/structure-io.md). This is the one that changes
    numbers; see Decisions.
 
-## Uncommitted in `~/dev/imp-tricks` (4 files)
+## Committed in `~/dev/imp-tricks` (two commits, unpushed)
 
 Contributed upstream while unblocking QuEst:
 
@@ -72,73 +86,78 @@ The 5 remaining imp-tricks failures (`cgdye/rotamer` R0-vs-FRETpredict,
 `dye_io` PDB→mmCIF, `polymer` Gaussian-chain PDF) reference none of the changed
 code and had never been collected before. Newly *visible*, not newly broken.
 
-# Decisions taken (2026-07-27) — **not yet implemented**
+# Decisions taken 2026-07-27 — **1-3 implemented, 4 blocked**
 
-The four open questions were answered. Nothing below has been coded; this is
-the work list for the next session, in the order it should be done.
+All four were answered in the previous session. Three are done; the fourth
+cannot be done here and the reason is packaging, not correctness.
 
-1. **`IMP.bff` becomes the primary AV backend.** Flip `AV_BACKENDS` in
-   `quest/core/av.py` to `("imp_bff", "labellib")`. LabelLib stays as the
-   fallback for platforms without a compiled `IMP.bff` — Windows above all.
-   Expect the suite to move: the two backends agree to a 0.90 ratio on 148l E36
-   (136 707 vs 151 869 points, centroids within 0.5 Å), so contact fractions and
-   quenching numbers shift by roughly that much and every pinned value needs
-   regenerating. `quest/core/imp_av.py` is already array-based and now has
-   coverage (`TestTheImpAvBackendRuns`), so the path is exercised — but it has
-   never been the *default*, and `tests/test_imp_tricks_bridge.py::
-   TestTheImpBackendIsNotReadyToBePrimary` exists solely to assert LabelLib is
-   first. **Delete that class as part of the flip**; it has done its job.
+1. **`IMP.bff` is the primary AV backend.** Done (`1b997ec`). Promoting it
+   surfaced three defects that had been invisible for as long as nothing entered
+   the branch — a **transposed** density grid (x↔z, which still overlapped the
+   truth by 83 % of its voxels, so counts and bounding boxes looked right while
+   quenching silently vanished), a grid origin one voxel out on even edge
+   lengths, and no thread safety at all. Details in
+   [subsystems/accessible-volume.md](subsystems/accessible-volume.md).
 
-2. **Do not strip HETATM or water.** Keep IMP's full atom set as steric
-   obstacles rather than QuEst's ATOM-only selector — `_atom_record_selector`
-   in `quest/core/pdb.py` goes, and the reader takes what IMP gives it
-   (1363 atoms on 148l against the current 1322; the extra 63 are `FGA`, `API`,
-   `DAL`, `MUB`, `NAG`, `BME`).
-   *Check while implementing:* IMP's own default already excludes water and
-   hydrogens — `NonWaterNonHydrogenPDBSelector` returns the identical 1363 — so
-   "don't strip" is satisfied by passing **no** selector. If crystallographic
-   waters are genuinely wanted as obstacles, that needs
-   `IMP.atom.NonHydrogenPDBSelector` (1503 atoms) and is a different, stronger
-   choice: mobile solvent occluding a dye is unusual, and it will shrink the
-   accessible volume further on top of decision 1. Measure both before picking.
+2. **HETATM is no longer stripped; water still is.** Done (`5b8fc2a`). Both
+   candidates were measured over all 151 CB sites rather than argued: keeping
+   waters as obstacles costs **17 %** of every accessible volume, which is a
+   stronger claim than mobile solvent supports. Admitting ligands broke two
+   things that had only ever seen amino acids — `to_coarse` and hetero atom
+   names. [specs/structure-io.md](specs/structure-io.md).
 
-3. **`allowed_sphere_radius` defaults to 2.1 Å.** Replace
-   `MIN_IMP_ALLOWED_SPHERE_RADIUS = 2.0` and QuEst's own `0.5` default with a
-   single value of **2.1**. This is the radius around the attachment atom inside
-   which obstacles are ignored so the linker can leave the atom it is tied to.
-   Below ~2 Å the path search starts nowhere and returns an **empty volume with
-   no error** — imp.bff's own reference test uses 2.0 and expects zero points at
-   1.0. 2.1 sits just above that cliff and matches carbon's radius.
+3. **`allowed_sphere_radius` defaults to 2.1 Å.** Done (`4f3dad2`). It also
+   **corrected a claim made in decision 1**: the labelability gap between the
+   backends is not mostly this parameter. Raising the default left LabelLib at
+   exactly 43/151, because `calculate1R`/`calculate3R` accept `linkersphere` and
+   never pass it on — LabelLib has no such knob and frees only the attachment
+   atom instead. Only the IMP.bff backend honours it.
 
-4. **imp-tricks becomes a declared dependency.** Add it to `pyproject.toml` and
-   `rattler-recipe/recipe.yaml` so it is installed rather than reached through
-   the `quest/imp_tricks.py` path shim. That unblocks `DUP-01`–`DUP-03`:
-   QuEst's `AV` class and `imp_av.py` both collapse into
-   `IMP.bff.av.compute.compute_av`, and `density2points` /
-   `random_distances` + `av_pair_statistics` can replace the in-tree copies.
-   The upstream fixes this depends on are in `~/dev/imp-tricks`, **uncommitted**
-   — they must be committed and released before QuEst can depend on them.
+4. **imp-tricks as a declared dependency — BLOCKED, and not on correctness.**
+   The upstream work is done: both of its AV backends now run and both are
+   verified point-for-point identical to QuEst's, pinned by
+   `TestTheUpstreamAvMatchesQuEsts` (imp-tricks `936a17c`, `b95c000`; QuEst
+   `ea74ca9`). Its `imp_bff` branch had **never produced a volume in its life**
+   — see [specs/imp-tricks-dedup.md](specs/imp-tricks-dedup.md).
 
-Sequencing note: 2 and 3 both change the accessible volume, and 1 changes which
-code computes it. Do them **one at a time**, re-running and re-baselining
-between each, or the resulting number changes cannot be attributed. Decision 4
-is independent and can go first.
+   What blocks it is that **imp-tricks is not installable**. It is `imp-tricks`
+   0.1.0 on a private GitLab (`gitlab.peulen.xyz/tpeulen/imp-tricks`), absent
+   from PyPI and conda-forge, and the two fixes above are committed **locally
+   and unpushed**. Adding it to `pyproject.toml` and
+   `rattler-recipe/recipe.yaml` now would make QuEst uninstallable for anyone
+   who cannot resolve that name, and would fail the packaging job in CI. The
+   path shim in `quest/imp_tricks.py` stays until imp-tricks is published
+   somewhere a resolver can reach.
+
+   *Order of operations when unblocking it:* push imp-tricks → publish it (or
+   vendor it, or pin a VCS URL if a private index is acceptable) → then declare
+   the dependency → then `DUP-01`-`DUP-03`, which is the largest deletion QuEst
+   has left.
 
 # Next steps, in order
 
-1. Implement decisions 1–4 above, one at a time, re-baselining between each.
-2. `DUP-02`/`DUP-03` (after decision 4): adopt `IMP.bff.av._kernels.density2points` (verified
+1. **Publish imp-tricks**, then decision 4. Nothing else unblocks the largest
+   deletion QuEst has left, and the code side of it is already finished and
+   pinned.
+2. **Fix the coarse-grain chain bug** in
+   [references/known-issues.md](references/known-issues.md):
+   `move_center_of_mass` matches residues by `res_id` alone, so in any
+   multi-chain structure one chain's side chains are folded into another
+   chain's CB. Found while implementing decision 2 and deliberately left alone,
+   because fixing it moves coarse-grained numbers and deserves its own
+   re-baseline.
+3. `DUP-02`/`DUP-03` (after decision 4): adopt `IMP.bff.av._kernels.density2points` (verified
    numerically identical, and a superset — it keeps voxel weights) and
    `random_distances` + `av_pair_statistics`.
-3. **Do not** adopt upstream's `r_mp`: `av_pair_statistics` returns ⟨R_DA⟩ under
+4. **Do not** adopt upstream's `r_mp`: `av_pair_statistics` returns ⟨R_DA⟩ under
    that name (its docstring admits "same as `r_da_mean` here"), which is a
    different quantity — 47.65 vs 51.53 Å on 148l E15/E90. QuEst's `dRmp` is
    correct and should go *upstream*.
-4. Remaining backlog rows: `LAY-04` (`quest.api` is still a re-export shim),
+5. Remaining backlog rows: `LAY-04` (`quest.api` is still a re-export shim),
    `LAY-07` (three unrelated long-running mechanisms, none cancelable),
    `OBJ-01` item 6 (κ² unmodelled), `OBJ-02` (fitting — not started, by
    instruction). [specs/assessment.md](specs/assessment.md).
-5. Web UI chrome is still partly English — plot card titles, metric row names,
+6. Web UI chrome is still partly English — plot card titles, metric row names,
    empty states, toolbar. `t()` is wired; it is one key at a time.
 
 # Traps that cost time here
