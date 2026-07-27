@@ -2,9 +2,9 @@
 type: Subsystem
 title: Accessible volume
 description: AV enumeration, the IMP.bff/LabelLib backend split, and the derived slow-factor and quenching-rate grids.
-resource: quest/lib/fps/__init__.py
+resource: quest/core/av.py
 tags: [accessible-volume, av, grid, numba, labellib, imp]
-timestamp: '2026-07-26T00:00:00Z'
+timestamp: '2026-07-27T00:00:00Z'
 ---
 
 # What the AV is
@@ -13,7 +13,7 @@ The set of positions the dye **centre** can occupy: reachable from the
 attachment atom along a linker of `linker_length` × `linker_width`, without the
 dye sphere (`radius1`, or `radius1..3` for AV3) overlapping protein atoms.
 Represented as a cubic density grid of spacing `dg` plus the corresponding point
-cloud. `quest/lib/fps/__init__.py::AV` owns it.
+cloud. `quest/core/av.py::AV` owns it.
 
 # Backend selection
 
@@ -22,9 +22,9 @@ the `QUEST_AV_BACKEND` environment variable, else `"auto"`:
 
 | Value | Behaviour |
 |---|---|
+| `"imp_bff"` | `quest/core/imp_av.py::build_imp_accessible_volume` — **the default** |
 | `"labellib"` | `calculate1R` (AV1) / `calculate3R` (AV3), thin wrappers over `ll.dyeDensityAV*` |
-| `"imp_bff"` | `quest/lib/imp_av.py::build_imp_accessible_volume` — **currently broken**, see below |
-| `"auto"` (default) | LabelLib if available, else IMP.bff, else `RuntimeError` |
+| `"auto"` (default) | IMP.bff if a *compiled* one is present, else LabelLib, else `RuntimeError` |
 
 An unavailable or misspelled backend raises immediately, naming what *is*
 usable, rather than failing later with an empty volume. `AV.av_backend` records
@@ -32,21 +32,85 @@ which one ran, and `verbose=True` prints it.
 
 `simulation_type='AV3'` only takes effect on the LabelLib path.
 
-**LabelLib is preferred on purpose.** It is the implementation QuEst has always
-actually run — every environment without a compiled `IMP.bff` fell back to it —
-and the one the tests pin. Preferring IMP.bff silently meant that in the one
-environment where it *is* present (`arm64`), QuEst selected a backend that
-returns an empty accessible volume; 34 tests failed the first time the suite ran
-there. See [references/known-issues.md](/references/known-issues.md).
+**IMP.bff is primary as of 2026-07-27**; LabelLib is the fallback for platforms
+without a compiled `IMP.bff`, Windows above all. Before that flip the IMP path
+re-read structures from disk, which discarded coarse-graining and broke mmCIF;
+it now takes the atom array
+([specs/structure-io.md](/specs/structure-io.md)).
+
+## The two backends do not agree, and the choice is visible in the results
+
+Fed the same atom array with the same radii they differ by algorithm alone:
+**136 707 (IMP.bff) against 151 869 (LabelLib) points on 148l E36 — a 0.90
+ratio, centroids 0.63 Å apart.** That residual is not the whole story, because
+the two are also given different `allowed_sphere_radius`: QuEst clamps IMP's to
+`MIN_IMP_ALLOWED_SPHERE_RADIUS` (2.0 Å, below which IMP's path search starts
+nowhere and silently returns nothing), while LabelLib gets the project's 0.5 Å
+and zeroes the attachment atom's radius instead.
+
+Measured over all 151 CB sites of 148l chain E under the reference project:
+
+| | labelable sites | quenching (0 < QY < 1) |
+|---|---|---|
+| LabelLib | 43 / 151 | 21 |
+| IMP.bff | **147 / 151** | **60** |
+
+So the flip does not merely shift numbers by 10 % — it more than triples how
+many sites can carry a dye at all. Most of that is the `allowed_sphere_radius`
+difference rather than the backend, which is exactly why the pending decision to
+give both backends a single 2.1 Å default matters
+([handover.md](/handover.md)). **Results are not comparable across backends**;
+anything pinned to a number has to say which one produced it.
 
 > The whole dance already exists as `IMP.bff.av.compute_av`, with the same
 > ordering, an explicit `backend=` override, and maintenance against IMP's
 > current API. QuEst should call it rather than carry a second copy —
-> [specs/imp-tricks-dedup.md](/specs/imp-tricks-dedup.md).
+> [specs/imp-tricks-dedup.md](/specs/imp-tricks-dedup.md). Its LabelLib branch
+> is verified point-for-point identical to QuEst's; its `imp_bff` branch does
+> not run at all, so that deletion is still blocked.
 
 An empty AV raises with a diagnostic naming the residue ("might be buried inside
 the protein"), because a zero-point volume otherwise fails much later and much
 less legibly.
+
+## Grid registration: the two ways to get it silently wrong
+
+Both were live in the IMP path until 2026-07-27, and both were invisible while
+that path was not the default. They are recorded because the failure mode is
+the dangerous kind — a plausible volume in the wrong place, not an error.
+
+1. **Axis order.** IMP numbers voxels with *x* fastest
+   (`i = x + nx*y + nx*ny*z`), so reshaping the flat tile values C-order into
+   `(nx, ny, nz)` transposes the volume, exchanging x and z. An accessible
+   volume is globular enough that the transpose still overlapped the truth by
+   **83 %** of its voxels: the point count, the bounding box and the total
+   volume were all right, and only the *shape* was mirrored. Downstream, the
+   contact volume then landed on the wrong side of the protein, so quenchers in
+   reach were not seen and donors came out unquenched.
+2. **Grid origin.** IMP sizes the map itself, and the attachment atom is on the
+   middle voxel only when the edge length is odd — it is 86 on 148l E36. The
+   origin must be read from the PathMap header
+   (`IMPAccessibleVolumeResult.origin`), never reconstructed from the
+   attachment atom. Relatedly, `_points_from_centred_grid` uses the *integer*
+   offset `(ng - 1) // 2` so it agrees with `_center_grid_indices`; a float
+   `(ng - 1) / 2` puts the point cloud half a voxel off the grid the quenching
+   kernels index into, for even `ng` only.
+
+The test that catches both: `AV(av_backend="imp_bff").points` must equal
+`build_imp_accessible_volume(...).points` **exactly**, as a set. Comparing
+counts or centroids alone passes with the grid transposed.
+
+## Threading
+
+`IMP` builds its decorators through SWIG, which is not safe from several
+threads at once — `quest/core/pdb.py` already serialises the parse for this
+reason, and the AV path hits the identical failure one layer down
+(`'XYZR_setup_particle'` receiving a particle *name*) as soon as a scan runs
+sites in a pool, which the web backend does. `_IMP_BUILD_LOCK` guards object
+construction and density extraction but **not** `av.resample()`: measured on
+148l E36, resample is 636 ms of a 662 ms build (96 %) and the SWIG construction
+is 22 ms (3 %), so locking the compute would cost a threaded scan nearly all
+its parallelism to guard the phase that is not failing.
 
 # The three grids
 
@@ -65,7 +129,7 @@ moiety ([quenching-model.md](quenching-model.md)).
 
 # Kernels
 
-All hot loops are `@njit` in `quest/lib/fps/__init__.py`, most with
+All hot loops are `@njit` in `quest/core/av.py`, most with
 `parallel=True`: `_density2points`, `_subav`, `_slow_factor_grid`,
 `_additive_factor_grid`, `_center_grid_indices`, `_ran_dist` (RDA sampling),
 `_asa` (solvent accessibility), and the trajectory kernels `_simulate_traj` /

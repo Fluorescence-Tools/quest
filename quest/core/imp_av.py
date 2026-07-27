@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import os
 import tempfile
+import threading
 from dataclasses import dataclass
 from typing import Iterable, Tuple
 
@@ -36,6 +37,25 @@ except Exception:  # pragma: no cover - keep optional dependency lazy
     HAS_IMP_BFF = False
 
 
+#: Serialises IMP object *construction*, not IMP computation.
+#:
+#: IMP builds its decorators through SWIG, which is not safe to do from several
+#: threads at once. `quest/core/pdb.py` already locks the parse for this reason
+#: ("Wrong number or type of arguments for overloaded function 'new_Atom'");
+#: the accessible-volume path hits the identical failure one layer down
+#: (`'XYZR_setup_particle'` receiving a particle *name* instead of a particle)
+#: as soon as a scan runs sites in a pool. It only began failing when IMP.bff
+#: became the default backend -- with LabelLib first, no thread ever entered
+#: this code.
+#:
+#: The lock deliberately does **not** cover `av.resample()`: measured on 148l
+#: E36, resample is 636 ms of a 662 ms build (96 %) while all the SWIG
+#: construction is 22 ms (3 %). Serialising the compute would cost a threaded
+#: scan almost all of its parallelism to guard a phase that is not the one
+#: failing. Each thread resamples its own model.
+_IMP_BUILD_LOCK = threading.Lock()
+
+
 def imp_tricks_av_available() -> bool:
     """Whether imp-tricks' maintained ``compute_av`` can be imported."""
     try:  # pragma: no cover - depends on the checkout
@@ -51,6 +71,12 @@ class IMPAccessibleVolumeResult:
     density: np.ndarray
     grid_size: int
     attachment_point: np.ndarray
+    #: Cartesian position of the ``density[0, 0, 0]`` voxel, read from the
+    #: PathMap's own header. **Not** derivable from ``attachment_point``: IMP
+    #: sizes the map itself and the attachment atom does not land on the middle
+    #: voxel when the grid has an even number of them. Assuming it did put every
+    #: derived grid half a voxel out -- see :func:`_path_map_density_to_grid`.
+    origin: np.ndarray
 
 
 def _ensure_pdb_path(structure) -> Tuple[str, contextlib.AbstractContextManager]:
@@ -125,7 +151,27 @@ def _path_map_header(path_map: "IMP.bff.PathMap"):
         return path_map.get_path_map_header_writable()
 
 
-def _path_map_density_to_grid(path_map: "IMP.bff.PathMap") -> Tuple[np.ndarray, int]:
+def _path_map_density_to_grid(
+    path_map: "IMP.bff.PathMap",
+) -> Tuple[np.ndarray, int, np.ndarray]:
+    """Density grid, edge length and grid origin, in QuEst's ``[x, y, z]`` order.
+
+    **The axis order is not cosmetic.** IMP numbers its voxels with *x* fastest
+    (``i = x + nx*y + nx*ny*z``), so reshaping the flat tile values C-order into
+    ``(nx, ny, nz)`` -- which makes the *last* axis fastest -- transposes the
+    volume, exchanging x and z. That is what this did until 2026-07-27, and it
+    survived unnoticed for two reasons: the backend was never the default, and
+    an accessible volume is globular enough that the transpose still overlaps
+    the truth by **83 %** of its voxels. It looks approximately right and is
+    completely wrong -- the contact volume lands on the mirrored side of the
+    protein, so quenchers that should be in reach are not, and the donor comes
+    out unquenched.
+
+    The origin comes from the map header for the same reason: IMP sizes the grid
+    itself, and the attachment atom sits on the middle voxel only when the edge
+    length is odd. Reconstructing the corner from the atom is off by one voxel
+    whenever it is even (it is 86 on the 148l reference site).
+    """
     header = path_map.get_header()
     nx, ny, nz = header.get_nx(), header.get_ny(), header.get_nz()
     if not (nx == ny == nz):
@@ -139,9 +185,19 @@ def _path_map_density_to_grid(path_map: "IMP.bff.PathMap") -> Tuple[np.ndarray, 
             _path_map_header(path_map).get_max_path_length(),
         ),
     )
-    density = np.asarray(tile_values, dtype=np.float32).reshape((nx, ny, nz), order="C")
-    density = np.where(density > 0.0, 1, 0).astype(np.uint8)
-    return density, nx
+    # (nz, ny, nx) C-order, then transposed: x ends up the slowest-varying axis
+    # of the array while remaining the fastest-varying index of the flat data.
+    density = (
+        np.asarray(tile_values, dtype=np.float32)
+        .reshape((nz, ny, nx), order="C")
+        .transpose(2, 1, 0)
+    )
+    density = np.ascontiguousarray(np.where(density > 0.0, 1, 0).astype(np.uint8))
+    origin = np.array(
+        [header.get_xorigin(), header.get_yorigin(), header.get_zorigin()],
+        dtype=np.float64,
+    )
+    return density, nx, origin
 
 
 def _model_from_atoms(atoms) -> Tuple["IMP.Model", list, np.ndarray]:
@@ -222,32 +278,41 @@ def build_imp_accessible_volume(
         )
 
     atoms = structure.atoms
-    model, particles, coords = _model_from_atoms(atoms)
     index = _attachment_index(atoms, residue_seq_number, atom_name, chain_identifier)
-    source_particle = particles[index]
 
-    av_particle = IMP.Particle(model)
-    IMP.bff.AV.do_setup_particle(
-        model,
-        av_particle,
-        source_particle,
-        linker_length=linker_length,
-        linker_width=linker_width,
-        radii=radii,
-        # Below ~2 A the attachment atom's own neighbours block every starting
-        # voxel and the path search returns an empty volume with no error;
-        # imp.bff's own reference test uses 2.0 and expects zero points at 1.0.
-        allowed_sphere_radius=allowed_sphere_radius,
-        contact_volume_thickness=0.0,
-        contact_volume_trapped_fraction=-1,
-        simulation_grid_resolution=simulation_grid_resolution,
-    )
-    av = IMP.bff.AV(model, av_particle)
+    # Everything that *creates* SWIG objects is serialised; `resample()` is not.
+    # See _IMP_BUILD_LOCK -- the split is worth the two `with` blocks because
+    # resample is 96 % of the wall clock and construction is 3 %.
+    with _IMP_BUILD_LOCK:
+        model, particles, coords = _model_from_atoms(atoms)
+        source_particle = particles[index]
+
+        av_particle = IMP.Particle(model)
+        IMP.bff.AV.do_setup_particle(
+            model,
+            av_particle,
+            source_particle,
+            linker_length=linker_length,
+            linker_width=linker_width,
+            radii=radii,
+            # Below ~2 A the attachment atom's own neighbours block every
+            # starting voxel and the path search returns an empty volume with no
+            # error; imp.bff's own reference test uses 2.0 and expects zero
+            # points at 1.0.
+            allowed_sphere_radius=allowed_sphere_radius,
+            contact_volume_thickness=0.0,
+            contact_volume_trapped_fraction=-1,
+            simulation_grid_resolution=simulation_grid_resolution,
+        )
+        av = IMP.bff.AV(model, av_particle)
+
+    # The C++ path search, on this thread's own model. Unlocked on purpose.
     av.resample()
 
-    path_map = av.get_map()
-    density, grid_size = _path_map_density_to_grid(path_map)
-    xyz_density = np.asarray(path_map.get_xyz_density(), dtype=np.float64)
+    with _IMP_BUILD_LOCK:
+        path_map = av.get_map()
+        density, grid_size, origin = _path_map_density_to_grid(path_map)
+        xyz_density = np.asarray(path_map.get_xyz_density(), dtype=np.float64)
     if xyz_density.size:
         points = np.ascontiguousarray(
             xyz_density.reshape((-1, xyz_density.shape[-1]))[:, :3]
@@ -260,4 +325,5 @@ def build_imp_accessible_volume(
         density=density,
         grid_size=int(grid_size),
         attachment_point=coords[index],
+        origin=origin,
     )

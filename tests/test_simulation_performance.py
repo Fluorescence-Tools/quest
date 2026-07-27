@@ -26,13 +26,29 @@ PDB_PATH = Path(__file__).parent / "148l.pdb"
 # enough to quenchers that the quantum yield actually moves; a site with
 # QY == 1.0 would pass a reproducibility check trivially.
 #
-# Re-picked 2026-07-27 when radii moved to IMP's (CHARMM-style, ~19 % larger
-# than the Bondi values QuEst used to carry). Fatter atoms close pockets: 15
-# and 17 have no accessible volume at all now, and only 43 of 151 CB sites on
-# this chain remain labelable. QY under *this* project: 18 → 0.75, 96 → 0.09,
-# 36 → 0.97. (The quantum yield depends on the project, not just the site:
-# 118 quenches under the template but not under this one's chemistry.)
-QUENCHED_SITES = (18, 96, 36)
+# Re-picked 2026-07-27 when IMP.bff became the primary AV backend, and picked
+# from the sites that quench under **both** backends. That constraint is the
+# lesson: this file tests seeded reproducibility, not accessible-volume
+# chemistry, so it must not depend on which backend the interpreter has. The
+# first re-pick used the IMP numbers alone and turned the whole base
+# environment -- LabelLib only, no compiled IMP.bff -- red.
+#
+# Measured over all 151 CB sites on this chain under *this* project:
+#
+#     site   LabelLib   IMP.bff
+#      96      0.089      0.147
+#     139      0.715      0.827
+#     129      0.966      0.938
+#
+# The two backends disagree about far more than these three: LabelLib leaves
+# 43 of 151 sites labelable and 21 quenching, IMP.bff 147 and 60. Sites 18 and
+# 36 (the previous list) quench under LabelLib and come out at QY == 1.0 under
+# IMP.bff, which is what makes a single-backend list a trap.
+#
+# Do not "fix" a failure here by widening the assertion: it means the volume
+# moved, and the sites have to be re-measured (scratch loop over every CB site,
+# 0 < QY < 1, under both backends) rather than the test relaxed.
+QUENCHED_SITES = (96, 139, 129)
 
 
 def _project(residue: int, *, seed: int | None = 5, **overrides):

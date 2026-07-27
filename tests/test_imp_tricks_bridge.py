@@ -94,6 +94,16 @@ class TestTheUpstreamAvMatchesQuEsts:
     class both become `IMP.bff.av.compute.compute_av`. That is only safe while
     the two produce the *same volume*, so this pins it. It skips wherever
     imp-tricks or LabelLib is missing, which includes the base environment.
+
+    **Both sides are pinned to LabelLib on purpose.** This compares two
+    *implementations of the same algorithm*, so it must not be left to pick up
+    whatever `AV_BACKENDS` prefers — when IMP.bff became primary it silently
+    turned into a LabelLib-vs-IMP.bff comparison and failed for the wrong
+    reason. The two backends are not expected to agree exactly; they differ by
+    ~10 % on volume, which `TestTheImpAvBackendRuns` measures instead.
+
+    Upstream's own `imp_bff` branch is not compared here because it does not
+    run at all — see `okf/specs/imp-tricks-dedup.md`.
     """
 
     STRUCTURE = Path(__file__).parent / "148l.pdb"
@@ -156,6 +166,7 @@ class TestTheUpstreamAvMatchesQuEsts:
             simulation_grid_resolution=0.5,
             save_av=False,
             verbose=False,
+            av_backend="labellib",
             **self.AV_PARAMS,
         ).points
         return upstream, own
@@ -176,13 +187,21 @@ class TestTheUpstreamAvMatchesQuEsts:
         np.testing.assert_array_equal(a, b)
 
 
-class TestTheImpBackendIsNotReadyToBePrimary:
-    """Why `AV_BACKENDS` still starts with LabelLib.
+class TestThePrimaryBackendStaysFitToBePrimary:
+    """The conditions IMP.bff had to meet before it could be promoted.
 
-    The intended order is IMP.bff first, LabelLib only where IMP.bff is not
-    built. These pin the two defects that stop it, so the day they are fixed the
-    tests fail and say so, rather than the ordering staying wrong by inertia.
+    It was second for as long as it re-read structures from disk. It is first
+    now, which makes these two properties load-bearing rather than aspirational:
+    they are what stops the default path silently computing the wrong volume.
+    The sibling class that asserted `AV_BACKENDS[0] == "labellib"` is gone --
+    it existed to make the promotion deliberate, and the promotion happened.
     """
+
+    def test_the_primary_backend_is_imp_bff(self) -> None:
+        """LabelLib remains the fallback where IMP.bff is not compiled."""
+        from quest.core.av import AV_BACKENDS
+
+        assert AV_BACKENDS == ("imp_bff", "labellib")
 
     def test_the_imp_backend_uses_the_structure_it_is_given(self) -> None:
         """Fixed 2026-07-27: it used to re-read the file from disk.
@@ -203,14 +222,6 @@ class TestTheImpBackendIsNotReadyToBePrimary:
         )
         assert "structure.atoms" in source
 
-    def test_labellib_is_still_first(self) -> None:
-        from quest.core.av import AV_BACKENDS
-
-        assert AV_BACKENDS[0] == "labellib", (
-            "IMP.bff was promoted; make sure the coarse-graining and mmCIF "
-            "defects above are actually fixed first"
-        )
-
     def test_the_allowed_sphere_floor_is_enforced(self) -> None:
         """Below ~2 A IMP's path search starts nowhere and returns nothing."""
         from quest.core.av import MIN_IMP_ALLOWED_SPHERE_RADIUS
@@ -219,11 +230,13 @@ class TestTheImpBackendIsNotReadyToBePrimary:
 
 
 class TestTheImpAvBackendRuns:
-    """Exercise the IMP.bff path itself, which the suite otherwise never enters.
+    """Exercise the IMP.bff path directly, and compare it against LabelLib.
 
-    `AV_BACKENDS` starts with LabelLib, so every other test takes that branch.
-    `build_imp_accessible_volume` shipped a `Model.get_particles()` call that
-    does not exist and nothing noticed — a whole backend with no coverage.
+    Written when `AV_BACKENDS` still started with LabelLib and no test entered
+    this branch at all: `build_imp_accessible_volume` shipped a
+    `Model.get_particles()` call that does not exist and nothing noticed. It is
+    the default path now, so the comparison below is what says how far the
+    fallback platforms sit from it.
     """
 
     STRUCTURE = Path(__file__).parent / "148l.pdb"

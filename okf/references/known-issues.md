@@ -13,37 +13,42 @@ so in [okf/log.md](../log.md).
 
 # Environment
 
-## QuEst's IMP.bff accessible-volume backend does not work
+## ~~QuEst's IMP.bff accessible-volume backend does not work~~ — fixed
 
-Discovered on 2026-07-27, the first time the suite ran in the canonical `arm64`
-environment — which has a **compiled `IMP.bff`** (IMP 2.24), so
-`HAS_IMP_BFF` is true there and QuEst selected the IMP path. **34 tests
-failed.** Three distinct faults, in order of discovery:
+**Resolved 2026-07-27. IMP.bff is now the primary backend**
+([subsystems/accessible-volume.md](/subsystems/accessible-volume.md)). Kept
+here because the sequence of faults is the record of how a backend with no test
+coverage fails: each fix revealed the next, and the last two produced *plausible
+wrong answers* rather than errors.
 
 1. `path_map.get_path_map_header()` raises `AttributeError` — IMP 2.24 binds it
-   to a C symbol (`DensityMap_get_path_map_header`) that is absent from the
-   compiled `_IMP_bff`. **Fixed** by falling back to the writable accessor,
-   which is bound to a different symbol.
+   to a C symbol (`DensityMap_get_path_map_header`) absent from the compiled
+   `_IMP_bff`. Fixed by falling back to the writable accessor.
 2. `path_map.get_xyz_density()` returns a NumPy array, and the code truth-tested
-   it (`if xyz_density:`) → `ValueError`. **Fixed.**
-3. **Not fixed:** with both API faults out of the way the backend returns an
-   *empty* accessible volume. `PM_TILE_ACCESSIBLE_DENSITY` filtered by the
-   documented value range yields zero tiles, and every tile's
-   `PM_TILE_PATH_LENGTH` is the 50000 "unreachable" sentinel — the path search
-   is not producing a reachable region at all. Reverse-engineering the current
-   contract was stopped deliberately.
+   it (`if xyz_density:`) → `ValueError`. Fixed.
+3. The backend returned an *empty* volume. Cause: `allowed_sphere_radius` was
+   left at QuEst's 0.5 Å default, and below ~2 Å IMP's path search starts
+   nowhere and reports nothing. Fixed by the
+   `MIN_IMP_ALLOWED_SPHERE_RADIUS = 2.0` floor. It was originally written up
+   here as "the path search is not producing a reachable region", which was the
+   symptom, not the cause.
+4. The backend re-read the structure from disk, discarding coarse-graining and
+   failing on mmCIF. Fixed by taking the atom array
+   ([specs/structure-io.md](/specs/structure-io.md)).
+5. It shipped a `Model.get_particles()` call that does not exist. Fixed, and
+   `TestTheImpAvBackendRuns` now exercises the path.
+6. The density grid was **transposed** (x↔z) and its origin was one voxel out.
+   Found only when the backend became the default and quenching quietly
+   vanished from the reference sites. See the registration section of
+   [subsystems/accessible-volume.md](/subsystems/accessible-volume.md).
+7. It was not thread-safe, so a pooled scan died in SWIG. Fixed with
+   `_IMP_BUILD_LOCK`.
 
-Because the backend is unusable, **selection no longer prefers it silently**:
-`resolve_av_backend()` defaults to LabelLib — the implementation QuEst has
-always actually run and the one its tests pin — and IMP.bff is opt-in via
-`QUEST_AV_BACKEND=imp_bff`, which now fails loudly with the list of usable
-backends instead of producing an empty volume.
-
-*Fix:* do not repair QuEst's hand-rolled integration. Call
-`IMP.bff.av.compute_av` from imp-tricks, which performs the same backend
-dispatch and is maintained against IMP's API. `DUP-01`/`DUP-02` in
-[specs/assessment.md](/specs/assessment.md);
-direction in [specs/imp-tricks-dedup.md](/specs/imp-tricks-dedup.md).
+*Still true:* the goal remains to delete this integration in favour of
+`IMP.bff.av.compute_av` rather than maintain a second copy — `DUP-01`/`DUP-02`
+in [specs/assessment.md](/specs/assessment.md), direction in
+[specs/imp-tricks-dedup.md](/specs/imp-tricks-dedup.md). That is blocked on the
+upstream backend below.
 
 ## imp-tricks' own AV backends do not run in `arm64` either
 
@@ -51,14 +56,25 @@ Verified 2026-07-27 by calling `IMP.bff.av.compute_av` from the checkout:
 
 - `backend="labellib"` — its guard requires `LabelLib.AV`; the installed
   LabelLib has only `dyeDensityAV1`, so the backend reports itself unavailable
-  (and would call a missing function if forced).
+  (and would call a missing function if forced). **Fixed** in the local
+  imp-tricks checkout, along with the attachment atom being left in its own
+  obstacle list — which made that backend return an empty volume with no error.
+  It is now verified point-for-point identical to QuEst's LabelLib path
+  (`TestTheUpstreamAvMatchesQuEsts`).
 - `backend="imp_bff"` — `'Particle' object has no attribute
-  'get_particle_index'`; IMP 2.24 spells it `get_index()`.
+  'get_particle_index'`; IMP 2.24 spells it `get_index()`. Fixed by a shim, but
+  the backend **still does not run**: it raises `UsageException: Can't get
+  attribute that is not there: mass on particle 1`, because it extracts its
+  density by feeding the source particle to an `IMP.em.SampledDensityMap` that
+  requires `IMP.atom.Mass`, which it never sets. Even with a mass, that would
+  sample a Gaussian blob around the attachment atom rather than reading the
+  path map's accessible density — so this branch has never produced an
+  accessible volume at all. It also never passes `allowed_sphere_radius`,
+  leaving it below the ~2 Å cliff.
 
-Both are version skew in **imp-tricks**, not in QuEst, and both must be fixed
-there before `DUP-01` (delegating QuEst's AV to `compute_av`) can land. Until
-then QuEst's LabelLib path — which matches the installed LabelLib — is the only
-working accessible-volume implementation on this machine.
+Both are version skew and defects in **imp-tricks**, not in QuEst. The
+`imp_bff` branch must be rewritten before `DUP-01` (delegating QuEst's AV to
+`compute_av`) can land.
 
 *Not* an issue: reaching imp-tricks from source. `quest.imp_tricks` splices the
 checkout in automatically, deliberately **without installing** it, since the

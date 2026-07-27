@@ -26,28 +26,26 @@ from .imp_av import (
 
 #: Accessible-volume backends, in the order ``"auto"`` prefers them.
 #:
-#: LabelLib is first because it is the implementation QuEst has always actually
-#: run. **The intended order is IMP.bff first, LabelLib as the fallback for
-#: platforms without a compiled IMP.bff (Windows).** It is not that order yet,
-#: because QuEst's own IMP integration (`imp_av.py`) is not fit to be primary —
-#: measured 2026-07-27 by making it primary and running the suite:
+#: **IMP.bff is primary; LabelLib is the fallback for platforms without a
+#: compiled IMP.bff — Windows above all.** Promoted 2026-07-27, once the two
+#: defects that had kept it second were fixed: `build_imp_accessible_volume`
+#: used to re-read the file from disk with `IMP.atom.read_pdb`, which silently
+#: discarded coarse-graining and made `.cif` projects fail outright. It now
+#: builds the IMP model from the atom array it is handed, so it cannot do
+#: either ([specs/structure-io.md](okf/specs/structure-io.md)).
 #:
-#: * **It ignores the structure it is handed.** `build_imp_accessible_volume`
-#:   re-reads the file from disk with `IMP.atom.read_pdb`, so any in-memory
-#:   change is discarded: a coarse-grained project silently gets the all-atom
-#:   volume (`test_coarse_grained` — coarse and all-atom came out *identical*,
-#:   13883.805 A^3 both).
-#: * **It cannot read mmCIF.** That re-read is `read_pdb` only, so a `.cif`
-#:   project fails outright (`test_mc4r`: "No molecule read from file").
-#: * The two backends also disagree on volume by ~20 % on 148l E15 — same place
-#:   (centroids within 0.6 A), less of it — which is an algorithmic difference,
-#:   not a parameter one, and it propagates to the contact fraction.
+#: The backends do not agree exactly, and this order decides which answer QuEst
+#: gives: on 148l E36 they return 136 707 (IMP.bff) against 151 869 (LabelLib)
+#: points — a 0.90 ratio, with centroids within 0.5 A. Same place, ~10 % less
+#: of it. That residual is algorithmic, and it is the one number that moves
+#: when a platform falls back to LabelLib, so contact fractions and quenching
+#: rates are not bit-comparable across the two.
 #:
-#: The fix is not to patch `imp_av.py`: it is to route through
-#: `IMP.bff.av.compute.compute_av`, which takes plain arrays and therefore
-#: *cannot* re-read a file or miss a coarse-graining. That needs its `imp_bff`
-#: backend fixed upstream first (see okf/specs/imp-tricks-dedup.md).
-AV_BACKENDS = ("labellib", "imp_bff")
+#: The direction of travel is still to route through
+#: `IMP.bff.av.compute.compute_av` rather than carry `imp_av.py` at all
+#: ([specs/imp-tricks-dedup.md](okf/specs/imp-tricks-dedup.md)); this only
+#: changes which of the two in-tree paths runs first.
+AV_BACKENDS = ("imp_bff", "labellib")
 
 #: Smallest `allowed_sphere_radius` that IMP.bff's path search can start from.
 #:
@@ -96,8 +94,8 @@ def resolve_av_backend(preference=None):
             if backend in available:
                 return backend
         raise RuntimeError(
-            "No accessible-volume backend is available. Install LabelLib "
-            "(preferred) or an IMP build providing IMP.bff."
+            "No accessible-volume backend is available. Install an IMP build "
+            "providing IMP.bff (preferred), or LabelLib."
         )
 
     if choice not in AV_BACKENDS:
@@ -117,14 +115,20 @@ def resolve_av_backend(preference=None):
 def _points_from_centred_grid(density, ng, dg, centre):
     """Point cloud of a cubic grid described by its *centre* rather than a corner.
 
-    QuEst's own AV carries ``x0`` (the attachment point, at the middle voxel);
+    QuEst's own AV carries ``x0`` (the grid anchor, at the middle voxel);
     LabelLib reports a corner. One kernel, two conventions, one shift.
+
+    The offset is the **integer** ``(ng - 1) // 2``, matching
+    :func:`_center_grid_indices`. For LabelLib's odd grids the two are equal, so
+    this changes nothing there; for an even edge length -- which is what IMP
+    produces -- a float ``(ng - 1) / 2`` would place the point cloud half a
+    voxel off the grid the quenching and stickiness kernels index into.
 
     Plain Python on purpose: it does arithmetic on three numbers and then calls
     the jitted kernel. Compiling *this* would only make it unable to see
     :func:`density2points` as anything but an untyped global.
     """
-    origin = np.asarray(centre, dtype=np.float64) - (ng - 1) / 2.0 * float(dg)
+    origin = np.asarray(centre, dtype=np.float64) - ((ng - 1) // 2) * float(dg)
     return density2points(ng, ng, ng, dg, density, origin)
 
 
@@ -1053,8 +1057,15 @@ class AV(object):
             )
             density = av_result.density
             ng = av_result.grid_size
-            x0 = av_result.attachment_point
             npm = int((ng - 1) // 2)
+            # Anchor on the map's own origin rather than on the attachment atom.
+            # IMP sizes the grid itself and the atom lands on the middle voxel
+            # only when the edge length is odd; on the 148l reference site it is
+            # 86, so assuming otherwise put `x0` -- and therefore every grid the
+            # quenching and stickiness kernels index with it -- one voxel out.
+            x0 = np.asarray(av_result.origin, dtype=np.float64) + npm * float(
+                simulation_grid_resolution
+            )
             n = density.sum()
             points = _points_from_centred_grid(
                 density.reshape(ng, ng, ng), ng, simulation_grid_resolution, x0
