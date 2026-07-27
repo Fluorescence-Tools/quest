@@ -11,7 +11,7 @@ requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Thomas-Otavio Peulen", email = "thomas.otavio.peulen@gmail.com" }]
 dependencies = [
-  "numpy>=2.0",
+  "numpy",
   "numexpr",
   "numba",
   "click",
@@ -21,17 +21,43 @@ dependencies = [
   "pyopengl",
   "tables",
   "labellib",
-  "qtpy<2.0.0",
+  "qtpy",
+  "tqdm",
 ]
 
 [project.scripts]
 quest = "quest.cli:cli"
 
 [project.gui-scripts]
-"cs.quest" = "quest.quest_gui:start_gui"
+"cs.quest" = "quest.gui:start_gui"
+
+[project.optional-dependencies]
+web = [
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  "python-multipart>=0.0.9",
+]
 
 [tool.setuptools.packages.find]
 include = ["quest*"]
 
 [tool.setuptools.package-data]
-"*" = ["*.json", "*.yaml", "*.ui", "*.png", "*.svg", "*.css", "*.so", "*.dll"]
+# No `*.ui`: the Qt form is `quest/gui/quest.view.json`, rendered by ChiSurf's
+# AutoForm. `*.json` therefore ships the view spec, the manifest and the
+# settings; `*.ico` ships the window icon that replaced the Qt resource module.
+"*" = ["*.json", "*.yaml", "*.ico", "*.png", "*.svg", "*.css", "*.so", "*.dll"]
+
+[tool.pytest.ini_options]
+markers = [
+  "browser: drives the web UI in a real browser; needs both servers and its own process",
+  "notebooks: executes the notebooks through nbclient; spawns kernels, so it needs its own process",
+]
+# Two suites are deselected by default and run by their own pixi tasks:
+# `test-e2e` (browser) and `test-notebooks`.
+#
+# Not a convenience: Chromium's renderer dies ("Page crashed") once a single
+# pytest process has also imported IMP, numba, FastAPI and executed the
+# notebooks. The suite passes alone and fails at the end of a combined run, so
+# leaving it in the default selection means a red suite that says nothing about
+# QuEst. Deselecting is honest; silently skipping would not be.
+addopts = "-m 'not browser and not notebooks'"

@@ -1,0 +1,116 @@
+# Pixi workspace for QuEst.
+#
+# The Node.js toolchain used by the web UI lives in its own `frontend`
+# environment so it never has to be installed system-wide and cannot drift from
+# the version Next.js requires. The Python side keeps using conda/pip as before;
+# the default environment here is intentionally empty.
+#
+#   pixi install -e frontend     # materialise the Node toolchain
+#   pixi run -e frontend dev     # backend on :8000 must already be running
+#
+# See webui/frontend/README.md for the full workflow.
+
+[workspace]
+name = "quest"
+description = "QuEst - protein structure based fluorescence quenching estimator"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "osx-64", "linux-64", "linux-aarch64", "win-64"]
+
+[dependencies]
+
+# --- Node.js toolchain for the Next.js web UI -------------------------------
+# Next.js 16 refuses to start on anything older than Node 20.9.
+[feature.frontend.dependencies]
+nodejs = ">=22.11,<25"
+
+[feature.frontend.tasks]
+node = "node --version"
+
+# Next.js web UI
+install = { cmd = "npm install", cwd = "webui/frontend" }
+dev = { cmd = "npm run dev", cwd = "webui/frontend", depends-on = ["install"] }
+build = { cmd = "npm run build", cwd = "webui/frontend", depends-on = ["install"] }
+start = { cmd = "npm run start", cwd = "webui/frontend" }
+typecheck = { cmd = "npx tsc --noEmit", cwd = "webui/frontend", depends-on = ["install"] }
+lint = { cmd = "npm run lint", cwd = "webui/frontend", depends-on = ["install"] }
+
+# Electron desktop shell
+desktop-install = { cmd = "npm install", cwd = "webui/desktop" }
+desktop = { cmd = "npm run start", cwd = "webui/desktop", depends-on = ["desktop-install"] }
+desktop-dist = { cmd = "npm run dist", cwd = "webui/desktop", depends-on = ["desktop-install"] }
+
+# --- Python: the library, its surfaces, and the packaging -------------------
+# The science stack. IMP carries the structure reader and the accessible-volume
+# backend; LabelLib is the AV implementation that actually runs.
+[feature.py.dependencies]
+python = ">=3.10,<3.13"
+numpy = ">=2.0"
+numexpr = "*"
+numba = "*"
+click = "*"
+pyyaml = "*"
+tqdm = "*"
+labellib = "*"
+imp = "*"
+pytables = "*"
+
+[feature.py.pypi-dependencies]
+quest = { path = ".", editable = true }
+
+[feature.py.tasks]
+test = "pytest tests -q -p no:pytest-qt"
+simulate = "quest simulate"
+scan = "quest scan"
+
+# The desktop surface. Separated so a headless install never pulls Qt.
+[feature.gui.dependencies]
+pyqt = "*"
+qtpy = "*"
+pyqtgraph = "*"
+pyopengl = "*"
+
+[feature.gui.tasks]
+gui = "quest gui"
+test-gui = { cmd = "pytest tests/test_gui_widget.py tests/test_gui_simulation.py -q", env = { QT_QPA_PLATFORM = "offscreen" } }
+
+# The FastAPI backend behind the web UI.
+[feature.web.dependencies]
+fastapi = ">=0.115"
+uvicorn = ">=0.30"
+python-multipart = ">=0.0.9"
+
+[feature.web.tasks]
+serve = "uvicorn webui.backend.app.main:app --host 127.0.0.1 --port 8000"
+test-web = "pytest webui/backend/tests -q -p no:pytest-qt"
+
+[feature.test.dependencies]
+pytest = "*"
+scipy = "*"
+matplotlib-base = "*"
+nbclient = "*"
+nbformat = "*"
+ipykernel = "*"
+
+[feature.test.pypi-dependencies]
+playwright = "*"
+
+[feature.test.tasks]
+test-e2e = "pytest tests/test_webui_e2e.py -q -p no:pytest-qt -m browser"
+test-notebooks = "pytest tests/test_notebooks.py tests/test_examples.py -q -p no:pytest-qt -m notebooks"
+test-all = { depends-on = ["test", "test-web", "test-notebooks"] }
+
+# Building the conda package with rattler-build.
+[feature.build.dependencies]
+rattler-build = "*"
+
+[feature.build.tasks]
+build-pkg = "rattler-build build --recipe rattler-recipe/recipe.yaml --output-dir build/pkg"
+
+[environments]
+frontend = { features = ["frontend"], solve-group = "frontend" }
+# Headless: library, CLI and the web backend. No Qt.
+default = { features = ["py", "web", "test"], solve-group = "py" }
+# Everything, including the desktop form.
+desktop = { features = ["py", "gui", "web", "test"], solve-group = "py" }
+# Packaging only, so CI does not solve the science stack to build a package.
+build = { features = ["build"], no-default-feature = true }
