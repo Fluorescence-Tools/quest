@@ -5,7 +5,7 @@ The Click-based `quest` command exposes validation, simulation, and template gen
 ## Common options
 
 - `-p, --project PATH`: project JSON file.
-- `--pdb PATH`: override PDB path without editing the project file.
+- `--pdb PATH_OR_ID`: override structure path or load a bare four-character PDB ID from RCSB without editing the project file.
 - `--set key=value`: override a project field (dotted paths supported).
 - `--grid key=v1,v2,...`: sweep multiple values (Cartesian product across grids).
 - `-o, --output PATH`: output file; extension selects format (`.csv` or `.json`).
@@ -25,6 +25,12 @@ Simulate with overrides and CSV output:
 
 ```bash
 quest simulate -p project.quest.json --set tau0=3.8 --set attachment.residue=42 -o decay.csv
+```
+
+Simulate directly from an RCSB PDB ID:
+
+```bash
+quest simulate -p project.quest.json --pdb 148l -o decay.csv
 ```
 
 Sweep residues and linker lengths (tagged outputs):
@@ -69,6 +75,6 @@ Starts the GUI if the Qt dependencies are installed.
 
 ## Troubleshooting
 
-- Provide a valid `pdb` path or pass `--pdb`.
+- Provide a valid `pdb` path/PDB ID or pass `--pdb`.
 - Ensure donor dye has `D`; otherwise validation fails.
 - For FRET runs, include two dyes and `fret.enabled: true`.

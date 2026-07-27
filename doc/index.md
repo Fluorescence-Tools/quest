@@ -70,7 +70,7 @@ Project files are JSON. Key blocks:
 - `quencher`: mapping of residue name to atom list and `kQ` per quencher.
 - `fret` (optional): `enabled`, `dyes` (donor first, acceptor second), `R0_matrix`.
 - `av_parameter`: `{linker_length, linker_width, radius1}`.
-- `pdb`: path to the structure file.
+- `pdb`: path to the structure file, or a bare four-character RCSB PDB ID such as `148l`.
 
 The CLI accepts dotted overrides (e.g., `--set attachment.residue=42`).
 
@@ -115,7 +115,8 @@ Use this when simulating PET quenching with Brownian dynamics:
    - Quenchers: list of amino-acid names (3-letter codes) and atoms; atoms in the exclude list are ignored.
    - `quench_radius`: distance threshold for quenching.
    - `kQ`: quenching rate constant.
-   - `slow_fact`: scaling factor for diffusion near sticks; `critical_distance`/`slow_radius` define where it applies.
+   - `stickiness_mode`: defaults to amino-acid-specific slowing, with ASP/GLU using the configured `amino_acid_slow_facts`.
+   - `slow_fact`: global scaling factor for diffusion near sticks; `critical_distance`/`slow_radius` define where it applies.
 4. **Simulation controls**
    - Time: `sim_time`, timestep `dt`.
    - Photons/frames: `n_photons`, `frames`.
