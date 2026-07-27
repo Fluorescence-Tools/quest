@@ -42,25 +42,33 @@ it now takes the atom array
 
 Fed the same atom array with the same radii they differ by algorithm alone:
 **136 707 (IMP.bff) against 151 869 (LabelLib) points on 148l E36 — a 0.90
-ratio, centroids 0.63 Å apart.** That residual is not the whole story, because
-the two are also given different `allowed_sphere_radius`: QuEst clamps IMP's to
-`MIN_IMP_ALLOWED_SPHERE_RADIUS` (2.0 Å, below which IMP's path search starts
-nowhere and silently returns nothing), while LabelLib gets the project's 0.5 Å
-and zeroes the attachment atom's radius instead.
+ratio, centroids 0.63 Å apart.**
 
-Measured over all 151 CB sites of 148l chain E under the reference project:
+That 10 % is the small part. Measured over all 151 CB sites of 148l chain E
+under the reference project:
 
 | | labelable sites | quenching (0 < QY < 1) |
 |---|---|---|
 | LabelLib | 43 / 151 | 21 |
-| IMP.bff | **147 / 151** | **60** |
+| IMP.bff, `allowed_sphere_radius` 2.0 | 147 / 151 | 60 |
+| IMP.bff, `allowed_sphere_radius` 2.1 (current) | **151 / 151** | **67** |
 
-So the flip does not merely shift numbers by 10 % — it more than triples how
-many sites can carry a dye at all. Most of that is the `allowed_sphere_radius`
-difference rather than the backend, which is exactly why the pending decision to
-give both backends a single 2.1 Å default matters
-([handover.md](/handover.md)). **Results are not comparable across backends**;
-anything pinned to a number has to say which one produced it.
+So the flip does not merely shift volumes by 10 % — it more than triples how
+many sites can carry a dye at all.
+
+**Why, and a correction.** When IMP.bff was promoted this was attributed mostly
+to the two backends receiving different `allowed_sphere_radius` values. That was
+wrong, and measuring it is what showed it: raising the project default from
+0.5 Å to 2.1 Å left LabelLib's count at exactly 43/151, because
+`calculate1R`/`calculate3R` accept a `linkersphere` argument and **never pass it
+on** — `ll.dyeDensityAV1` has no such parameter. The real cause is how each
+backend frees the attachment site: LabelLib zeroes the attachment atom's own vdW
+radius and nothing else, so a CB hemmed in by CHARMM-sized neighbours has no
+route out; IMP ignores *every* obstacle inside the sphere. Fatter radii made
+that difference decisive.
+
+**Results are not comparable across backends**; anything pinned to a number has
+to say which one produced it.
 
 > The whole dance already exists as `IMP.bff.av.compute_av`, with the same
 > ordering, an explicit `backend=` override, and maintenance against IMP's

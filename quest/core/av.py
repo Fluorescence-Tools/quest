@@ -1,6 +1,7 @@
 import os.path
 import json
 import os
+import warnings
 from collections import OrderedDict
 
 import numpy as np
@@ -47,15 +48,58 @@ from .imp_av import (
 #: changes which of the two in-tree paths runs first.
 AV_BACKENDS = ("imp_bff", "labellib")
 
-#: Smallest `allowed_sphere_radius` that IMP.bff's path search can start from.
+#: Radius around the attachment atom inside which obstacles are ignored, so the
+#: linker can leave the atom it is tied to.
 #:
-#: The parameter is the radius around the attachment atom inside which obstacles
-#: are ignored, so the linker can leave the atom it is tied to. Below ~2 A the
-#: attachment atom's own neighbours block every starting voxel and the search
-#: returns an **empty volume with no error** -- which is exactly what QuEst's
-#: IMP backend did for months while the default was 0.5. LabelLib has no such
-#: parameter; it zeroes the attachment atom's radius instead.
+#: **One project-level value, 2.1 A**, replacing QuEst's 0.5 default and the
+#: separate 2.0 clamp IMP's path got. 2.1 A is carbon's CHARMM radius -- the
+#: attachment atom is a CB in every default workflow, and the sphere that lets
+#: the linker escape it should be the size of that atom. It also sits just above
+#: the cliff below which IMP's path search starts nowhere and returns an **empty
+#: volume with no error**; imp.bff's own reference test uses 2.0 and expects zero
+#: points at 1.0.
+#:
+#: **Only the IMP.bff backend honours it.** `calculate1R`/`calculate3R` accept a
+#: `linkersphere` argument and never pass it on -- `ll.dyeDensityAV1` has no such
+#: parameter, and the wrapper zeroes the attachment atom's own vdW radius
+#: instead. Measured: raising the default from 0.5 to 2.1 moves LabelLib's
+#: labelable-site count on 148l chain E by exactly nothing (43/151 before and
+#: after), while IMP.bff goes 147 -> 151/151 and quenching sites 60 -> 67.
+#:
+#: That is also the correction to a claim made when IMP.bff was promoted: the
+#: 43-vs-147 gap between the backends is **not** mostly this parameter, it is
+#: how each treats the attachment site. LabelLib frees only the attachment atom,
+#: so a CB hemmed in by CHARMM-sized neighbours has no way out; IMP ignores every
+#: obstacle within the sphere.
+DEFAULT_ALLOWED_SPHERE_RADIUS = 2.1
+
+#: Smallest `allowed_sphere_radius` that IMP.bff's path search can start from.
+#: Only reachable now by asking for less than the default explicitly; the clamp
+#: warns rather than silently substituting, because a quietly changed parameter
+#: is how the backends drifted apart in the first place. LabelLib has no such
+#: cliff -- it zeroes the attachment atom's radius instead.
 MIN_IMP_ALLOWED_SPHERE_RADIUS = 2.0
+
+
+def _clamped_allowed_sphere_radius(value):
+    """Keep IMP's path search above the cliff, and say so when it has to.
+
+    The old code clamped silently. That is how a caller asking for 0.5 got 2.0
+    and never learned the number it reasoned about was not the number that ran.
+    """
+    radius = float(value)
+    if radius >= MIN_IMP_ALLOWED_SPHERE_RADIUS:
+        return radius
+    warnings.warn(
+        f"allowed_sphere_radius={radius:g} A is below "
+        f"{MIN_IMP_ALLOWED_SPHERE_RADIUS:g} A, where IMP.bff's path search "
+        f"starts nowhere and returns an empty volume without reporting one. "
+        f"Using {MIN_IMP_ALLOWED_SPHERE_RADIUS:g} A instead; the default is "
+        f"{DEFAULT_ALLOWED_SPHERE_RADIUS:g} A.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+    return MIN_IMP_ALLOWED_SPHERE_RADIUS
 
 
 def available_av_backends():
@@ -794,7 +838,7 @@ def calculate1R(l: float,
                 y: np.array,
                 z: np.array,
                 vdw: np.array,
-                linkersphere: float = 0.5,
+                linkersphere: float = DEFAULT_ALLOWED_SPHERE_RADIUS,
                 linknodes: int = 3,
                 vdwRMax: float = 1.8,
                 dg: float = 0.5,
@@ -860,7 +904,8 @@ class AV(object):
     def __init__(self, structure, residue_seq_number=None, atom_name=None, chain_identifier=None,
                  linker_length=20.0, linker_width=0.5, radius1=5.0,
                  radius2=4.5, radius3=3.5, simulation_grid_resolution=0.5, save_av=False, output_file='out',
-                 attachment_atom_index=None, verbose=False, allowed_sphere_radius=0.5,
+                 attachment_atom_index=None, verbose=False,
+                 allowed_sphere_radius=DEFAULT_ALLOWED_SPHERE_RADIUS,
                  simulation_type='AV1', position_name=None, residue_name=None,
                  av_backend=None):
 
@@ -1050,8 +1095,8 @@ class AV(object):
                 linker_length=linker_length,
                 linker_width=linker_width,
                 radii=(radius1, radius2, radius3),
-                allowed_sphere_radius=max(
-                    float(allowed_sphere_radius), MIN_IMP_ALLOWED_SPHERE_RADIUS
+                allowed_sphere_radius=_clamped_allowed_sphere_radius(
+                    allowed_sphere_radius
                 ),
                 simulation_grid_resolution=simulation_grid_resolution,
             )

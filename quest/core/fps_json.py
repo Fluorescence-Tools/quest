@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Any, Dict, Generator, Tuple, Union, Optional
 import numpy as np
 
+from .av import DEFAULT_ALLOWED_SPHERE_RADIUS
+
 def load_fps_json(path_or_dict: Union[Path, str, dict]) -> dict:
     """Load and parse an fps.json file or dictionary, validating its structure."""
     if isinstance(path_or_dict, (Path, str)):
@@ -64,7 +66,9 @@ def normalize_to_fps_positions(sites_list_or_dict: Any, project: dict) -> dict:
             "radius3": float(project.get("radius3") or av_param.get("radius3") or 3.5),
             "simulation_grid_resolution": float(project.get("dg") or project.get("simulation_grid_resolution") or 1.5),
             "simulation_type": project.get("simulation_type") or "AV1",
-            "allowed_sphere_radius": float(project.get("allowed_sphere_radius") or 0.5),
+            "allowed_sphere_radius": float(
+                project.get("allowed_sphere_radius") or DEFAULT_ALLOWED_SPHERE_RADIUS
+            ),
             "anchor_atoms": project.get("anchor_atoms", ""),
             "chain_weighting": project.get("chain_weighting", False),
             "contact_volume_thickness": float(project.get("contact_volume_thickness", 0.0)),
