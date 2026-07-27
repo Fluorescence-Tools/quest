@@ -98,6 +98,23 @@ collection. Every test invocation in this repo must pass `-p no:pytest-qt`
 (the plugin name; `-p no:qt` does not match). *Fix:* install a Qt binding, or
 make the plugin a conditional dev dependency.
 
+## Coarse-graining matches residues by `res_id` alone, ignoring the chain
+
+`move_center_of_mass` in `quest/core/structure.py` selects a residue's atoms
+with `all_atoms['res_id'] == res`, with no chain term. Residue numbering restarts
+per chain, so in any multi-chain structure — `tests/data/mc4r_dimer.cif`, every
+dimer — the side-chain atoms of chain B's residue 40 are folded into the CB
+pseudo-atom of chain A's residue 40. The CB then sits at a centre of mass
+averaged over two different residues, which moves both the stickiness centre and
+the quenching centre.
+
+Found 2026-07-27 while admitting HETATM records: it surfaced as
+`KeyError: 'MUB'`, because a ligand residue shares a `res_id` with a protein
+residue. The `KeyError` is fixed (untemplated residues are skipped) but **the
+underlying mismatch is not** — it was left alone deliberately, since fixing it
+changes coarse-grained numbers and that belongs in its own change with its own
+re-baseline. *Fix:* match on `(chain, res_id)`.
+
 # Repository hygiene
 
 ## Simulation output accumulates in the working tree

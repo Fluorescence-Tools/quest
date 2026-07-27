@@ -66,6 +66,11 @@ def move_center_of_mass(structure, all_atoms):
             for at in at_nbr:
                 atom = all_atoms[at]
                 residue_name = atom['res_name']
+                # A residue with no coarse template has no "side chain" to fold
+                # into a CB; its atoms are kept whole by `to_coarse` and must
+                # not be collapsed into somebody else's centre of mass.
+                if residue_name not in residue_atoms_internal:
+                    continue
                 if atom['atom_name'] not in residue_atoms_internal[residue_name]:
                     cb['coord'] += atom['coord'] * atom['mass']
                     cb['mass'] += atom['mass']
@@ -238,7 +243,17 @@ class Structure(object):
         ######       TAKE ONLY INTERNAL ATOMS         ######
         ####################################################
         all_atoms = np.copy(self.atoms)
-        tmp = [atom for atom in all_atoms if atom['atom_name'] in residue_atoms_internal[atom['res_name']]]
+        # Residues with no coarse template -- ligands, cofactors, modified
+        # residues -- are kept **whole**. Coarse-graining reduces an amino acid
+        # to its backbone plus CB; a bound sugar has no such reduction, and
+        # dropping it would silently reinstate the HETATM stripping that
+        # `quest/core/pdb.py` deliberately stopped doing. Before this, keeping
+        # HETATM records raised `KeyError: 'FGA'` here.
+        tmp = [
+            atom for atom in all_atoms
+            if atom['res_name'] not in residue_atoms_internal
+            or atom['atom_name'] in residue_atoms_internal[atom['res_name']]
+        ]
         atoms = np.empty(len(tmp), dtype={'names': PDB.keys, 'formats': PDB.formats})
         atoms[:] = tmp
         atoms['i'] = np.arange(atoms.shape[0])

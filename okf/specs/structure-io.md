@@ -81,18 +81,45 @@ Two separable things that got conflated:
   backend choice is availability only — IMP.bff preferred, LabelLib where
   IMP.bff is not built (Windows).
 
-**Decided 2026-07-27: HETATM and water are not stripped.** A bound ligand
-occludes the dye, so the loader keeps IMP's full atom set rather than QuEst's
-ATOM-only selector — 1363 atoms on 148l against 1322, the extra 63 being `FGA`,
-`API`, `DAL`, `MUB`, `NAG` and `BME`. Not yet implemented; see
-[handover](../handover.md).
+**Decided and implemented 2026-07-27: HETATM is not stripped; water still is.**
+A bound ligand occludes the dye, so the loader passes **no selector** and takes
+IMP's default — everything but waters and hydrogens. `_atom_record_selector` is
+deleted. On 148l that is 1363 atoms against 1322, the extra 41 being `FGA`,
+`API`, `DAL`, `MUB`, `NAG` and `BME`.
 
-One thing to settle while implementing it: IMP's *default* read already omits
-water and hydrogens (`NonWaterNonHydrogenPDBSelector` returns the same 1363), so
-passing no selector satisfies "keep the ligands". Keeping crystallographic
-waters as steric obstacles as well is a stronger and more unusual choice —
-mobile solvent does not normally occlude a dye — and needs
-`NonHydrogenPDBSelector` (1503 atoms). Measure both.
+Both candidates were measured over all 151 CB sites of 148l chain E, because
+atom counts do not decide this — what the volumes do decides it:
+
+| selector | atoms | labelable | mean AV |
+|---|---|---|---|
+| ATOM records only (before) | 1322 | 148/151 | 9485 Å³ |
+| **no selector / `NonWaterNonHydrogen`** | **1363** | **150/151** | **9320 Å³** |
+| `NonHydrogenPDBSelector` (waters in) | 1503 | 148/151 | 7900 Å³ |
+
+Waters cost **17 % of every accessible volume**, and crystallographic solvent is
+mobile on the timescale a tethered dye explores — treating it as a rigid wall is
+a stronger claim than the physics supports. Rejected.
+
+Admitting ligands cost 1.7 % of mean volume and, counter-intuitively, *gained*
+two labelable sites. More obstacles cannot open a pocket; what changes is the
+grid IMP sizes around the site, so a path search that previously started nowhere
+can succeed. Worth remembering when a labelability count moves the wrong way.
+
+## Two things HETATM broke on arrival
+
+Both were latent, and both are the same shape: code that had only ever seen
+standard amino acids.
+
+- **`to_coarse` raised `KeyError: 'FGA'`.** Residues with no coarse template are
+  now kept **whole** — coarse-graining reduces an amino acid to backbone plus
+  CB, and a bound sugar has no such reduction. Dropping them would have
+  reinstated the stripping this decision removed, at a different layer.
+  `move_center_of_mass` needed the same guard.
+- **Every hetero atom was named `"HET:"`.** IMP names them `"HET: C1 "`, and the
+  `atom_name` field is `|U5`, so the real name was truncated away and all of
+  them collided on one string. `_atom_name()` strips the prefix. This matters
+  because atom names are how the quenching chemistry and the coarse templates
+  identify atoms.
 
 # Done, and what remains
 

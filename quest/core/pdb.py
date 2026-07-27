@@ -100,30 +100,21 @@ def _cache_key(path: str):
     return (os.path.abspath(path), stat.st_mtime_ns, stat.st_size)
 
 
-def _atom_record_selector():
-    """IMP selector accepting exactly the records QuEst's parser accepted.
+def _atom_name(atom) -> str:
+    """The atom's own name, with IMP's hetero-record prefix removed.
 
-    QuEst has always read **ATOM records only** — HETATM waters, ions and
-    ligands were never part of the steric environment the dye diffuses through.
-    None of IMP's stock selectors expresses that (`AllPDBSelector` keeps
-    everything, `NonWater*` still keeps ligands), and the difference is not
-    cosmetic: on 148L it is 1322 atoms versus 1525, which would move every
-    accessible volume.
+    IMP names atoms in HETATM records ``"HET: N  "``, ``"HET: C1 "`` and so on.
+    The ``atom_name`` field is ``|U5``, so storing that verbatim truncates every
+    one of them to the literal string ``"HET:"`` — every hetero atom ends up
+    with the *same* name and its real one is lost. Nothing noticed while HETATM
+    records were stripped at the door; admitting them
+    (see :func:`read`) makes it matter, because atom names are how the quenching
+    chemistry and the coarse-grain templates identify atoms.
     """
-    import IMP.atom
-
-    class _AtomRecords(IMP.atom.PDBSelector):
-        def __init__(self):
-            IMP.atom.PDBSelector.__init__(self, "ATOM records")
-
-        def get_is_selected(self, record):
-            # IMP hands this a raw line (2.17) or a PDBRecord (2.24); the
-            # newer object answers the question directly.
-            if hasattr(record, "get_is_atom"):
-                return bool(record.get_is_atom())
-            return str(record).startswith("ATOM")
-
-    return _AtomRecords()
+    name = atom.get_atom_type().get_string().strip()
+    if name.startswith("HET:"):
+        name = name[4:].strip()
+    return name
 
 
 def read(filename, **kwargs):
@@ -133,8 +124,19 @@ def read(filename, **kwargs):
     mmCIF are both handled by IMP (``IMP.atom.read_pdb`` / ``read_mmcif``);
     QuEst no longer carries its own parser for either.
 
-    Only ATOM records are read, which is what QuEst's own parser did; see
-    :func:`_atom_record_selector` for why no stock IMP selector will do.
+    **No selector is passed, so IMP's default applies**: everything except
+    waters and hydrogens. Ligands, cofactors and modified residues are steric
+    obstacles like any other atom, because they physically are — a dye cannot
+    diffuse through a bound sugar. QuEst used to strip every HETATM record,
+    which on 148L discarded 41 atoms of ``FGA``, ``API``, ``DAL``, ``MUB``,
+    ``NAG`` and ``BME`` (1322 against 1363).
+
+    Waters are deliberately *not* obstacles. Adding them
+    (``IMP.atom.NonHydrogenPDBSelector``, 1503 atoms) costs **17 % of every
+    accessible volume** on the 148l chain-E sites, and crystallographic solvent
+    is mobile on the timescale a tethered dye explores — treating it as a rigid
+    wall is a stronger claim than the physics supports. Measured, not assumed:
+    see [specs/structure-io.md](okf/specs/structure-io.md).
 
     Raises
     ------
@@ -173,11 +175,12 @@ def _read_with_imp(path):
     import IMP.core
 
     model = IMP.Model()
-    selector = _atom_record_selector()
+    # No selector: IMP's default keeps everything but waters and hydrogens,
+    # which is exactly the atom set QuEst wants. See :func:`read`.
     if path.lower().endswith((".cif", ".mmcif")):
-        hierarchy = IMP.atom.read_mmcif(path, model, selector)
+        hierarchy = IMP.atom.read_mmcif(path, model)
     else:
-        hierarchy = IMP.atom.read_pdb(path, model, selector)
+        hierarchy = IMP.atom.read_pdb(path, model)
 
     leaves = IMP.atom.get_leaves(hierarchy)
     atoms = np.zeros(len(leaves), dtype={"names": keys, "formats": formats})
@@ -197,7 +200,7 @@ def _read_with_imp(path):
         atoms["res_id"][index] = residue.get_index()
         atoms["res_name"][index] = residue.get_residue_type().get_string()
         atoms["atom_id"][index] = index
-        atoms["atom_name"][index] = atom.get_atom_type().get_string().strip()
+        atoms["atom_name"][index] = _atom_name(atom)
         atoms["element"][index] = element
         atoms["coord"][index] = list(IMP.core.XYZ(particle).get_coordinates())
         atoms["bfactor"][index] = atom.get_temperature_factor()

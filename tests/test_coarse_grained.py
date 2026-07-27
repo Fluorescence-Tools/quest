@@ -15,7 +15,10 @@ import pytest
 
 from quest.core import build_donor_from_project, simulate_project
 from quest.core.structure import Structure
-from quest.core.dye_diffusion import default_amino_acid_interactions
+from quest.core.dye_diffusion import (
+    STANDARD_AMINO_ACID_RESIDUES,
+    default_amino_acid_interactions,
+)
 
 PDB_PATH = Path(__file__).parent / "148l.pdb"
 
@@ -54,11 +57,45 @@ class TestStructureCoarseGraining:
         assert coarse.is_coarse is True
         assert len(coarse.atoms) < len(all_atom.atoms)
 
-        kept = {str(name).strip().upper() for name in coarse.atoms["atom_name"]}
+        # Only *amino acids* are coarse-grained. Scoping the assertion to them
+        # is the point, not a loosening: since QuEst stopped stripping HETATM,
+        # ligands and cofactors reach `to_coarse`, and it keeps them whole
+        # because there is no backbone-plus-CB reduction of a bound sugar.
+        amino_acids = {name for name in STANDARD_AMINO_ACID_RESIDUES}
+        kept = {
+            str(atom["atom_name"]).strip().upper()
+            for atom in coarse.atoms
+            if str(atom["res_name"]).strip().upper() in amino_acids
+        }
         assert kept <= COARSE_ATOMS, f"unexpected atoms kept: {kept - COARSE_ATOMS}"
         # Side-chain atoms that drive PET are gone.
         assert "NE1" not in kept
         assert "SD" not in kept
+
+    def test_coarse_graining_keeps_ligands_whole(self) -> None:
+        """A bound ligand is a steric obstacle at every resolution.
+
+        Dropping untemplated residues here would silently reinstate the HETATM
+        stripping `quest/core/pdb.py` stopped doing, and coarse-graining would
+        quietly open pockets that are physically closed.
+        """
+        all_atom = Structure(str(PDB_PATH), make_coarse=False)
+        coarse = Structure(str(PDB_PATH), make_coarse=True, auto_update=False)
+
+        def hetero_atoms(structure):
+            return sorted(
+                (str(a["res_name"]).strip(), str(a["atom_name"]).strip())
+                for a in structure.atoms
+                if str(a["res_name"]).strip().upper() not in STANDARD_AMINO_ACID_RESIDUES
+            )
+
+        assert hetero_atoms(coarse) == hetero_atoms(all_atom)
+        # And their names survived: IMP calls them "HET: C1", which truncates to
+        # a useless "HET:" in the |U5 field unless the prefix is stripped.
+        assert all(
+            name and not name.startswith("HET")
+            for _, name in hetero_atoms(coarse)
+        )
 
     def test_cb_moves_to_the_side_chain_centre_of_mass(self) -> None:
         all_atom = Structure(str(PDB_PATH), make_coarse=False)
