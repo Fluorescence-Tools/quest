@@ -1,13 +1,16 @@
-"""Pure Python/Numba implementations of photon trace simulation.
+"""Photon-trace and decay-curve kernels (numba).
 
-This replaces the former Cython module ``photon.pyx`` but keeps the same
-public API: ``simulate_photon_trace``, ``simulate_photon_trace_kQ`` and
-``simulate_photon_trace_rate``.
+Two entry points, both driven by a *per-frame quenching rate* array:
+``simulate_photon_trace_rate`` samples individual photons, and
+``simulate_decay_quench`` integrates a decay curve directly. The older
+boolean-collision variants were removed once nothing called them.
 """
 from __future__ import annotations
 
+import os
 from typing import Tuple
 
+import numba
 import numpy as np
 from numba import njit, prange
 
@@ -26,104 +29,29 @@ def _log_exp_wait(tau0: float) -> float:
     return np.log(1.0 / (_ranf() + _EPS)) * tau0
 
 
-@njit(cache=True, parallel=True)
-def _simulate_trace(
-    n_ph: int,
-    collided: np.ndarray,
-    quenching_prob: float,
-    t_step: float,
-    tau0: float,
-) -> Tuple[np.ndarray, np.ndarray]:
-    dts = np.zeros(n_ph, dtype=np.float64)
-    phs = np.zeros(n_ph, dtype=np.uint8)
-    n_frames = collided.shape[0]
-    shift_nbrs = np.random.randint(0, n_frames // 2 if n_frames > 1 else 1, n_ph)
-
-    if quenching_prob == 0.0:
-        for i in prange(n_ph):
-            dts[i] = _log_exp_wait(tau0)
-            phs[i] = 1
-        return dts, phs
-
-    if quenching_prob >= 1.0:
-        for i in prange(n_ph):
-            dts[i] = _log_exp_wait(tau0)
-            phs[i] = 1
-            n_step = int(dts[i] / t_step)
-            shift_nbr = shift_nbrs[i]
-            for j in range(shift_nbr, shift_nbr + n_step):
-                if j >= collided.shape[0]:
-                    break
-                if collided[j]:
-                    dts[i] = 0.0
-                    phs[i] = 0
-                    break
-        return dts, phs
-
-    for i in prange(n_ph):
-        dts[i] = _log_exp_wait(tau0)
-        phs[i] = 1
-        n_step = int(dts[i] / t_step)
-        shift_nbr = shift_nbrs[i]
-        for j in range(shift_nbr, shift_nbr + n_step):
-            if j >= collided.shape[0]:
-                break
-            if collided[j] and _ranf() < quenching_prob:
-                dts[i] = 0.0
-                phs[i] = 0
-                break
-    return dts, phs
-
-
-def simulate_photon_trace(
-    n_ph: int,
-    collided: np.ndarray,
-    quenching_prob: float = 0.5,
-    t_step: float = 0.01,
-    tau0: float = 0.25,
-):
-    return _simulate_trace(n_ph, np.asarray(collided, dtype=np.uint8), quenching_prob, t_step, tau0)
+@njit(cache=True, nogil=True)
+def _photon_rate_walk(kq, t_step, tau0, shift_nbr, n_frames):
+    """Emit one photon: sample its lifetime, then race it against quenching."""
+    dt = _log_exp_wait(tau0)
+    n_step = int(dt / t_step)
+    for j in range(shift_nbr, shift_nbr + n_step):
+        if _ranf() < kq[j % n_frames] * t_step:
+            return 0.0, np.uint8(0)
+    return dt, np.uint8(1)
 
 
 @njit(cache=True, parallel=True)
-def _simulate_trace_kq(
-    n_ph: int, collided: np.ndarray, kq: float, t_step: float, tau0: float
-) -> Tuple[np.ndarray, np.ndarray]:
-    dts = np.zeros(n_ph, dtype=np.float64)
-    phs = np.zeros(n_ph, dtype=np.uint8)
-    n_frames = collided.shape[0]
-    shift_nbrs = np.random.randint(0, n_frames // 2 if n_frames > 1 else 1, n_ph)
-    p_quench = kq * t_step
+def _seed_worker_threads(base_seed: int) -> None:
+    """Give every numba worker thread a fresh RNG state.
 
-    if kq == 0.0:
-        for i in prange(n_ph):
-            dts[i] = _log_exp_wait(tau0)
-            phs[i] = 1
-        return dts, phs
-
-    for i in prange(n_ph):
-        dts[i] = _log_exp_wait(tau0)
-        phs[i] = 1
-        n_step = int(dts[i] / t_step)
-        shift_nbr = shift_nbrs[i]
-        for j in range(shift_nbr, shift_nbr + n_step):
-            if j >= collided.shape[0]:
-                break
-            if collided[j] and _ranf() < p_quench:
-                dts[i] = 0.0
-                phs[i] = 0
-                break
-    return dts, phs
-
-
-def simulate_photon_trace_kQ(
-    n_ph: int,
-    collided: np.ndarray,
-    kQ: float = 0.5,
-    t_step: float = 0.01,
-    tau0: float = 0.25,
-):
-    return _simulate_trace_kq(n_ph, np.asarray(collided, dtype=np.uint8), kQ, t_step, tau0)
+    Numba keeps one RNG state per thread and initialises it deterministically,
+    so an *unseeded* run repeats itself for the whole life of the process --
+    four Monte-Carlo runs in a row return byte-identical results, which reads
+    as precision that is not there. Seeding one iteration per thread reaches
+    each thread's own state.
+    """
+    for index in prange(numba.get_num_threads()):
+        np.random.seed(base_seed + index)
 
 
 @njit(cache=True, parallel=True)
@@ -133,20 +61,33 @@ def _simulate_trace_rate(
     dts = np.zeros(n_ph, dtype=np.float64)
     phs = np.zeros(n_ph, dtype=np.uint8)
     n_frames = kq.shape[0]
-    shift_nbrs = np.random.randint(0, n_frames // 2 if n_frames > 1 else 1, n_ph)
+    if n_frames == 0:
+        return dts, phs
+    shift_nbrs = np.random.randint(0, n_frames if n_frames > 1 else 1, n_ph)
 
     for i in prange(n_ph):
-        dts[i] = _log_exp_wait(tau0)
-        phs[i] = 1
-        n_step = int(dts[i] / t_step)
-        shift_nbr = shift_nbrs[i]
-        for j in range(shift_nbr, shift_nbr + n_step):
-            if j >= kq.shape[0]:
-                break
-            if _ranf() < kq[j] * t_step:
-                dts[i] = 0.0
-                phs[i] = 0
-                break
+        dts[i], phs[i] = _photon_rate_walk(kq, t_step, tau0, shift_nbrs[i], n_frames)
+    return dts, phs
+
+
+# Seeded counterpart of `_simulate_trace_rate`. It has to stay sequential:
+# under `parallel=True` numba keeps one RNG state per thread and hands
+# iterations to whichever thread is free, so the draws a photon sees would
+# depend on the scheduler and the seed would not pin the result down.
+@njit(cache=True, nogil=True)
+def _simulate_trace_rate_seeded(
+    n_ph: int, kq: np.ndarray, t_step: float, tau0: float, random_seed: int
+) -> Tuple[np.ndarray, np.ndarray]:
+    np.random.seed(random_seed)
+    dts = np.zeros(n_ph, dtype=np.float64)
+    phs = np.zeros(n_ph, dtype=np.uint8)
+    n_frames = kq.shape[0]
+    if n_frames == 0:
+        return dts, phs
+    shift_nbrs = np.random.randint(0, n_frames if n_frames > 1 else 1, n_ph)
+
+    for i in range(n_ph):
+        dts[i], phs[i] = _photon_rate_walk(kq, t_step, tau0, shift_nbrs[i], n_frames)
     return dts, phs
 
 
@@ -155,8 +96,20 @@ def simulate_photon_trace_rate(
     kQ: np.ndarray,
     t_step: float = 0.01,
     tau0: float = 0.25,
+    random_seed: int | None = None,
 ):
-    return _simulate_trace_rate(n_ph, np.asarray(kQ, dtype=np.float32), t_step, tau0)
+    """Monte-Carlo photon trace against a per-frame quenching rate.
+
+    Passing ``random_seed`` makes the trace reproducible, at the cost of
+    running single-threaded; see `_simulate_trace_rate_seeded`.
+    """
+    kq = np.asarray(kQ, dtype=np.float32)
+    if random_seed is None:
+        # Draw the thread seeds from the OS so consecutive unseeded runs are
+        # genuinely independent samples, not the same one four times.
+        _seed_worker_threads(int.from_bytes(os.urandom(4), "little"))
+        return _simulate_trace_rate(n_ph, kq, t_step, tau0)
+    return _simulate_trace_rate_seeded(n_ph, kq, t_step, tau0, int(random_seed))
 
 
 @njit(cache=True, parallel=True)
@@ -257,4 +210,3 @@ def simulate_decay_quench(
         float(t_step),
         float(tau0),
     )
-
