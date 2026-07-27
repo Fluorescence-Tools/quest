@@ -9,8 +9,11 @@ timestamp: '2026-07-27T00:00:00Z'
 
 # Read this, then [`log.md`](log.md)
 
-Everything below is **uncommitted**. Nothing has been pushed. Two repositories
-are dirty; both are green.
+**QuEst is now committed** — the 138 paths described below landed as nine
+commits on `main` (`5962ce3`…`1fa4226`), and the working tree is clean.
+Nothing has been pushed. `~/dev/imp-tricks` is **still dirty**; its four files
+must be committed and released before decision 4 can be done. Both
+repositories are green.
 
 # State
 
@@ -25,9 +28,10 @@ are dirty; both are green.
 
 All runs above were on a **cold numba cache**. That matters; see Traps.
 
-## Uncommitted in `quest` (138 paths)
+## Committed in `quest` (138 paths, nine commits)
 
-Five threads landed this session, in order:
+Five threads landed this session, in order — see [`log.md`](log.md) for which
+commit carries which:
 
 1. **AutoForm migration.** Every `.ui` file is gone. The Qt form is
    `quest/gui/quest.view.json`, *generated* from the parameter catalog by

@@ -2,6 +2,24 @@
 
 ## 2026-07-27
 
+* **The work is committed, in nine pieces.** Everything that had accumulated in
+  the working tree — 138 paths, five threads — is now history rather than
+  uncommitted state. Nothing is pushed. The split, oldest first:
+  `5962ce3` .gitignore; `64aaebe` the OKF bundle and `CLAUDE.md`; `92ce43b`
+  `quest.lib` → `quest.core`; `d4d46d2` the service layer; `fde6731` the
+  parameter catalog and i18n; `790dc1d` the AutoForm GUI; `f34e9a2` the web UI;
+  `7f51688` notebooks and examples; `1fa4226` pixi and rattler-build.
+  Deliberately **not** bisectable: the tree was restructured wholesale, so the
+  middle commits do not stand alone. They are split to be *read*, and each
+  message records why the change was made rather than what the diff shows.
+  Two things were found while staging and fixed rather than committed:
+  `jobs/` had reached **2292 run directories and 32 GB** (now ignored, along
+  with the `out*.xyz` / `test.pdb` / `test.cif` / `sim_test.log` /
+  `webui-viewer-testpdb.png` leftovers), and `tests/data/148l.pdb` was a
+  byte-identical duplicate of `tests/148l.pdb` used only by `test_fps_json.py`,
+  which now reads the top-level copy. The index also carried a stale
+  `quest/core_new/` snapshot from an abandoned rename; it was superseded by
+  `quest/core/` and was cleared before staging.
 * **Four architectural decisions taken, none implemented yet** — written up in
   [handover.md](handover.md) as the next session's work list: `IMP.bff` becomes
   the primary AV backend with LabelLib the Windows fallback; HETATM and water
