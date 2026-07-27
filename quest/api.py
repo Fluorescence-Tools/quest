@@ -32,6 +32,22 @@ from .core import (
     build_donor_from_project,
     load_project,
     simulate_project,
+    top_quenchers,
+)
+from .project import (
+    ProjectValidationError,
+    template_project,
+    validate_project,
+)
+from .structure_fetch import (
+    download_pdb_id,
+    is_pdb_id,
+    resolve_structure_path,
+)
+from .core.fps_json import (
+    load_fps_json,
+    normalize_to_fps_positions,
+    run_fps_scan,
 )
 
 __all__ = [
@@ -39,4 +55,14 @@ __all__ = [
     "load_project",
     "simulate_project",
     "build_donor_from_project",
+    "top_quenchers",
+    "ProjectValidationError",
+    "template_project",
+    "validate_project",
+    "download_pdb_id",
+    "is_pdb_id",
+    "resolve_structure_path",
+    "load_fps_json",
+    "normalize_to_fps_positions",
+    "run_fps_scan",
 ]

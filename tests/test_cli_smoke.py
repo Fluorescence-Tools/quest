@@ -7,17 +7,30 @@ from pathlib import Path
 from click.testing import CliRunner
 
 # Ensure vendored quest package (modules/quest) is on sys.path
-ROOT = Path(__file__).resolve().parents[3]
-QUEST_ROOT = ROOT / "modules" / "quest"
+ROOT = Path(__file__).resolve().parents[1]
+QUEST_ROOT = ROOT / "quest"
 if str(QUEST_ROOT) not in sys.path:
     sys.path.insert(0, str(QUEST_ROOT))
 
 from quest.cli import cli  # type: ignore[import]
 
 
+AMINO_ACIDS = [
+    "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+    "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+]
+
+
+def _aa_interactions(**overrides: dict[str, float]) -> dict[str, dict[str, float]]:
+    interactions = {aa: {"slow_factor": 1.0, "kQ": 0.0} for aa in AMINO_ACIDS}
+    for aa, values in overrides.items():
+        interactions[aa].update(values)
+    return interactions
+
+
 def _make_minimal_project() -> dict:
     project: dict = {}
-    project["pdb"] = str(ROOT / "test" / "data" / "atomic_coordinates" / "pdb_files" / "148l.pdb")
+    project["pdb"] = str(Path(__file__).resolve().parent / "148l.pdb")
     project["attachment"] = {"chain": "E", "residue": 10, "atom": "CB"}
     project["av_parameter"] = {"linker_length": 21.5, "linker_width": 0.5, "radius1": 3.5}
     project["dg"] = 0.5
@@ -28,14 +41,10 @@ def _make_minimal_project() -> dict:
     project["n_bins"] = 128
     project["skip_frame"] = 5
     project["tau0"] = 4.2
-    project["kQ"] = 2.0
-    project["slow_fact"] = 0.1
     project["critical_distance"] = 6.5
-    project["quencher"] = {"TYR": ["CB"]}
+    project["amino_acid_interactions"] = _aa_interactions(TYR={"slow_factor": 0.1, "kQ": 2.0})
     project["output_file"] = "test_out"
     project["save_avs"] = False
-    project["all_quencher_atoms"] = True
-    project["sticky_mode"] = "quencher"
     project["fret"] = {"enabled": False, "dyes": [
         {
             "name": "D0",
