@@ -95,15 +95,17 @@ class TestTheUpstreamAvMatchesQuEsts:
     the two produce the *same volume*, so this pins it. It skips wherever
     imp-tricks or LabelLib is missing, which includes the base environment.
 
-    **Both sides are pinned to LabelLib on purpose.** This compares two
+    **Each side is pinned to the same backend on purpose.** This compares two
     *implementations of the same algorithm*, so it must not be left to pick up
     whatever `AV_BACKENDS` prefers — when IMP.bff became primary it silently
     turned into a LabelLib-vs-IMP.bff comparison and failed for the wrong
-    reason. The two backends are not expected to agree exactly; they differ by
-    ~10 % on volume, which `TestTheImpAvBackendRuns` measures instead.
+    reason. The two backends are not expected to agree with *each other*; they
+    differ by ~10 % on volume, which `TestTheImpAvBackendRuns` measures.
 
-    Upstream's own `imp_bff` branch is not compared here because it does not
-    run at all — see `okf/specs/imp-tricks-dedup.md`.
+    Both backends are covered as of 2026-07-27. Upstream's `imp_bff` branch had
+    never run — it raised on every input — and was fixed in imp-tricks along
+    the way; comparing only LabelLib would leave the path QuEst actually
+    defaults to unpinned.
     """
 
     STRUCTURE = Path(__file__).parent / "148l.pdb"
@@ -112,21 +114,28 @@ class TestTheUpstreamAvMatchesQuEsts:
     SITE = dict(chain="E", residue=118, atom="CB")
     AV_PARAMS = dict(linker_length=21.5, linker_width=0.5, radius1=3.5)
 
-    @pytest.fixture(scope="class")
-    def clouds(self):
-        pytest.importorskip("LabelLib", reason="LabelLib is not installed")
+    @pytest.fixture(scope="class", params=["labellib", "imp_bff"])
+    def clouds(self, request):
+        backend = request.param
         from quest.imp_tricks import enable_imp_tricks
 
         enable_imp_tricks()
         compute = pytest.importorskip(
             "IMP.bff.av.compute", reason="imp-tricks checkout not reachable"
         )
-        if not getattr(compute, "_HAS_LABELLIB", False):
-            pytest.skip("imp-tricks reports no usable LabelLib backend")
+        if backend == "labellib":
+            pytest.importorskip("LabelLib", reason="LabelLib is not installed")
+            if not getattr(compute, "_HAS_LABELLIB", False):
+                pytest.skip("imp-tricks reports no usable LabelLib backend")
+        else:
+            from quest.core.imp_av import HAS_IMP_BFF
+
+            if not (HAS_IMP_BFF and getattr(compute, "_HAS_IMP_BFF", False)):
+                pytest.skip("no compiled IMP.bff (the C++ AV class) in this interpreter")
 
         import numpy as np
 
-        from quest.core.av import AV
+        from quest.core.av import AV, DEFAULT_ALLOWED_SPHERE_RADIUS
         from quest.core.structure import Structure
 
         structure = Structure(str(self.STRUCTURE))
@@ -154,7 +163,8 @@ class TestTheUpstreamAvMatchesQuEsts:
                 linker_width=self.AV_PARAMS["linker_width"],
                 dye_radii=(self.AV_PARAMS["radius1"], 0.0, 0.0),
                 grid_resolution=0.5,
-                backend="labellib",
+                backend=backend,
+                allowed_sphere_radius=DEFAULT_ALLOWED_SPHERE_RADIUS,
             ).points
         )[:, :3]
 
@@ -166,7 +176,7 @@ class TestTheUpstreamAvMatchesQuEsts:
             simulation_grid_resolution=0.5,
             save_av=False,
             verbose=False,
-            av_backend="labellib",
+            av_backend=backend,
             **self.AV_PARAMS,
         ).points
         return upstream, own
@@ -178,13 +188,23 @@ class TestTheUpstreamAvMatchesQuEsts:
         assert own.shape[0] > 1000
 
     def test_the_volumes_are_identical(self, clouds) -> None:
+        """Same voxels, to well under a thousandth of a grid step.
+
+        Not bit-equality, and the reason is worth keeping: on the `imp_bff`
+        path the two sides reach the same points by different arithmetic.
+        QuEst rebuilds its cloud from the density grid in float64, upstream
+        takes IMP's own `get_xyz_density()`, which has been through float32.
+        They agree to ~2e-6 Å — a millionth of the 0.5 Å voxel — so the
+        tolerance is about the last bits of a float, not about slack in the
+        volume. A real disagreement is a whole voxel, 5e5 times larger.
+        """
         import numpy as np
 
         upstream, own = clouds
         assert upstream.shape == own.shape
         a = upstream[np.lexsort(upstream.T)]
         b = own[np.lexsort(own.T)]
-        np.testing.assert_array_equal(a, b)
+        np.testing.assert_allclose(a, b, atol=1e-4, rtol=0)
 
 
 class TestThePrimaryBackendStaysFitToBePrimary:

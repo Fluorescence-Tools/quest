@@ -50,7 +50,7 @@ in [specs/assessment.md](/specs/assessment.md), direction in
 [specs/imp-tricks-dedup.md](/specs/imp-tricks-dedup.md). That is blocked on the
 upstream backend below.
 
-## imp-tricks' own AV backends do not run in `arm64` either
+## ~~imp-tricks' own AV backends do not run in `arm64` either~~ — fixed
 
 Verified 2026-07-27 by calling `IMP.bff.av.compute_av` from the checkout:
 
@@ -61,20 +61,24 @@ Verified 2026-07-27 by calling `IMP.bff.av.compute_av` from the checkout:
   obstacle list — which made that backend return an empty volume with no error.
   It is now verified point-for-point identical to QuEst's LabelLib path
   (`TestTheUpstreamAvMatchesQuEsts`).
-- `backend="imp_bff"` — `'Particle' object has no attribute
-  'get_particle_index'`; IMP 2.24 spells it `get_index()`. Fixed by a shim, but
-  the backend **still does not run**: it raises `UsageException: Can't get
-  attribute that is not there: mass on particle 1`, because it extracts its
-  density by feeding the source particle to an `IMP.em.SampledDensityMap` that
-  requires `IMP.atom.Mass`, which it never sets. Even with a mass, that would
-  sample a Gaussian blob around the attachment atom rather than reading the
-  path map's accessible density — so this branch has never produced an
-  accessible volume at all. It also never passes `allowed_sphere_radius`,
-  leaving it below the ~2 Å cliff.
+- `backend="imp_bff"` — **had never produced an accessible volume in its life.**
+  `'Particle' object has no attribute 'get_particle_index'` (IMP 2.24 spells it
+  `get_index()`) was only the first layer. Underneath: it read its density by
+  feeding the source particle to an `IMP.em.SampledDensityMap` requiring an
+  `IMP.atom.Mass` it never set, so every call raised `UsageException` — and with
+  a mass it would have sampled a Gaussian blob around the attachment atom rather
+  than the path map's accessible density. It never passed
+  `allowed_sphere_radius`, leaving it below the ~2 Å cliff; it decorated the AV
+  onto the source particle and resampled with `shift_xyz=False`, leaving the map
+  at the coordinate origin; and it reshaped the flat tile values in the wrong
+  axis order. **All fixed** (imp-tricks `b95c000`), with `TestComputeAvBackends`
+  added upstream — there had been no test touching `compute_av` at all, which is
+  why a backend that could not work looked fine.
 
-Both are version skew and defects in **imp-tricks**, not in QuEst. The
-`imp_bff` branch must be rewritten before `DUP-01` (delegating QuEst's AV to
-`compute_av`) can land.
+Both were version skew and defects in **imp-tricks**, not in QuEst, and both are
+now verified point-for-point identical to QuEst's on 148l E118, E36 and E90.
+`DUP-01` is no longer blocked on correctness — only on packaging, since QuEst
+still reaches imp-tricks through a path shim rather than a declared dependency.
 
 *Not* an issue: reaching imp-tricks from source. `quest.imp_tricks` splices the
 checkout in automatically, deliberately **without installing** it, since the

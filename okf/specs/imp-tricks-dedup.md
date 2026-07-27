@@ -173,18 +173,35 @@ step, and it is a decision about what QuEst depends on, not a code change.
 
 `AV` (in `av.py`) and `imp_av.py` should both become
 `IMP.bff.av.compute.compute_av`, whose signature is already the right shape —
-plain arrays (`atoms_xyz`, `atoms_vdw`, `source_xyz`), no IMP particles. It
-cannot compute an AV in `arm64` by **either** backend:
+plain arrays (`atoms_xyz`, `atoms_vdw`, `source_xyz`), no IMP particles.
 
-- `compute.py:162` — `ca_p.get_particle_index()`. The compiled IMP here spells
-  it `get_index()`. `AttributeError`.
-- `compute.py:231` — the LabelLib backend refuses with "LabelLib is required".
-  LabelLib *is* installed; it exposes `dyeDensityAV1` / `dyeDensityAV1_arr`,
-  and imp-tricks looks for `LabelLib.AV`.
+**Unblocked 2026-07-27.** Both backends now work and both are verified against
+QuEst's, so the precondition for `DUP-01`/`DUP-02` is met. What it took, in
+imp-tricks (commits `936a17c` and `b95c000`):
 
-Both are one-liners **in imp-tricks**. Until they are fixed, QuEst keeps its own
-AV and the duplication stands — this is the single change that unblocks the
-largest deletion (`DUP-01`, `DUP-02`, and `imp_av.py` entirely).
+*LabelLib branch* — the availability probe required `LabelLib.AV`, which current
+builds do not ship (they expose `dyeDensityAV1`); the attachment atom kept its
+own exclusion sphere, so the linker started inside an obstacle and the backend
+returned an empty volume with no error; and `Particle.get_particle_index()` does
+not exist in IMP 2.24, which spells it `get_index()`.
+
+*IMP.bff branch* — **had never run at all.** It raised
+`UsageException: Can't get attribute that is not there: mass` on every input,
+because it read its density by handing the source particle to an
+`IMP.em.SampledDensityMap` that needs an `IMP.atom.Mass` it never set — and with
+a mass, that samples a Gaussian blob around the attachment point rather than the
+accessible volume. It also never passed `allowed_sphere_radius`, decorated the
+AV onto the source particle itself and resampled with `shift_xyz=False` (leaving
+the map at the coordinate origin), and reshaped the flat tile values in the
+wrong axis order.
+
+Acceptance: upstream and QuEst return point-for-point identical clouds on 148l
+E118, E36 and E90 under **both** backends, pinned by
+`TestTheUpstreamAvMatchesQuEsts`, which is now parametrised over both.
+
+What remains before the deletion can happen is packaging, not correctness:
+imp-tricks has to be a declared dependency rather than a path shim — decision 4
+in [handover.md](../handover.md).
 
 ## The arrow points the other way — QuEst is right, upstream is wrong
 

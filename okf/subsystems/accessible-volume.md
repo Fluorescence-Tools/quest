@@ -73,9 +73,9 @@ to say which one produced it.
 > The whole dance already exists as `IMP.bff.av.compute_av`, with the same
 > ordering, an explicit `backend=` override, and maintenance against IMP's
 > current API. QuEst should call it rather than carry a second copy —
-> [specs/imp-tricks-dedup.md](/specs/imp-tricks-dedup.md). Its LabelLib branch
-> is verified point-for-point identical to QuEst's; its `imp_bff` branch does
-> not run at all, so that deletion is still blocked.
+> [specs/imp-tricks-dedup.md](/specs/imp-tricks-dedup.md). **Both** its branches
+> are now verified point-for-point identical to QuEst's, so that deletion is
+> blocked only on packaging.
 
 An empty AV raises with a diagnostic naming the residue ("might be buried inside
 the protein"), because a zero-point volume otherwise fails much later and much
