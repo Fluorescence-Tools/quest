@@ -58,6 +58,26 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **Phase 13 (part) — `known-issues.md` pruned: 358 lines to 263, and every
+  entry in it is now closed.** Each fixed entry had accumulated a correction
+  *in front of* its obsolete original, which meant the wrong text was still the
+  bulk of the file. The originals are gone; the corrections stay, and so does
+  the reason each entry is kept rather than deleted — a backend whose faults
+  each hid the next, a diagnosis that was confidently wrong twice, a "genuine
+  judgement call" that turned out to have a right answer, a severity rating
+  that said "has not bitten yet" about something biting every multi-chain
+  structure.
+
+  Two entries were still *asserting the opposite of the truth*. The
+  `-p no:pytest-qt` entry is **inverted**, not deleted: passing the flag is now
+  harmful, and it is still written into `pixi.toml`'s tasks and older notes, so
+  a reader who finds it there needs to be told. The README entry had been fixed
+  in phase 0 and never struck.
+
+  What remains open is in [specs/assessment.md](specs/assessment.md) — `DUP-05`'s
+  `asa` remainder and `DUP-07`'s `payload.py` destination — and both are
+  decisions rather than defects.
+
 * **Phase 10 — the ChiSurf plugin declares itself, and stops costing ChiSurf's
   startup. `LAY-05` closes on both sides** (chisurf `669fce499`).
 

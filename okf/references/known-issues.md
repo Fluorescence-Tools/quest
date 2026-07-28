@@ -1,15 +1,28 @@
 ---
 type: Reference
 title: Known issues
-description: Defects and environment problems that are real, understood, and not yet fixed.
+description: Defects and environment problems that are real and understood - the open ones, and the closed ones whose *failure mode* is worth keeping.
 resource: okf/log.md
 tags: [known-issues, environment, technical-debt]
 timestamp: '2026-07-26T00:00:00Z'
 ---
 
 Each entry states what is wrong, how it shows up, and what the fix would be.
-Verified on 2026-07-26 unless noted. Remove an entry when it is fixed, and say
-so in [okf/log.md](../log.md).
+Remove an entry when it is fixed **and its failure mode teaches nothing** — and
+say so in [okf/log.md](../log.md).
+
+Several entries here are struck through rather than deleted. They are kept for
+one reason each, and it is never sentiment: a backend whose faults each hid the
+next, a diagnosis that was confidently wrong twice, a "genuine judgement call"
+that turned out to have a right answer, a severity rating that said "has not
+bitten yet" about something biting every multi-chain structure. **The rule
+they add up to: a plausible explanation is not a diagnosis until it has been
+defeated and seen to restore the failure.**
+
+Pruned on 2026-07-28 — the superseded original text of every fixed entry was
+removed, leaving the correction. **Every entry in this file is now closed**;
+what remains open is in [specs/assessment.md](/specs/assessment.md), and both
+items there are decisions rather than defects.
 
 # Environment
 
@@ -120,39 +133,9 @@ What the old entry got wrong:
   It is not: the two files together pass.
 
 Both readings were consistent with the symptom, and neither was tested by
-defeating it. The original text follows.
-
-### Original entry (superseded)
-
-Run apart, `tests/test_notebooks.py` gives **9 passed** and
-`tests/test_examples.py` gives **7 passed** — the 16 the handover records. Run
-as one selection, `pytest tests -m notebooks` gives **6 failed, 10 passed**.
-
-The failure is a dylib conflict in the child process, not anything about the
-science: an example launched as a subprocess (or a notebook kernel) resolves
-`libimp_kernel.2.24.0.dylib` against `/Users/tpeulen/mambaforge/lib/libboost_filesystem.dylib`
-— the **base** environment's boost, not `arm64`'s — and dies with
-`Symbol not found: ..._ZN5boost10filesystem6detail15path_algorithms11filename_v3E...`.
-Whichever of the two files runs second is the one that fails.
-
-**It is not confined to the notebooks.** Any QuEst test that probes the domain
-layer in a subprocess hits the same fault the moment `import quest.core` reaches
-IMP at module scope — `test_importing_the_domain_does_not_import_qt` and
-`test_the_model_needs_no_qt` both did, when `DUP-02` first imported
-`IMP.bff.av._kernels` at the top of `quest/core/av.py`. The import was made lazy
-instead ([subsystems/accessible-volume.md](/subsystems/accessible-volume.md)),
-which is the right shape anyway, but it means **this environment fault is being
-routed around rather than fixed**, and the constraint is now load-bearing: the
-domain layer must not import IMP until something actually needs it.
-
-**Pre-existing**, verified 2026-07-28 by running the same selection in a
-worktree at `1807e72`, before the AV decisions: identical 6 failed / 10 passed.
-It is the same shape as the browser suite's exclusion already documented in
-`pyproject.toml` — a process that has loaded IMP is not a clean parent for a
-child that also needs it. *Fix:* give each file its own process (as the
-`test-notebooks` pixi task should), or scrub the inherited dynamic-loader
-environment before spawning. Until then **do not report "16 passed" from a
-single command** — it has never produced that.
+defeating it. **That is the lesson worth keeping**: a diagnosis that explains
+the symptom is not a diagnosis until it has been defeated and seen to restore
+the failure.
 
 ## ~~`pyproject.toml` requires `numpy>=2.0`; the working env has numpy 1.26.4~~ — stale
 
@@ -162,24 +145,17 @@ met, and the entry below described the *base* environment (numpy 1.26.4,
 IMP 2.17.0) — which is being retired. The `tests/sim_test.log` failure it cites
 was an older IMP build compiled against numpy 1.x, not a property of numpy 2.
 
-Original entry follows.
+## ~~`pytest` cannot collect without `-p no:pytest-qt`~~ — inverted 2026-07-28
 
-### Original entry (superseded)
+**The opposite is now true, and passing the flag is harmful.** The entry was
+about the base environment, which had no Qt binding, so pytest-qt aborted the
+session at collection. Base is retired; `arm64` *has* pytest-qt, and the flag
+removes the `qtbot` fixture — which is what made ChiSurf's own widget tests
+error when it was passed reflexively to another project's suite.
 
-The declared floor is not met by the interpreter QuEst actually runs on, and
-that is currently the right way round: `tests/sim_test.log` records the failure
-mode under numpy 2.2.6 — the installed IMP extension modules are compiled
-against numpy 1.x and abort with "A module that was compiled using NumPy 1.x
-cannot be run in NumPy 2.2.6". *Fix:* either rebuild IMP against numpy 2, or
-relax the declared floor to match what is supported. Right now the metadata
-promises something the stack cannot deliver.
-
-## `pytest` cannot collect without `-p no:pytest-qt`
-
-No Qt binding is installed, and pytest-qt aborts the entire session at
-collection. Every test invocation in this repo must pass `-p no:pytest-qt`
-(the plugin name; `-p no:qt` does not match). *Fix:* install a Qt binding, or
-make the plugin a conditional dev dependency.
+Kept, inverted rather than deleted, because the flag is still written into
+`pixi.toml`'s tasks and into older notes, and a reader who finds it there needs
+to know it is now wrong here. See [workflows/testing.md](/workflows/testing.md).
 
 ## ~~On the LabelLib path the point cloud sits half a voxel off its own grid~~ — fixed 2026-07-28, and it was two defects, on both backends
 
@@ -218,38 +194,6 @@ two independently-computed backends agree far better than they did — donor
 quantum yield at 148l E96 was 0.089 (LabelLib) against 0.458 (IMP.bff), a
 factor of 5.1; it is now 0.073 against 0.085, a factor of 1.2.
 
-Original entry follows.
-
-### Original entry (superseded)
-
-`AV.points` and `AV.density` describe the same volume, and on the LabelLib
-backend they are **offset from each other by half a voxel on every axis** —
-measured on 148l E55 at `dg` 0.5 Å: the centroid of `AV.points` is
-`(−0.25, −0.25, −0.25)` Å from the centroid of the cloud rebuilt out of
-`AV.density` with `AV.x0`. On the IMP.bff path the two are identical.
-
-The cause is two conventions for the same offset. Every grid kernel —
-`_center_grid_indices`, and therefore `subav`, `_slow_factor_grid`,
-`_additive_factor_grid` and `calc_slow_av`'s `points_slow` — uses the **integer**
-`(ng - 1) // 2`. The LabelLib point cloud instead comes from the true geometric
-corner, `origin = source − (ng − 1) / 2 · dg`. For odd `ng` the two coincide;
-LabelLib's grid is **92** on this structure, and even.
-
-The consequence is that on the fallback backend the fast cloud (`AV.points`,
-which feeds ⟨R_DA⟩, `Rmp` and the saved `.xyz`) is shifted relative to the
-contact cloud and the grid the walk actually runs on. It is small — 0.43 Å on a
-distance — but systematic, and it is the same *class* of defect as the IMP grid
-registration bug fixed on 2026-07-27, which is worth noting because that one
-looked equally harmless and silently removed all quenching.
-
-Found 2026-07-28 while verifying `DUP-01`, and **deliberately not fixed there**:
-routing through `compute_av` reproduces the existing behaviour on both backends
-exactly, and unifying the conventions moves LabelLib results. Which convention
-is right is also a genuine judgement call — the float corner is geometrically
-true for the grid, the integer one is what the kernels index with — so it wants
-its own change, its own re-baseline, and probably its own decision. *Fix:* pick
-one offset and use it in both places.
-
 ## ~~Coarse-graining matches residues by `res_id` alone, ignoring the chain~~ — fixed 2026-07-28, and it was not one function
 
 **Fixed**, and the proposed fix below (*"match on `(chain, res_id)`"* in
@@ -284,27 +228,6 @@ change; the CB coordinates are what the fix corrects.
 
 This closes `DUP-06` in [specs/assessment.md](/specs/assessment.md).
 
-Original entry follows.
-
-### Original entry (superseded)
-
-`move_center_of_mass` in `quest/core/structure.py` selects a residue's atoms
-with `all_atoms['res_id'] == res`, with no chain term. Residue numbering restarts
-per chain, so in any multi-chain structure — `tests/data/mc4r_dimer.cif`, every
-dimer — the side-chain atoms of chain B's residue 40 are folded into the CB
-pseudo-atom of chain A's residue 40. The CB then sits at a centre of mass
-averaged over two different residues, which moves both the stickiness centre and
-the quenching centre.
-
-Found 2026-07-27 while admitting HETATM records: it surfaced as
-`KeyError: 'MUB'`, because a ligand residue shares a `res_id` with a protein
-residue. The `KeyError` is fixed (untemplated residues are skipped) but **the
-underlying mismatch is not** — it was left alone deliberately, since fixing it
-changes coarse-grained numbers and that belongs in its own change with its own
-re-baseline. *Fix:* match on `(chain, res_id)`.
-
-# Repository hygiene
-
 ## ~~Simulation output accumulates in the working tree~~ — fixed 2026-07-28
 
 **Fixed at the cause, not with a broom.** `simulate_project`'s `save_outputs`
@@ -323,22 +246,6 @@ UUID-named directories and reports without deleting unless told otherwise.
 
 The accumulated **2870 directories / 39 GB** were deleted on 2026-07-28.
 
-Original entry follows.
-
-### Original entry (superseded)
-
-`jobs/` at the repo root had grown to **2292** run directories and **32 GB** by
-the time it was measured, alongside the `out.xyz`, `out_slow.xyz`, `test.pdb`,
-`test.cif`, `tests/sim_test.log` and `webui-viewer-testpdb.png` leftovers.
-`simulate_project` writes to `Path.cwd()/jobs/<uuid>` whenever `save_outputs` is
-true, so any run or test started from the repo root leaves one behind.
-
-**Half fixed.** All of those paths are now in `.gitignore`, so they can no
-longer be committed by accident — but the accumulation itself is unchanged, and
-the directory still has to be emptied by hand. The real fix is on the writing
-side: tests and bulk work must pass `save_outputs=False` or a temporary
-`project_dir` ([workflows/testing.md](/workflows/testing.md)).
-
 ## ~~30 `.coverage.*` files in the repo root~~ — fixed 2026-07-28
 
 `quest/utils.py` is **deleted**. Nothing in the tree imported it: it was a
@@ -350,9 +257,17 @@ helper left over from the `sys.path` injection `LAY-08` removed, and
 
 # Documentation
 
-## README points at a vendored path that does not exist here
+## ~~README points at a vendored path that does not exist here~~ — fixed 2026-07-28
 
-The notebook links read `modules/quest/notebooks/…`, which is the path QuEst has
-when it is vendored inside the sibling ChiSurf tree, not in this standalone
-repository (`notebooks/…`). The Travis badge at the top is also dead and still
-references the pre-rename `master` branch.
+The notebook links pointed at `modules/quest/notebooks/…`, the path QuEst has
+when vendored inside the sibling ChiSurf tree, not in this standalone
+repository. They now name the four notebooks that exist and are executed by
+`tests/test_notebooks.py`, plus the scripted equivalents in `examples/`. The
+dead Travis badge — still referencing the pre-rename `master` branch — is
+replaced by the GitHub Actions one.
+
+# Still open
+
+Nothing in this file. The two remaining defects live in
+[specs/assessment.md](/specs/assessment.md) as `DUP-05`'s `asa` remainder and
+`DUP-07`'s `payload.py` destination, and both are decisions rather than bugs.
