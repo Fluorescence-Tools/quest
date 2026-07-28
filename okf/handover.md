@@ -30,9 +30,9 @@ everything ([workflows/environment.md](workflows/environment.md)).
 
 | | tests |
 |---|---|
-| library + Qt GUI + web backend, one command | **524 passed, 1 skipped** |
+| library + Qt GUI + web backend, one command | **531 passed, 1 skipped** |
 | notebooks + examples (`-m notebooks`) | **16 passed, 2 skipped** |
-| browser e2e (Playwright, both servers up) | **26 passed** |
+| browser e2e (Playwright, both servers up) | **27 passed** |
 | ChiSurf `quenching_estimator` | **14 passed** |
 | notebooks + examples (`-m notebooks`, cold cache) | **16 passed** |
 | imp-tricks `tests/bff` | **201 passed, 24 skipped, 5 failed** — the 5 predate all of this |
@@ -97,6 +97,17 @@ residue identity were both wrong, on both backends.
 2. **Phase 13 — the last of the closeout**: rewrite this file once 12 lands.
    The prune of [references/known-issues.md](references/known-issues.md) is
    done (`a78709a`).
+
+# A trap the catalog hides
+
+**A parameter added to `quest/settings/parameter_catalog.json` reaches
+`doc/parameters*.md` and the Qt form automatically — and the web UI never.**
+`quest/gui/quest.view.json` is *generated* from the catalog;
+`webui/frontend/src/components/AppLayout.tsx` is hand-written React. `fret.kappa2`
+shipped on 2026-07-28 with two of the three surfaces wired and nothing failing.
+
+Until the web panel is generated from the catalog too, adding a parameter is a
+**three-place** edit, and only two of them are automatic.
 
 # Still open, needing a decision
 

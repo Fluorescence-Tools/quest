@@ -83,6 +83,35 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **The browser suite found what the browser suite could not: κ² never reached
+  the web UI.** `fret.kappa2` landed in the parameter catalog, the project
+  template, the domain and the Qt form on 2026-07-28 — and **not** in the web
+  FRET panel, because that panel is hand-built React rather than generated from
+  the catalog, so a new parameter does not arrive on its own. Two surfaces had
+  it, one did not.
+
+  27 browser tests were green throughout; none of them could have noticed. It
+  was found by *rendering the panel and looking at it*, which is what
+  [workflows/testing.md](workflows/testing.md) says to do and the fourth time
+  this session that rule has paid.
+
+  Fixed in `AppLayout.tsx`, `projectHelpers.ts` and `types/index.ts`, and pinned
+  by `TestFretPanel::test_the_orientation_factor_is_editable` — **seen to
+  fail** by deleting the field again.
+
+  **And looking again caught a second thing.** The default rendered as
+  `0.6666666666666666`, sixteen digits in a spin box. It is displayed to four
+  figures now while the *stored* value stays exactly `2/3`, because the
+  neutrality guarantee is `kappa2 / (2/3) == 1` — rounding the stored value
+  would have quietly moved every FRET number by 5·10⁻⁵. The test asserts both
+  the value and the rendered *length*.
+
+  The general point, worth more than the fix: **a parameter added to the
+  catalog reaches the docs and the Qt form automatically, and the web UI never.**
+  `quest/gui/quest.view.json` is generated; `AppLayout.tsx` is written. Until
+  the web panel is generated too, every new parameter needs a deliberate third
+  edit — and nothing fails if it is forgotten.
+
 * **Phase 12 closed as "not doing it": imp-tricks stays local**, reversing the
   interview decision. The recipe is written and the version deliberately left at
   `0.1.0`; nothing in the code waits on publication.

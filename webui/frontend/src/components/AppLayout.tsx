@@ -10,6 +10,7 @@ import { fieldLabel, getParameterHelp } from "../lib/parameterCatalog";
 import {
   AMINO_ACID_RESIDUES,
   DEFAULT_FORSTER_RADIUS,
+  DEFAULT_KAPPA2,
   defaultAcceptorDye,
   firstUsefulAtom,
   forsterMatrix,
@@ -97,6 +98,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // R0 lives in the donor->acceptor cell of the Forster matrix, in Angstrom.
   const r0 = n(project.fret?.R0_matrix?.[0]?.[1], DEFAULT_FORSTER_RADIUS);
   const savedR0 = n(savedProject.fret?.R0_matrix?.[0]?.[1], DEFAULT_FORSTER_RADIUS);
+  // kappa2 is *stated*, not modelled: QuEst's dye is a point in a volume with no
+  // transition dipole to orient. 2/3 is the isotropic dynamic average that a
+  // published Forster radius already assumes, so the default changes no number.
+  const kappa2 = n(project.fret?.kappa2, DEFAULT_KAPPA2);
+  const savedKappa2 = n(savedProject.fret?.kappa2, DEFAULT_KAPPA2);
 
   function setFretEnabled(enabled: boolean) {
     setProject((current) => {
@@ -571,6 +577,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           parameterId="fret.R0_matrix"
                           catalog={catalog}
                           isDirty={r0 !== savedR0}
+                        />
+                        <Field
+                          label="κ²"
+                          // Rounded for display only: the stored default is
+                          // exactly 2/3, and the rate's neutrality depends on
+                          // that (kappa2 / (2/3) == 1). Rendering the raw
+                          // double put 0.6666666666666666 in the box.
+                          value={Number(kappa2.toPrecision(4))}
+                          step="0.05"
+                          min={0}
+                          max={4}
+                          onChange={(value) => updateProject("fret.kappa2", value)}
+                          parameterId="fret.kappa2"
+                          catalog={catalog}
+                          isDirty={kappa2 !== savedKappa2}
                         />
                         <Field
                           label="Acceptor D [Å²/ns]"

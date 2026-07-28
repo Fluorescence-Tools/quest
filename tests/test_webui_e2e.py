@@ -288,6 +288,41 @@ class TestFretPanel:
         _upload_structure(page)
         page.get_by_label("Simulate FRET acceptor").check()
 
+    def test_the_orientation_factor_is_editable(self, page: Page) -> None:
+        """κ² must exist on **this** surface too.
+
+        It reached the parameter catalog and the Qt form on 2026-07-28 and was
+        missing here — the web FRET panel is hand-built React rather than
+        generated from the catalog, so a new parameter does not arrive on its
+        own. A parameter present on two surfaces and absent from the third is
+        the divergence okf/architecture/surfaces.md exists to prevent, and no
+        assertion in this file would have noticed: it was found by looking.
+        """
+        self._enable_fret(page)
+        field = page.locator("label.field").filter(has_text="κ²").locator("input")
+        expect(field).to_be_visible()
+        # 2/3 is the isotropic dynamic average a published R0 already assumes,
+        # so the default reproduces every number computed before it existed.
+        # Displayed to four figures -- the raw double put 0.6666666666666666 in
+        # the box -- while the *stored* value stays exactly 2/3, which is what
+        # the rate's neutrality depends on.
+        assert abs(float(field.input_value()) - 2 / 3) < 5e-4
+        assert len(field.input_value()) <= 8, (
+            f"kappa2 renders as {field.input_value()!r}; round it for display"
+        )
+
+        field.fill("1.25")
+        field.blur()
+        page.wait_for_timeout(400)
+        assert abs(float(field.input_value()) - 1.25) < 1e-9
+
+        # And the backend template carries it, so the panel round-trips rather
+        # than editing a key the domain ignores.
+        stored = page.evaluate(
+            "async () => (await fetch('/api/template?with_fret=true')).json()"
+        )
+        assert "kappa2" in stored["project"]["fret"]
+
     def test_fret_is_off_until_asked_for(self, page: Page) -> None:
         _load(page, "/labeling")
         checkbox = page.get_by_label("Simulate FRET acceptor")

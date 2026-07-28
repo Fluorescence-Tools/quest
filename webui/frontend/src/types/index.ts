@@ -69,6 +69,8 @@ export type Project = {
       av_parameter?: { linker_length?: number; linker_width?: number; radius1?: number };
     }>;
     R0_matrix?: Array<Array<number | null>>;
+    /** Orientation factor, stated rather than modelled. Default 2/3. */
+    kappa2?: number;
     /**
      * "trajectory" simulates the acceptor's own walk and uses the instantaneous
      * donor-acceptor distance; "averaged" averages over its static accessible
