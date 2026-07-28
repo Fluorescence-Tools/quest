@@ -101,6 +101,10 @@
       "label": "Rayon de Förster",
       "description": "Rayon de Förster R0 du couple donneur–accepteur, en ångströms comme toute autre longueur du projet. Il est stocké dans la case donneur→accepteur de fret.R0_matrix ; le taux de transfert varie en (R0/r)^6, si bien qu'une saisie en nanomètres fait disparaître le FRET. Les couples xanthènes usuels se situent entre 45 et 65 Å."
     },
+    "fret.kappa2": {
+      "label": "Facteur d'orientation κ²",
+      "description": "Facteur d'orientation κ² du transfert, entre 0 (dipôles de transition perpendiculaires) et 4 (colinéaires). QuEst ne le modélise pas : le fluorophore est un point diffusant dans un volume et n'a aucun dipôle à orienter — cette valeur est donc le régime de moyenne que vous postulez. La valeur par défaut 2/3 est la moyenne dynamique isotrope, que suppose déjà tout rayon de Förster publié ; la conserver reproduit exactement la vitesse de transfert. Ne l'augmentez qu'avec la preuve que les deux fluorophores sont contraints en orientation."
+    },
     "fret.dyes.1.attachment.chain": {
       "label": "Chaîne de l'accepteur",
       "description": "Identifiant de chaîne du résidu sur lequel l'accepteur FRET est attaché."

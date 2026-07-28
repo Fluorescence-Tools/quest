@@ -252,6 +252,15 @@
                 },
                 {
                   "type": "value",
+                  "attr": "fret_kappa2",
+                  "kind": "float",
+                  "label": "Orientierungsfaktor κ²",
+                  "description": "Orientierungsfaktor κ² des Transfers, zwischen 0 (senkrecht zueinander stehende Übergangsdipole) und 4 (kollinear). QuEst modelliert ihn nicht: der Farbstoff ist ein Punkt, der in einem Volumen diffundiert, und besitzt keinen Dipol, der sich ausrichten könnte — dieser Wert ist also die Mittelungsannahme, die Sie treffen. Der Standardwert 2/3 ist das isotrope dynamische Mittel, das ein publizierter Förster-Radius bereits voraussetzt; ihn stehen zu lassen reproduziert die Rate exakt. Erhöhen Sie ihn nur, wenn belegt ist, dass beide Farbstoffe in ihrer Orientierung eingeschränkt sind.",
+                  "minimum": 0.0,
+                  "maximum": 4.0
+                },
+                {
+                  "type": "value",
                   "attr": "acceptor_chain",
                   "kind": "str",
                   "label": "Kette des Akzeptors",

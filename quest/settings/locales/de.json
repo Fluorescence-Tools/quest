@@ -101,6 +101,10 @@
       "label": "Förster-Radius",
       "description": "Förster-Radius R0 des Donor-Akzeptor-Paares, in Ångström wie jede andere Länge im Projekt. Gespeichert wird die Zelle Donor→Akzeptor von fret.R0_matrix; die Transferrate skaliert mit (R0/r)^6, sodass eine Eingabe in Nanometern FRET verschwinden lässt. Typische Xanthen-Paare liegen bei 45–65 Å."
     },
+    "fret.kappa2": {
+      "label": "Orientierungsfaktor κ²",
+      "description": "Orientierungsfaktor κ² des Transfers, zwischen 0 (senkrecht zueinander stehende Übergangsdipole) und 4 (kollinear). QuEst modelliert ihn nicht: der Farbstoff ist ein Punkt, der in einem Volumen diffundiert, und besitzt keinen Dipol, der sich ausrichten könnte — dieser Wert ist also die Mittelungsannahme, die Sie treffen. Der Standardwert 2/3 ist das isotrope dynamische Mittel, das ein publizierter Förster-Radius bereits voraussetzt; ihn stehen zu lassen reproduziert die Rate exakt. Erhöhen Sie ihn nur, wenn belegt ist, dass beide Farbstoffe in ihrer Orientierung eingeschränkt sind."
+    },
     "fret.dyes.1.attachment.chain": {
       "label": "Kette des Akzeptors",
       "description": "Kettenbezeichner des Rests, an den der FRET-Akzeptorfarbstoff gebunden ist."

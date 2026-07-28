@@ -831,6 +831,19 @@ def build_donor_from_project(
             if r01 is not None:
                 d.fret_R0 = float(r01)
 
+        # The orientation factor. **Stated, not modelled** -- QuEst's dye is a
+        # point in a volume with no transition dipole, so this is the averaging
+        # regime the user asserts, and 2/3 (isotropic) is what a published R0
+        # already assumes. Validated in `_kappa2_scale`, so a project carrying
+        # kappa2 = 9 is refused rather than quietly producing a rate 13x too
+        # large. Closes OBJ-01 item 6 as *chosen and documented*.
+        kappa2 = fret.get("kappa2")
+        if kappa2 is not None:
+            from .av import _kappa2_scale
+
+            _kappa2_scale(kappa2)  # validate now, not eight frames into a run
+            d.fret_kappa2_value = float(kappa2)
+
     return d
 
 

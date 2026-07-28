@@ -86,6 +86,7 @@ FIELD_PATHS: "OrderedDict[str, str]" = OrderedDict(
         ("acceptor_D", "fret.dyes.1.D"),
         ("acceptor_slow_radius", "fret.dyes.1.slow_radius"),
         ("acceptor_dynamics", "fret.acceptor_dynamics"),
+        ("fret_kappa2", "fret.kappa2"),
     )
 )
 

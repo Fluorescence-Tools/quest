@@ -252,6 +252,15 @@
                 },
                 {
                   "type": "value",
+                  "attr": "fret_kappa2",
+                  "kind": "float",
+                  "label": "Orientation factor κ²",
+                  "description": "Orientation factor κ² of the transfer, between 0 (perpendicular transition dipoles) and 4 (collinear). QuEst does not model it: the dye is a point diffusing in a volume and has no dipole to orient, so this is the averaging regime you are asserting. The default 2/3 is the isotropic dynamic average, which is what a published Förster radius already assumes — leaving it there reproduces the rate exactly. Raise it only with evidence that both dyes are orientationally restricted.",
+                  "minimum": 0.0,
+                  "maximum": 4.0
+                },
+                {
+                  "type": "value",
                   "attr": "acceptor_chain",
                   "kind": "str",
                   "label": "Acceptor chain",

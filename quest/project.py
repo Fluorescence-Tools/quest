@@ -32,6 +32,11 @@ __all__ = [
 #: because the transfer rate goes as ``(R0/r)**6``.
 DEFAULT_FORSTER_RADIUS = 52.0
 
+#: Isotropic dynamic average of the orientation factor. See
+#: `quest.core.av.ISOTROPIC_KAPPA2` -- this is the assumption a published
+#: Forster radius already carries, so it changes no number.
+DEFAULT_KAPPA2 = 2.0 / 3.0
+
 
 class ProjectValidationError(ValueError):
     """Raised when a project mapping is missing or contradicts a requirement."""
@@ -104,6 +109,18 @@ def validate_project(
             "Donor dye entry must define diffusion coefficient 'D'."
         )
 
+    # The orientation factor is an assumption the project *states*, so a value
+    # outside [0, 4] is a malformed project rather than a runtime surprise --
+    # kappa2 = 9 would silently multiply the transfer rate by 13.5.
+    kappa2 = fret_block.get("kappa2")
+    if kappa2 is not None:
+        from .core.av import _kappa2_scale
+
+        try:
+            _kappa2_scale(kappa2)
+        except ValueError as exc:
+            raise ProjectValidationError(str(exc)) from exc
+
     t_start = project.get("t_start", 0.0)
     t_stop = project.get("t_max", None)
     if t_stop is None:
@@ -169,6 +186,11 @@ def template_project(*, with_fret: bool = True) -> MutableMapping[str, Any]:
         # Förster radii in Angstrom, like every other length in a project.
         # 52 A is a typical donor-acceptor pair; calibrate it for the real one.
         fret_block["R0_matrix"] = [[None, DEFAULT_FORSTER_RADIUS], [DEFAULT_FORSTER_RADIUS, None]]
+        # The orientation factor, stated rather than modelled. 2/3 is the
+        # isotropic dynamic average, which is what a published R0 already
+        # assumes -- so the default changes no number, and the point of having
+        # it in the template is that the assumption is visible.
+        fret_block["kappa2"] = DEFAULT_KAPPA2
 
     project["fret"] = fret_block
     return project

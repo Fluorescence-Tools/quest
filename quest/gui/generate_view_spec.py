@@ -67,6 +67,8 @@ _RANGES: dict[str, tuple[float, float]] = {
     "tau0": (0.0, 1000.0),
     "fret.dyes.0.D": (0.0, 1000.0),
     "fret.dyes.1.D": (0.0, 1000.0),
+    # 0 = perpendicular transition dipoles, 4 = collinear.
+    "fret.kappa2": (0.0, 4.0),
     "critical_distance": (0.0, 50.0),
     "slow_radius": (0.0, 50.0),
     "t_max": (0.0, 1e9),

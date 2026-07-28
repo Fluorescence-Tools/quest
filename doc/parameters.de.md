@@ -33,6 +33,7 @@ Diese Seite wird aus `parameter_catalog.json`, `quest/settings/locales/de.json` 
 | `fret.dyes.1.av_parameter.radius1` | FRET-Akzeptor | number | Å | Ausschlussradius, der den FRET-Akzeptorfarbstoff als Kugel beschreibt. |
 | `fret.dyes.1.slow_radius` | FRET-Akzeptor | number | Å | Radius um jedes Aminosäurezentrum, innerhalb dessen dieser Rest den Akzeptor verlangsamt. Getrennt vom Donor: Ein Cyanin und ein Rhodamin haften nicht in gleicher Weise an einer Proteinoberfläche. Voreinstellung ist der Wert des Donors. |
 | `fret.enabled` | FRET-Akzeptor | boolean | - | Legt fest, ob ein FRET-Akzeptorfarbstoff simuliert wird, um FRET-Effizienz und Abklingkurven zu berechnen. |
+| `fret.kappa2` | FRET-Akzeptor | number | - | Orientierungsfaktor κ² des Transfers, zwischen 0 (senkrecht zueinander stehende Übergangsdipole) und 4 (kollinear). QuEst modelliert ihn nicht: der Farbstoff ist ein Punkt, der in einem Volumen diffundiert, und besitzt keinen Dipol, der sich ausrichten könnte — dieser Wert ist also die Mittelungsannahme, die Sie treffen. Der Standardwert 2/3 ist das isotrope dynamische Mittel, das ein publizierter Förster-Radius bereits voraussetzt; ihn stehen zu lassen reproduziert die Rate exakt. Erhöhen Sie ihn nur, wenn belegt ist, dass beide Farbstoffe in ihrer Orientierung eingeschränkt sind. |
 | `n_bins` | Simulation | integer | - | Anzahl der Zeitkanäle des ausgegebenen Abklinghistogramms. |
 | `n_photons` | Simulation | integer | - | Anzahl der simulierten Anregungsphotonen zur Rekonstruktion des Fluoreszenzabklingens. |
 | `output_file` | Erweitert | text | - | Namenspräfix für gespeicherte Simulationsergebnisse, Trajektorien und Abklingkurven. |
@@ -303,6 +304,13 @@ Radius um jedes Aminosäurezentrum, innerhalb dessen dieser Rest den Akzeptor ve
 **Typ:** `boolean`
 
 Legt fest, ob ein FRET-Akzeptorfarbstoff simuliert wird, um FRET-Effizienz und Abklingkurven zu berechnen.
+
+### `fret.kappa2`
+
+**Bezeichnung:** Orientierungsfaktor κ²  
+**Typ:** `number`
+
+Orientierungsfaktor κ² des Transfers, zwischen 0 (senkrecht zueinander stehende Übergangsdipole) und 4 (kollinear). QuEst modelliert ihn nicht: der Farbstoff ist ein Punkt, der in einem Volumen diffundiert, und besitzt keinen Dipol, der sich ausrichten könnte — dieser Wert ist also die Mittelungsannahme, die Sie treffen. Der Standardwert 2/3 ist das isotrope dynamische Mittel, das ein publizierter Förster-Radius bereits voraussetzt; ihn stehen zu lassen reproduziert die Rate exakt. Erhöhen Sie ihn nur, wenn belegt ist, dass beide Farbstoffe in ihrer Orientierung eingeschränkt sind.
 
 ## Löschung
 

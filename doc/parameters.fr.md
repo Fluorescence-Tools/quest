@@ -33,6 +33,7 @@ Cette page est générée à partir de `parameter_catalog.json`, `quest/settings
 | `fret.dyes.1.av_parameter.radius1` | Accepteur FRET | number | Å | Rayon d'exclusion représentant l'accepteur FRET comme une sphère. |
 | `fret.dyes.1.slow_radius` | Accepteur FRET | number | Å | Rayon autour de chaque centre d'acide aminé à l'intérieur duquel ce résidu ralentit l'accepteur. Distinct de celui du donneur : une cyanine et une rhodamine n'adhèrent pas de la même façon à une surface protéique. Par défaut, la valeur du donneur. |
 | `fret.enabled` | Accepteur FRET | boolean | - | Indique si un accepteur FRET est simulé afin de calculer l'efficacité de FRET et les courbes de déclin. |
+| `fret.kappa2` | Accepteur FRET | number | - | Facteur d'orientation κ² du transfert, entre 0 (dipôles de transition perpendiculaires) et 4 (colinéaires). QuEst ne le modélise pas : le fluorophore est un point diffusant dans un volume et n'a aucun dipôle à orienter — cette valeur est donc le régime de moyenne que vous postulez. La valeur par défaut 2/3 est la moyenne dynamique isotrope, que suppose déjà tout rayon de Förster publié ; la conserver reproduit exactement la vitesse de transfert. Ne l'augmentez qu'avec la preuve que les deux fluorophores sont contraints en orientation. |
 | `n_bins` | Simulation | integer | - | Nombre de canaux temporels de l'histogramme de déclin produit. |
 | `n_photons` | Simulation | integer | - | Nombre de photons d'excitation simulés pour reconstruire l'histogramme de déclin de fluorescence. |
 | `output_file` | Avancé | text | - | Préfixe de nom employé pour enregistrer les résultats, les trajectoires et les déclins. |
@@ -303,6 +304,13 @@ Rayon autour de chaque centre d'acide aminé à l'intérieur duquel ce résidu r
 **Type:** `boolean`
 
 Indique si un accepteur FRET est simulé afin de calculer l'efficacité de FRET et les courbes de déclin.
+
+### `fret.kappa2`
+
+**Libellé:** Facteur d'orientation κ²  
+**Type:** `number`
+
+Facteur d'orientation κ² du transfert, entre 0 (dipôles de transition perpendiculaires) et 4 (colinéaires). QuEst ne le modélise pas : le fluorophore est un point diffusant dans un volume et n'a aucun dipôle à orienter — cette valeur est donc le régime de moyenne que vous postulez. La valeur par défaut 2/3 est la moyenne dynamique isotrope, que suppose déjà tout rayon de Förster publié ; la conserver reproduit exactement la vitesse de transfert. Ne l'augmentez qu'avec la preuve que les deux fluorophores sont contraints en orientation.
 
 ## Extinction
 

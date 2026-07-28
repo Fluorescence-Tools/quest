@@ -147,6 +147,15 @@
       "unit": "Å",
       "description": "Förster radius R0 of the donor–acceptor pair, in Ångström like every other length in a project. Stored as the donor→acceptor cell of fret.R0_matrix; the transfer rate scales as (R0/r)^6, so entering nanometres makes FRET vanish. Typical xanthene pairs are 45–65 Å."
     },
+    "fret.kappa2": {
+      "label": "Orientation factor κ²",
+      "category": "FRET Acceptor",
+      "type": "number",
+      "default": 0.6666666666666666,
+      "minimum": 0.0,
+      "maximum": 4.0,
+      "description": "Orientation factor κ² of the transfer, between 0 (perpendicular transition dipoles) and 4 (collinear). QuEst does not model it: the dye is a point diffusing in a volume and has no dipole to orient, so this is the averaging regime you are asserting. The default 2/3 is the isotropic dynamic average, which is what a published Förster radius already assumes — leaving it there reproduces the rate exactly. Raise it only with evidence that both dyes are orientationally restricted."
+    },
     "fret.dyes.1.attachment.chain": {
       "label": "Acceptor chain",
       "category": "FRET Acceptor",

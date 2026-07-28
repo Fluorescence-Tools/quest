@@ -387,11 +387,11 @@ def RDAMeanE(av1, av2, R0: float = 52.0, nSamples: int = 50_000, seed: int = RDA
 
 
 @njit(cache=True, parallel=True)
-def _fret_rate_trace(trajectory, acceptor_points, R0, tau0, r_min2):
+def _fret_rate_trace(trajectory, acceptor_points, R0, tau0, r_min2, kappa2_scale):
     n_frames = trajectory.shape[0]
     n_acceptor = acceptor_points.shape[0]
     rates = np.empty(n_frames, dtype=np.float64)
-    R0_6 = R0 ** 6
+    R0_6 = R0 ** 6 * kappa2_scale
     inv_tau0 = 1.0 / tau0
     for frame in prange(n_frames):
         px = trajectory[frame, 0]
@@ -411,10 +411,10 @@ def _fret_rate_trace(trajectory, acceptor_points, R0, tau0, r_min2):
 
 
 @njit(cache=True, parallel=True)
-def _fret_rate_pair_trace(donor, acceptor, R0, tau0, r_min2):
+def _fret_rate_pair_trace(donor, acceptor, R0, tau0, r_min2, kappa2_scale):
     n_frames = donor.shape[0]
     rates = np.empty(n_frames, dtype=np.float64)
-    R0_6 = R0 ** 6
+    R0_6 = R0 ** 6 * kappa2_scale
     inv_tau0 = 1.0 / tau0
     for frame in prange(n_frames):
         dx = donor[frame, 0] - acceptor[frame, 0]
@@ -427,18 +427,54 @@ def _fret_rate_pair_trace(donor, acceptor, R0, tau0, r_min2):
     return rates
 
 
+#: The isotropic dynamic average of the orientation factor.
+#:
+#: A published Förster radius is quoted *at* this value, so the transfer rate
+#: carries the ratio ``kappa2 / ISOTROPIC_KAPPA2`` -- equivalently the
+#: ``1.5 * kappa2`` that appears in the literature -- and passing 2/3 leaves the
+#: rate exactly as it was.
+ISOTROPIC_KAPPA2 = 2.0 / 3.0
+
+#: kappa2 ranges over [0, 4]: 0 for perpendicular dipoles, 4 for collinear ones.
+MAX_KAPPA2 = 4.0
+
+
+def _kappa2_scale(kappa2) -> float:
+    """Convert an orientation factor into a multiplier on ``R0**6``.
+
+    **QuEst does not model kappa2**, and cannot: its dye is a structureless
+    point diffusing in a volume, with no transition dipole to orient. What this
+    does is make the *assumption* explicit and adjustable instead of silently
+    baked into R0 (okf/specs/objectives.md, OBJ-01 item 6).
+
+    Modelling it would need a rotational degree of freedom per dye and a
+    correlation time to go with it -- a change to the physics, not a call to a
+    library. `IMP.bff.cgdye.rotamer.scoring.kappa2_from_vectors` computes it,
+    but it takes the two transition dipole vectors, which is exactly what QuEst
+    has not got.
+    """
+    value = float(ISOTROPIC_KAPPA2 if kappa2 is None else kappa2)
+    if not np.isfinite(value) or value < 0.0 or value > MAX_KAPPA2:
+        raise ValueError(
+            f"kappa2 must be in [0, {MAX_KAPPA2:g}] (0 = perpendicular dipoles, "
+            f"4 = collinear); got {value!r}."
+        )
+    return value / ISOTROPIC_KAPPA2
+
+
 def fret_rate_pair_trace(
     donor_trajectory,
     acceptor_trajectory,
     R0: float,
     tau0: float,
     r_min: float = 7.0,
+    kappa2: float = ISOTROPIC_KAPPA2,
 ):
     """Per-frame FRET rate (1/ns) from *two* trajectories.
 
     Both dyes are resolved in time::
 
-        k_FRET(t) = (1/tau0) * (R0 / |r_D(t) - r_A(t)|)^6
+        k_FRET(t) = (1/tau0) * (R0 / |r_D(t) - r_A(t)|)^6 * (kappa2 / (2/3))
 
     This is the general case. :func:`fret_rate_trace` averages the acceptor over
     its accessible volume instead, which is the *fast-acceptor limit* — correct
@@ -491,7 +527,9 @@ def fret_rate_pair_trace(
             "simulate both dyes with the same t_max and t_step."
         )
     r_min = max(float(r_min), 1e-6)
-    return _fret_rate_pair_trace(donor, acceptor, float(R0), float(tau0), r_min * r_min)
+    return _fret_rate_pair_trace(
+        donor, acceptor, float(R0), float(tau0), r_min * r_min, _kappa2_scale(kappa2)
+    )
 
 
 def fret_rate_trace(
@@ -501,13 +539,14 @@ def fret_rate_trace(
     tau0: float,
     r_min: float = 7.0,
     max_acceptor_points: int = 512,
+    kappa2: float = ISOTROPIC_KAPPA2,
 ):
     """Per-frame FRET rate (1/ns) along a donor trajectory.
 
     For every donor position the transfer rate is averaged over the acceptor's
     accessible volume::
 
-        k_FRET(t) = (1/tau0) * < (R0 / |r_D(t) - r_A|)^6 >_A
+        k_FRET(t) = (1/tau0) * < (R0 / |r_D(t) - r_A|)^6 >_A * (kappa2 / (2/3))
 
     This resolves the donor in time -- the point of simulating its diffusion at
     all -- while treating the acceptor as sampling its own volume quickly
@@ -549,7 +588,9 @@ def fret_rate_trace(
         stride = int(np.ceil(points.shape[0] / float(max_acceptor_points)))
         points = np.ascontiguousarray(points[::stride])
     r_min = max(float(r_min), 1e-6)
-    return _fret_rate_trace(trajectory, points, float(R0), float(tau0), r_min * r_min)
+    return _fret_rate_trace(
+        trajectory, points, float(R0), float(tau0), r_min * r_min, _kappa2_scale(kappa2)
+    )
 
 
 def RDAMean(av1, av2, nSamples: int = 50_000, seed: int = RDA_SAMPLING_SEED):

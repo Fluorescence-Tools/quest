@@ -252,6 +252,15 @@
                 },
                 {
                   "type": "value",
+                  "attr": "fret_kappa2",
+                  "kind": "float",
+                  "label": "Facteur d'orientation κ²",
+                  "description": "Facteur d'orientation κ² du transfert, entre 0 (dipôles de transition perpendiculaires) et 4 (colinéaires). QuEst ne le modélise pas : le fluorophore est un point diffusant dans un volume et n'a aucun dipôle à orienter — cette valeur est donc le régime de moyenne que vous postulez. La valeur par défaut 2/3 est la moyenne dynamique isotrope, que suppose déjà tout rayon de Förster publié ; la conserver reproduit exactement la vitesse de transfert. Ne l'augmentez qu'avec la preuve que les deux fluorophores sont contraints en orientation.",
+                  "minimum": 0.0,
+                  "maximum": 4.0
+                },
+                {
+                  "type": "value",
                   "attr": "acceptor_chain",
                   "kind": "str",
                   "label": "Chaîne de l'accepteur",

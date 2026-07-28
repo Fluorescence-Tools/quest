@@ -52,8 +52,24 @@ What is wrong with it today:
    an `R0 [Å]` spin box in the Qt FRET group and an `R0 [Å]` field in the web
    UI's FRET acceptor panel, which also gained the enable toggle and acceptor
    site selectors it never had. A browser FRET run now reports E = 0.55 on T4L.
-6. **No orientation factor.** κ² is not modelled, and no averaging regime is
-   chosen or documented.
+6. ~~**No orientation factor.**~~ **Closed 2026-07-28 as *chosen and
+   documented*, which is not the same as modelled — read this before assuming
+   κ² is simulated.** `fret.kappa2` is an explicit project field, validated to
+   `[0, 4]` when the project is read, translated in all three languages, and
+   defaulting to the isotropic dynamic average **2/3**. Because a published
+   Förster radius is already quoted at 2/3, the default reproduces every number
+   computed before the field existed; the rate carries `κ²/(2/3)`, the
+   literature's `1.5·κ²`.
+
+   **It cannot be modelled in the current dye model, and that is the real
+   finding.** QuEst's dye is a structureless point diffusing in an accessible
+   volume: it has no transition dipole, so there is nothing to orient. Adopting
+   code does not help — `kappa2_from_vectors` upstream *takes* the two dipole
+   vectors. Modelling κ² needs a **new degree of freedom**: a rotational
+   diffusion of a dipole per dye, its own correlation time, its own schema
+   entries, and its own calibration. That is a project the size of the
+   acceptor-diffusion work, and it is what would move item 6 from *documented*
+   to *modelled*.
 
 "Working" means, at minimum: a per-frame D–A distance, one definition of
 efficiency, an error when the acceptor cannot be built, R0 in the catalog and
@@ -85,9 +101,15 @@ zeroed transfer is fixed, and a full FRET run works from the browser.
 efficiency definition, and a loud failure when the acceptor is missing; then
 item 2, a diffusing and sticking acceptor with per-dye properties.
 
-**Remaining: item 6** — κ² is not modelled. `IMP.bff.cgdye.analysis.fret` already handles κ², which is one more
-reason the rate kernel should move there
-([imp-tricks-dedup.md](imp-tricks-dedup.md), `DUP-03`).
+**All six items are now closed** — item 6 as *documented*, not as *modelled*;
+see above, and do not read the checked box as "QuEst simulates κ²".
+
+The claim that `IMP.bff.cgdye.analysis.fret` "already handles κ², which is one
+more reason the rate kernel should move there" was **wrong on both counts** and
+is retracted: that module solves a Markov kinetic ensemble over rotamer
+libraries and merely *accepts* a κ² matrix. See `DUP-03` in
+[assessment.md](assessment.md); the direction of that migration is now
+reversed.
 
 # OBJ-02 — Fit dye parameters to measured decays
 
@@ -104,7 +126,19 @@ shipped chemistry is explicitly *starting values to be calibrated*
 this objective is what turns them into calibrated ones, and it is the same loop
 that would calibrate an accessible contact volume against a donor lifetime.
 
-Two routes, not yet chosen:
+**Decided 2026-07-28: the host route.** QuEst contributes a *model*; ChiSurf's
+existing optimiser, error analysis, global analysis and decay-data handling
+drive it. Nothing is implemented — the decision is the deliverable
+([specs/programme-2026-07.md](programme-2026-07.md), decision 1) — but it is
+binding on work done before it starts, and it has already shaped two things:
+`quest.api` becomes a verb facade over the RPC client rather than a re-export
+shim (`LAY-04`), and **serialization moves to the transport boundary** so an
+in-process call returns native arrays. That second one is not tidiness: an
+optimiser calls `simulate` thousands of times, and converting every decay
+channel to a Python list per iteration is a tax paid forever by the caller this
+objective exists to serve.
+
+The two routes as they were weighed:
 
 - **Rely on the host.** As a first-class ChiSurf plugin, QuEst reaches an
   existing fitting and sampling stack — optimisers, error analysis, global
@@ -117,8 +151,7 @@ Two routes, not yet chosen:
 - **Own optimiser.** Keeps QuEst standalone at the cost of reimplementing
   fitting, uncertainties and data handling.
 
-The host route is preferred on present evidence; the decision should be recorded
-here when it is made.
+**The host route was taken on 2026-07-28**, as recorded above.
 
 ## What this implies for work done before it starts
 

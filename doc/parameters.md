@@ -33,6 +33,7 @@ This page is generated from `parameter_catalog.json`. Update those first when ch
 | `fret.dyes.1.av_parameter.radius1` | FRET Acceptor | number | Å | Exclusion radius representing the FRET acceptor dye sphere. |
 | `fret.dyes.1.slow_radius` | FRET Acceptor | number | Å | Radius around each amino-acid centre within which that residue slows the acceptor. Separate from the donor's: a cyanine and a rhodamine do not adhere to a protein surface in the same way. Defaults to the donor's value. |
 | `fret.enabled` | FRET Acceptor | boolean | - | Whether a FRET acceptor dye is simulated to compute FRET efficiency and decay curves. |
+| `fret.kappa2` | FRET Acceptor | number | - | Orientation factor κ² of the transfer, between 0 (perpendicular transition dipoles) and 4 (collinear). QuEst does not model it: the dye is a point diffusing in a volume and has no dipole to orient, so this is the averaging regime you are asserting. The default 2/3 is the isotropic dynamic average, which is what a published Förster radius already assumes — leaving it there reproduces the rate exactly. Raise it only with evidence that both dyes are orientationally restricted. |
 | `n_bins` | Simulation | integer | - | Number of time channels/bins used to construct the output decay histogram. |
 | `n_photons` | Simulation | integer | - | Number of excitation photons simulated to reconstruct the fluorescence decay histogram. |
 | `output_file` | Advanced | text | - | Base filename prefix used when saving simulation outputs, trajectories, and decays. |
@@ -303,6 +304,13 @@ Radius around each amino-acid centre within which that residue slows the accepto
 **Type:** `boolean`
 
 Whether a FRET acceptor dye is simulated to compute FRET efficiency and decay curves.
+
+### `fret.kappa2`
+
+**Label:** Orientation factor κ²  
+**Type:** `number`
+
+Orientation factor κ² of the transfer, between 0 (perpendicular transition dipoles) and 4 (collinear). QuEst does not model it: the dye is a point diffusing in a volume and has no dipole to orient, so this is the averaging regime you are asserting. The default 2/3 is the isotropic dynamic average, which is what a published Förster radius already assumes — leaving it there reproduces the rate exactly. Raise it only with evidence that both dyes are orientationally restricted.
 
 ## Quenching
 

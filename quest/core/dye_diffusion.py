@@ -901,6 +901,7 @@ class DonorDecay(object):
         self._residue_site_cache = None
         self.fret_enabled = False
         self.fret_R0 = None
+        self.fret_kappa2_value = None
         self.acceptor_chain = None
         self.acceptor_residue = None
         self.acceptor_atom = None
@@ -1342,6 +1343,24 @@ class DonorDecay(object):
         """Forster radius in Angstrom, falling back to a typical xanthene pair."""
         return float(self.fret_R0) if self.fret_R0 is not None else 52.0
 
+    @property
+    def fret_kappa2(self):
+        """Orientation factor, defaulting to the isotropic dynamic average 2/3.
+
+        **This is an assumption, not a model.** QuEst's dye is a structureless
+        point in a volume and has no transition dipole to orient, so kappa2
+        cannot be computed here -- it is stated. Making it a parameter is what
+        closes OBJ-01 item 6 ("no orientation factor is *chosen or documented*")
+        without pretending the physics is simulated; see
+        `quest.core.av._kappa2_scale`.
+
+        The default reproduces every number computed before it existed, because
+        a published R0 is already quoted at kappa2 = 2/3.
+        """
+        return fps.ISOTROPIC_KAPPA2 if self.fret_kappa2_value is None else float(
+            self.fret_kappa2_value
+        )
+
     def rda_mean_e(self, n_samples=50000):
         """Forster-averaged donor-acceptor distance <R_DA>_E, in Angstrom.
 
@@ -1403,6 +1422,7 @@ class DonorDecay(object):
                 R0=self.fret_R0_angstrom,
                 tau0=self.tau0,
                 r_min=r_min,
+                kappa2=self.fret_kappa2,
             )
         else:
             acceptor_trajectory = getattr(self.acceptor_diffusion, "_traj", None)
@@ -1418,6 +1438,7 @@ class DonorDecay(object):
                 R0=self.fret_R0_angstrom,
                 tau0=self.tau0,
                 r_min=r_min,
+                kappa2=self.fret_kappa2,
             )
         if verbose:
             print("FRET rate: mean %.4f 1/ns over %i frames" % (rates.mean(), rates.shape[0]))

@@ -58,6 +58,48 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **Phase 5 — κ² is now *stated*. `DUP-03` is rejected and its direction
+  reversed, and `OBJ-02` is decided.**
+
+  `fret.kappa2` is an explicit project field: in the template, in the parameter
+  catalog, translated into German and French, rendered in the Qt form, validated
+  to `[0, 4]` by `validate_project` **before a structure is resolved** — a
+  project carrying κ² = 9 would otherwise have multiplied the transfer rate by
+  13.5 and surfaced only as an implausible efficiency. The rate carries
+  `κ²/(2/3)`, the literature's `1.5·κ²`.
+
+  **The default changes no number**, by construction: a published Förster radius
+  is already quoted at the isotropic dynamic average, so 2/3 is neutral, and a
+  test asserts the two rate arrays are bit-identical with and without the
+  parameter.
+
+  **`DUP-03` was wrong on both of its claims, and reading the upstream module is
+  what showed it.** `IMP.bff.cgdye.analysis.fret.calculate_fret_exact` takes an
+  `(nd × na)` distance matrix *plus transition matrices for both dyes*, forms
+  `np.kron(p_d, p_a)` and solves a Markov kinetic ensemble — a rotamer-library
+  formulation, O((nd·na)²), against QuEst's ~10⁵-point clouds. Not a slower
+  drop-in: **a different model at a different scale.** Nor does it "handle κ²";
+  it *accepts* a κ² matrix. **The migration direction is reversed**: QuEst's
+  trajectory kernel is the general one and should go upstream, like `dRmp`.
+
+  **κ² cannot be modelled here at all, and that is the finding worth keeping.**
+  The dye is a structureless point in a volume — no transition dipole, nothing
+  to orient. `kappa2_from_vectors` upstream *takes* the two dipole vectors.
+  Modelling it needs a new degree of freedom (rotational diffusion per dye, a
+  correlation time, schema, calibration), which is a project the size of the
+  acceptor-diffusion work. `OBJ-01` item 6 therefore closes as **chosen and
+  documented**, and both the objective and the tests say so in as many words, so
+  that a later reader does not mistake a ticked box for simulated physics.
+
+  **`OBJ-02` is decided: the host route.** QuEst contributes a model; ChiSurf's
+  optimiser drives it. Nothing implemented — but it is already binding on
+  phase 8, because an optimiser calling `simulate` thousands of times must not
+  pay a numpy→list conversion per iteration.
+
+  The i18n coverage test caught the missing German and French entries on the
+  first run, before any of this was committed. That is the mechanism `P1` exists
+  to provide, working as intended a phase early.
+
 * **Phase 4 — a residue is `(chain, number, insertion code)`. `DUP-06` is
   closed, and its "low severity, has not bitten yet" was wrong.**
 
