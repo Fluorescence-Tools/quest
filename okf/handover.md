@@ -10,10 +10,10 @@ timestamp: '2026-07-28T18:00:00Z'
 # Read this, then [`specs/programme-2026-07.md`](specs/programme-2026-07.md), then [`log.md`](log.md)
 
 **Everything is committed and clean; nothing is pushed.** A thirteen-phase
-programme was agreed by interview on 2026-07-28 and **phases 0–9 and 11 are
-done** (thirteen commits in `quest`, one in `imp-tricks`). **Every `LAY-*` row
-is closed**; what remains is the ChiSurf-side plugin, publication, and the
-closeout. The decisions behind it — and
+programme was agreed by interview on 2026-07-28 and **phases 0–11 are done**
+(fifteen commits in `quest`, two in `imp-tricks`, one in `chisurf`). **Every
+`LAY-*` row is closed, on both sides.** What remains is publication — which
+needs credentials — and the closeout. The decisions behind it — and
 the three places they *reverse* what this bundle used to assert — are in
 [specs/programme-2026-07.md](specs/programme-2026-07.md). Read that before
 proposing work in these areas; several "obvious" next steps there have already
@@ -29,7 +29,7 @@ everything ([workflows/environment.md](workflows/environment.md)).
 | library + Qt GUI + web backend, one command | **524 passed, 1 skipped** |
 | notebooks + examples (`-m notebooks`) | **16 passed, 2 skipped** |
 | browser e2e (Playwright, both servers up) | **26 passed** |
-| ChiSurf `quenching_estimator` | **1 passed** |
+| ChiSurf `quenching_estimator` | **14 passed** |
 | imp-tricks `tests/bff` | **201 passed, 24 skipped, 5 failed** — the 5 predate all of this |
 
 Nothing in that table is stale: every row was measured on 2026-07-28.
@@ -52,28 +52,12 @@ residue identity were both wrong, on both backends.
 | 6+7 | `dae3763`, imp-tricks `3dbefc8` | Upstream `r_mp` and `split_av_acv` fixed; `subav` and `dRmp` adopted; `DUP-02` closed |
 | 8 | `4539b22` | **`quest.api` is a facade**; serialization moved to the transport; contract, `error_code` taxonomy, `quest.contract.describe`. Closes `LAY-04` |
 | 9 | `82b75d4`, `8218c22` | **One mechanism for long-running work**, cooperatively cancelable; `jobs` (running) split from `runs` (artefacts). Closes `LAY-07` |
+| 10 | chisurf `669fce499` | **The plugin declares itself**: manifest, `api`/`rpc`/`cli`/`gui`, no `core/`, a dockable widget, and no `quest` import at ChiSurf startup. Closes `LAY-05`'s ChiSurf half |
 | 11 | `0dd0ac5` | i18n gets an end condition: frontend keys must resolve, and the 90-string chrome backlog is a ratchet |
 
-# Left: phases 10, 12, 13
+# Left: phases 12 and 13
 
-1. **Phase 10 — the ChiSurf plugin, rewritten from scratch** on the
-   `chisurf/plugins/modelling/fps_json_editor/` template, reusing `cs`
-   machinery. Today `chisurf/plugins/quenching_estimator/` is a single
-   `__init__.py` with **no manifest**, so it loads through the host's legacy AST
-   discovery; it imports `quest.gui` at **module scope**, so ChiSurf startup
-   pulls QuEst → IMP whether or not anyone opens it; and it wraps the form in a
-   `QMainWindow` used as a central widget, which is a window pretending to be
-   embedded.
-
-   It needs: `manifest.json`, `api/contract.py` re-exporting QuEst's,
-   `rpc/services.py` registering QuEst's twelve methods into the host
-   dispatcher (`quest.backend.services.register_services` takes anything with
-   `register(name, handler)`), `cli/`, a `gui/` that embeds `quest/gui/`'s
-   AutoForm as a **dockable widget**, and a lazy entry point. `core/` stays
-   empty — QuEst is the core. **`quest/gui/` stays in QuEst.** Closes the
-   ChiSurf half of `LAY-05`.
-
-2. **Phase 12 — publish imp-tricks** to anaconda.org (`tpeulen`, noarch)
+1. **Phase 12 — publish imp-tricks** to anaconda.org (`tpeulen`, noarch)
    **and** PyPI. **Decide the version at release time**: it is unreleased, so a
    bump per change distinguishes nothing and spends a number early. Once there
    is a published version, pin it in `pixi.toml` and the recipe in place of the
@@ -84,7 +68,7 @@ residue identity were both wrong, on both backends.
    Publication is what turns CI green — the `*` constraint makes all four jobs
    red today, deliberately.
 
-3. **Phase 13 — OKF closeout**: prune the superseded entries in
+2. **Phase 13 — OKF closeout**: prune the superseded entries in
    [references/known-issues.md](references/known-issues.md) (several now carry a
    "fixed" preamble in front of an obsolete original), and rewrite this file
    once 10 and 12 land.

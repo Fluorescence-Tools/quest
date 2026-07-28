@@ -58,6 +58,39 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **Phase 10 — the ChiSurf plugin declares itself, and stops costing ChiSurf's
+  startup. `LAY-05` closes on both sides** (chisurf `669fce499`).
+
+  `chisurf/plugins/quenching_estimator/` was a single `__init__.py` with no
+  manifest, loading through the host's legacy AST discovery. It now follows the
+  `modelling/fps_json_editor` layout — `manifest.json`, `api/`, `rpc/`, `cli/`,
+  `gui/` — with **no `core/`**, because QuEst is an installable package and *is*
+  the core. Nothing in the plugin reimplements anything:
+  `rpc/services.py` hands ChiSurf's dispatcher to
+  `quest.backend.services.register_services` (duck-typed on
+  `register(name, handler)` for exactly this, so both surfaces run the same
+  handlers), `api/contract.py` re-exports `quest.backend.contract`, and
+  `rpc_methods` is **copied verbatim** from `quest/manifest.json` with a test
+  that fails if they diverge.
+
+  **Nothing imports `quest` at module scope.** ChiSurf imports every plugin at
+  discovery, and the old file did `from quest.gui import
+  TransientDecayGenerator` at the top — so launching ChiSurf pulled in QuEst,
+  IMP and numba whether or not anyone opened the tool, and a broken QuEst
+  install became a broken ChiSurf startup. Two tests spawn a subprocess and
+  assert no `quest.*` or `IMP.*` module is in `sys.modules` after importing the
+  plugin. **Seen to fail**: restoring the eager import turns both red.
+
+  The GUI is a `ChisurfDockTool` rather than a `QMainWindow` used as a central
+  widget with a hand-built `File` menu — a window pretending to be embedded.
+  `quest/gui/` stays in QuEst.
+
+  **Rendering it caught something no assertion would have**: the first toolbar
+  repeated the embedded form's own *Load project* / *Save project* footer
+  buttons. It carries only *Load PDB…* now, and a test pins that. This is the
+  third time the "render it and look at the image" rule in
+  [workflows/testing.md](workflows/testing.md) has paid for itself.
+
 * **Phase 11 — i18n gets an end condition instead of a grind.**
 
   Two guards, both of which had been missing for different reasons.
