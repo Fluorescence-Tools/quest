@@ -183,3 +183,36 @@ latent environment fault into a hard failure of the service layer.
 `RDAMeanE` (⟨R_DA⟩_E via a Förster-averaged sample), `RDAMean` and `dRmp`
 (mean-position distance) sample pairs of AV point clouds. `R0` comes from the
 project's `fret.R0_matrix`.
+
+## The sampling is upstream's (`DUP-03`, 2026-07-28)
+
+`RDAMean` and `RDAMeanE` are aggregations over
+`IMP.bff.av._kernels.random_distances` + `IMP.bff.distance_metrics.av_pair_statistics`;
+QuEst's `_ran_dist` is deleted. Measured on 148l E15/E90 (64 969 × 71 873
+points, 50 000 samples), the two agree inside their own sampling noise:
+⟨R_DA⟩ 55.164 ± 0.037 Å against 55.171 ± 0.032, ⟨R_DA⟩_E 54.467 ± 0.022 against
+54.473 ± 0.029.
+
+Two things changed, and both are deliberate:
+
+- **It is ~5× slower** — 3.4 ms a call against 0.68 ms. QuEst's kernel was
+  `parallel=True`; upstream's is sequential because it seeds explicitly, and
+  numba's per-thread RNG cannot be seeded reproducibly. A further 0.87 ms is the
+  `(N, 3) → (N, 4)` widening upstream's signature requires; QuEst's grids are
+  binary, so that weight column is all ones and the weighted mean reduces to the
+  plain one. Acceptable **only because this runs once per simulation** — ~0.4 s
+  across a 151-site scan. Do not adopt this kernel on a per-frame path.
+- **Results are reproducible, which they were not.** The old parallel kernel drew
+  from an unseeded per-thread RNG, so two calls on the same clouds disagreed. The
+  seed is now a parameter (`RDA_SAMPLING_SEED`, default 0).
+
+**`dRmp` stays local, and index 1 of `av_pair_statistics` must never be read.**
+Upstream returns `r_mp` as a copy of `r_da_mean` — its own docstring concedes it
+— and R_mp = |⟨r_D⟩ − ⟨r_A⟩| cannot be recovered from a sample of pair distances
+at all, because the sampling destroys exactly that information. 47.65 Å (QuEst)
+against 51.53 Å (upstream) on 148l E15/E90. QuEst reads indices 0 and 2 only.
+
+`TestTheAdoptedDistanceKernelsBehave` pins the three properties the swap could
+have broken. It uses **E55/E124**: a test spanning both environments must pick
+sites labelable under *both* backends, and E15 — the pair the spec quotes — is
+not among LabelLib's 43 of 151.

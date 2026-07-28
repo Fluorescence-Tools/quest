@@ -217,20 +217,83 @@ def _points_from_centred_grid(density, ng, dg, centre):
     return density2points(ng, ng, ng, dg, density, origin)
 
 
-@njit(cache=True, parallel=True)
-def _ran_dist(av1_points, av2_points, distances, n_samples):
-    lp1 = av1_points.shape[0]
-    lp2 = av2_points.shape[0]
-    for i in prange(n_samples):
-        i1 = int(np.random.random() * lp1)
-        i2 = int(np.random.random() * lp2)
-        d0 = av1_points[i1, 0] - av2_points[i2, 0]
-        d1 = av1_points[i1, 1] - av2_points[i2, 1]
-        d2 = av1_points[i1, 2] - av2_points[i2, 2]
-        distances[i] = np.sqrt(d0 * d0 + d1 * d1 + d2 * d2)
+#: Default seed for the AV pair sampling. Fixed on purpose -- see
+#: :func:`_sample_pair_distances`.
+RDA_SAMPLING_SEED = 0
+
+#: Resolved on first use by :func:`_pair_distance_kernels`, never at import.
+_UPSTREAM_PAIR_KERNELS = None
 
 
-def RDAMeanE(av1, av2, R0: float = 52.0, nSamples: int = 50_000):
+def _pair_distance_kernels():
+    """`random_distances` and `av_pair_statistics`, imported on first use.
+
+    Lazy for the same reason as :func:`_density2points_kernel` -- importing
+    `IMP.bff` reaches `IMP`, and `import quest.core` must not.
+    """
+    global _UPSTREAM_PAIR_KERNELS
+    if _UPSTREAM_PAIR_KERNELS is None:
+        try:
+            from IMP.bff.av._kernels import random_distances
+            from IMP.bff.distance_metrics import av_pair_statistics
+        except ImportError as exc:  # pragma: no cover - depends on the environment
+            raise ImportError(
+                "QuEst's donor-acceptor distances require `IMP.bff` from "
+                "imp-tricks, which is not importable. Install imp-tricks, or "
+                "place a checkout at ~/dev/imp-tricks (or $IMP_TRICKS_SRC) so "
+                "`quest.imp_tricks` can splice it in."
+            ) from exc
+        _UPSTREAM_PAIR_KERNELS = (random_distances, av_pair_statistics)
+    return _UPSTREAM_PAIR_KERNELS
+
+
+def _sample_pair_distances(av1, av2, n_samples, seed=RDA_SAMPLING_SEED):
+    """Sampled distances and weights between two AV point clouds.
+
+    `IMP.bff.av._kernels.random_distances` as of 2026-07-28 (`DUP-03`); QuEst's
+    own `_ran_dist` is deleted. Two consequences, both measured rather than
+    assumed on 148l E15/E90 (64 969 x 71 873 points, 50 000 samples):
+
+    **The numbers agree and the timing does not.** ⟨R_DA⟩ 55.164 ± 0.037 A
+    (QuEst) against 55.171 ± 0.032 (upstream), ⟨R_DA⟩_E 54.467 ± 0.022 against
+    54.473 ± 0.029 — inside the sampling noise of either. But upstream costs
+    **3.4 ms a call against 0.68 ms**, because QuEst's kernel was
+    ``parallel=True`` where upstream's is sequential, and because upstream takes
+    ``(N, 4)`` points so the cloud has to be widened with a weight column first
+    (0.87 ms of the 3.4). Accepted, not overlooked: this runs **once per
+    simulation** as a diagnostic, so a 2.7 ms regression is ~0.4 s across a
+    151-site scan. Do not adopt this kernel anywhere it runs per frame.
+
+    **Results are now reproducible, which they were not.** Upstream seeds
+    explicitly; QuEst's parallel kernel drew from an unseeded per-thread RNG, so
+    two calls on the same clouds gave different answers. A reported distance
+    that changes between runs is a defect, so the fixed default stays and the
+    seed is a parameter rather than a constant.
+
+    The weight column is all ones: QuEst's density grids are binary, so the
+    weighted mean upstream computes reduces to the plain one QuEst took.
+    """
+    random_distances, _ = _pair_distance_kernels()
+    n_samples = int(n_samples)
+
+    def _weighted(points):
+        # Upstream's signature is (x, y, z, weight); QuEst's clouds are (x, y, z).
+        wide = np.ones((points.shape[0], 4), dtype=np.float64)
+        wide[:, :3] = points
+        return wide
+
+    sample = random_distances(
+        _weighted(av1.points), _weighted(av2.points), n_samples, int(seed)
+    )
+    # Contiguous copies: `av_pair_statistics` does two `np.dot`s, and numba warns
+    # (rightly) that a strided column view makes them slower than they need be.
+    return (
+        np.ascontiguousarray(sample[:, 0]),
+        np.ascontiguousarray(sample[:, 1]),
+    )
+
+
+def RDAMeanE(av1, av2, R0: float = 52.0, nSamples: int = 50_000, seed: int = RDA_SAMPLING_SEED):
     """Forster-averaged donor-acceptor distance <R_DA>_E, in Angstrom.
 
     ``R0`` is in Angstrom, matching the AV point clouds. This is the average a
@@ -238,10 +301,10 @@ def RDAMeanE(av1, av2, R0: float = 52.0, nSamples: int = 50_000):
     plain mean distance :func:`RDAMean` or the mean-position distance
     :func:`dRmp`.
     """
-    distances = np.empty(nSamples, dtype=np.float64)
-    _ran_dist(av1.points, av2.points, distances, nSamples)
-    Esum = np.mean(1.0 / (1.0 + (distances / R0) ** 6.0))
-    return (1.0 / Esum - 1.0) ** (1.0 / 6.0) * R0
+    distances, weights = _sample_pair_distances(av1, av2, nSamples, seed)
+    _, av_pair_statistics = _pair_distance_kernels()
+    # Index 2 is R_E. Index 1 is *not* R_mp -- see :func:`dRmp`.
+    return float(av_pair_statistics(distances, weights, float(R0))[2])
 
 
 @njit(cache=True, parallel=True)
@@ -410,13 +473,27 @@ def fret_rate_trace(
     return _fret_rate_trace(trajectory, points, float(R0), float(tau0), r_min * r_min)
 
 
-def RDAMean(av1, av2, nSamples: int = 50_000):
-    distances = np.empty(nSamples, dtype=np.float64)
-    _ran_dist(av1.points, av2.points, distances, nSamples)
-    return float(np.mean(distances))
+def RDAMean(av1, av2, nSamples: int = 50_000, seed: int = RDA_SAMPLING_SEED):
+    """Mean donor-acceptor distance <R_DA>, in Angstrom."""
+    distances, weights = _sample_pair_distances(av1, av2, nSamples, seed)
+    _, av_pair_statistics = _pair_distance_kernels()
+    return float(av_pair_statistics(distances, weights, 52.0)[0])
 
 
 def dRmp(av1, av2):
+    """Distance between the two clouds' mean positions, in Angstrom.
+
+    **Stays in QuEst deliberately, and the arrow points upstream here.**
+    `av_pair_statistics` returns this as its second value and it is wrong: its
+    own docstring concedes "same as ``r_da_mean`` here", i.e. it returns the mean
+    *pair distance* again. R_mp is |<r_D> - <r_A>|, which cannot be recovered
+    from a sample of pair distances at all — the sampling destroys exactly the
+    information it needs. Measured on 148l E15/E90: 47.65 A here against
+    51.53 A from upstream's field, 8 % apart, and the smaller number is the
+    correct one.
+
+    So index 1 of `av_pair_statistics` must never be read. QuEst reads 0 and 2.
+    """
     return float(np.sqrt(((av1.Rmp - av2.Rmp) ** 2).sum()))
 
 
@@ -840,7 +917,7 @@ def density2points(nx, ny, nz, dg, density, r0):
     What differs is the **enumeration order** — upstream runs ``ix`` outermost,
     QuEst's ran ``iz`` outermost — so the rows come back permuted. That is safe
     only because nothing reads ``AV.points`` positionally: the walk runs on the
-    density grid, :func:`_ran_dist` samples indices at random, :meth:`AV.Rmp`
+    density grid, :func:`RDAMean` samples indices at random, :meth:`AV.Rmp`
     averages, and the acceptor cloud is averaged over in full. The one visible
     effect is the row order of a saved ``.xyz``.
 

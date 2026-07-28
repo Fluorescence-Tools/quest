@@ -339,3 +339,80 @@ class TestTheImpAvBackendRuns:
             "coarse-grained and all-atom gave the same volume — the backend is "
             "reading the file again instead of the structure"
         )
+
+
+class TestTheAdoptedDistanceKernelsBehave:
+    """`DUP-03`: <R_DA> and <R_DA>_E come from `IMP.bff` now, not from QuEst.
+
+    Written *with* the swap, because what protected these before was a single
+    assertion that a distance lay between 10 and 100 A — which every wrong
+    answer short of a unit error also satisfies. The three properties below are
+    the ones the adoption could plausibly have broken.
+
+    `dRmp` is deliberately not tested against upstream: `av_pair_statistics`
+    returns R_mp wrongly by its own admission, and QuEst keeps its own. See
+    :func:`quest.core.av.dRmp`.
+    """
+
+    STRUCTURE = Path(__file__).parent / "148l.pdb"
+    R0 = 52.0
+    #: Both sites must be labelable under **both** backends, or this class errors
+    #: in whichever environment falls back to LabelLib. E15/E90 -- the pair the
+    #: dedup spec quotes -- does not qualify: LabelLib labels 43 of 148l chain E's
+    #: 151 CB sites against IMP.bff's 151, and 15 is not among the 43. E55/E124
+    #: is the widest-separated pair that is (64.0 A between mean positions), so
+    #: it also exercises the R0-relative regime these metrics are for.
+    SITES = (55, 124)
+
+    @pytest.fixture(scope="class")
+    def pair(self):
+        pytest.importorskip("LabelLib", reason="LabelLib is not installed")
+        from quest.core.av import AV
+        from quest.core.structure import Structure
+
+        structure = Structure(str(self.STRUCTURE), make_coarse=False)
+        common = dict(atom_name="CB", chain_identifier="E", linker_length=21.5)
+        return tuple(
+            AV(structure, residue_seq_number=site, **common) for site in self.SITES
+        )
+
+    def test_the_two_distances_are_ordered_and_physical(self, pair) -> None:
+        """<R_DA>_E < <R_DA> for any real pair: the Forster average is
+        weighted towards the close configurations, which is the whole reason
+        the two are not interchangeable."""
+        from quest.core.av import RDAMean, RDAMeanE
+
+        av1, av2 = pair
+        r_da = RDAMean(av1, av2)
+        r_e = RDAMeanE(av1, av2, self.R0)
+        assert 20.0 < r_e < r_da < 120.0, (r_e, r_da)
+
+    def test_sampling_is_reproducible(self, pair) -> None:
+        """Upstream seeds explicitly where QuEst's parallel kernel did not, so
+        a reported distance no longer changes between identical calls. This is
+        a behaviour *change*, and pinning it is the point."""
+        from quest.core.av import RDAMeanE
+
+        av1, av2 = pair
+        assert RDAMeanE(av1, av2, self.R0) == RDAMeanE(av1, av2, self.R0)
+        assert RDAMeanE(av1, av2, self.R0, seed=1) != RDAMeanE(av1, av2, self.R0, seed=2)
+
+    def test_it_converges_on_the_same_answer_the_old_kernel_gave(self, pair) -> None:
+        """A plain unweighted Monte-Carlo mean over random pairs — what QuEst's
+        deleted `_ran_dist` computed. The clouds are binary, so upstream's
+        weighted mean must reduce to exactly this."""
+        import numpy as np
+
+        from quest.core.av import RDAMean
+
+        av1, av2 = pair
+        rng = np.random.default_rng(20260728)
+        i1 = rng.integers(0, av1.points.shape[0], 200_000)
+        i2 = rng.integers(0, av2.points.shape[0], 200_000)
+        reference = float(
+            np.linalg.norm(av1.points[i1] - av2.points[i2], axis=1).mean()
+        )
+        # Both sides are Monte-Carlo; 0.5 A is comfortably inside the spread of
+        # either at these sample counts and well below the 8 % that separates
+        # genuinely different metrics.
+        assert RDAMean(av1, av2, 200_000) == pytest.approx(reference, abs=0.5)

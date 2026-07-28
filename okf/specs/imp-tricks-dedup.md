@@ -112,7 +112,7 @@ same date.
 | what | upstream | evidence | state |
 |---|---|---|---|
 | `density2points` | `IMP.bff.av._kernels.density2points` | Selects exactly the same voxels on 5×7×9, 8×8×8 and 11×11×11 grids. Theirs is a strict superset: it keeps the per-voxel weight, which QuEst throws away. | **`DUP-02` done 2026-07-28** |
-| `RDAMean`, `RDAMeanE`, `_ran_dist` | `random_distances` + `av_pair_statistics` | Agree within sampling noise on 148l E15/E90: ⟨R_DA⟩ 51.56 vs 51.53 Å, ⟨R_DA⟩_E 51.36 vs 51.53 Å. | `DUP-03` |
+| `RDAMean`, `RDAMeanE`, `_ran_dist` | `random_distances` + `av_pair_statistics` | Agree within sampling noise on 148l E15/E90: ⟨R_DA⟩ 55.164 ± 0.037 vs 55.171 ± 0.032 Å, ⟨R_DA⟩_E 54.467 ± 0.022 vs 54.473 ± 0.029 Å. | **`DUP-03` done 2026-07-28** |
 
 Neither is blocked by anything. `IMP.bff.av._kernels` and
 `IMP.bff.distance_metrics` import and run in `arm64` today.
@@ -137,6 +137,33 @@ Two things had to be fixed before the swap was a swap rather than a regression:
   rather than assumed. Rule for the rest of this migration: **an upstream kernel
   that returns a collection may not return it in the same order**, and that has
   to be verified against every consumer before the swap, not after.
+
+### What `DUP-03` cost: a 5× slowdown, taken knowingly
+
+`RDAMean`/`RDAMeanE` now aggregate `random_distances` + `av_pair_statistics`,
+and `_ran_dist` is gone. The numbers agree inside sampling noise, but upstream
+costs **3.4 ms a call against 0.68 ms**, for two structural reasons that will
+recur elsewhere in this migration:
+
+- QuEst's kernel was `parallel=True`; upstream's is **sequential because it
+  seeds**, and numba's per-thread RNG cannot be seeded reproducibly. Determinism
+  and parallelism are in direct conflict in this kernel, and upstream chose
+  determinism — correctly, for a *reported* distance. QuEst gains reproducibility
+  it did not have.
+- Upstream's signature takes `(N, 4)` weighted points, so a binary QuEst cloud
+  has to be widened first (0.87 ms of the 3.4). The weights are then all ones and
+  the weighted mean reduces to the plain one.
+
+Accepted because this runs **once per simulation** (~0.4 s across a 151-site
+scan). **The general rule this establishes: check where the upstream symbol sits
+in the call graph before adopting it.** The same trade on a per-frame path — the
+FRET rate trace, the trajectory kernels — would be unacceptable, and those are
+exactly what this document proposes moving next.
+
+A second, smaller lesson: `TestTheAdoptedDistanceKernelsBehave` first used
+E15/E90, the pair quoted throughout this document, and errored in the base
+environment. Any test that must pass in both has to pick sites labelable under
+**both** backends, and E15 is not among LabelLib's 43 of 151. It uses E55/E124.
 
 And one that surfaced only by running it: importing `IMP.bff.av._kernels` at
 module scope broke `test_importing_the_domain_does_not_import_qt` and

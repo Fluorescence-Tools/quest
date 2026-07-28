@@ -2,6 +2,29 @@
 
 ## 2026-07-28
 
+* **`DUP-03` done: the RDA sampling is upstream's, and it is 5× slower.**
+  `RDAMean`/`RDAMeanE` now aggregate `IMP.bff.av._kernels.random_distances` +
+  `av_pair_statistics`; `_ran_dist` is deleted. Numbers agree inside sampling
+  noise (⟨R_DA⟩ 55.164 ± 0.037 vs 55.171 ± 0.032 Å on 148l E15/E90), but the
+  call costs **3.4 ms against 0.68 ms**: QuEst's kernel was `parallel=True`
+  while upstream's is sequential *because it seeds*, and numba's per-thread RNG
+  cannot be seeded reproducibly — determinism and parallelism genuinely conflict
+  here. Taken knowingly: this runs once per simulation, ~0.4 s over a 151-site
+  scan, and QuEst **gains reproducibility it did not have** (the old kernel gave
+  a different answer on every call). The rule it establishes: check where an
+  upstream symbol sits in the call graph before adopting it — the same trade on
+  the per-frame FRET rate path would be unacceptable, and that is what the spec
+  proposes moving next.
+* **`dRmp` stays, and index 1 of `av_pair_statistics` is now documented as
+  unreadable.** Upstream returns `r_mp` as a copy of `r_da_mean`; R_mp cannot be
+  recovered from a sample of pair distances at all. QuEst reads indices 0 and 2.
+* **The new tests had to change site to exist in both environments.**
+  `TestTheAdoptedDistanceKernelsBehave` first used E15/E90 — the pair this
+  project's own spec quotes everywhere — and errored under LabelLib, which
+  labels 43 of 148l chain E's 151 CB sites and not that one. Now E55/E124, the
+  widest-separated pair labelable under **both** backends (64.0 Å). Same class
+  of mistake as the `QUENCHED_SITES` re-pick earlier: a number measured under
+  one backend is not a fixture for a suite that runs under two.
 * **`DUP-02` done: `density2points` is upstream's.** QuEst's `_density2points`
   is deleted; `quest.core.av.density2points` is now an adapter over
   `IMP.bff.av._kernels.density2points`. Same voxels on 5×7×9, 8×8×8 and
