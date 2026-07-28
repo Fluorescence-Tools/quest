@@ -58,6 +58,52 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **Phase 2 — the numbers are pinned, and the two suites that had gone two
+  sessions unverified are green.**
+
+  `tests/baselines/{labellib,imp_bff}.json` record what this tree computes: for
+  148l chain E sites 96/139/129 under **each** backend — grid edge, point count,
+  occupied voxels, `x0`, the cloud **centroid** and its per-axis **extent**, then
+  the seeded simulation (QY, τ, collisions, AV and contact volume, photon
+  total), the E55–E124 distance metrics, one FRET run, and coarse-graining on
+  both `148l.pdb` and `mc4r_dimer.cif`. `tests/baselines/generate.py` rebuilds
+  them and clears the numba cache first; `tests/test_baselines.py` asserts.
+
+  **Centroid and extent are separate assertions on purpose.** A cloud shifted
+  half a voxel has the same point count, the same volume and the same bounding
+  box — only the centroid moves. That is the defect phase 3 exists to fix, and
+  a baseline recording only sizes would not have seen it.
+
+  **Seen to fail**, which is the only reason to believe any of it: adding
+  `+ 0.5·dg` to the LabelLib `x0` turns 7 tests red — the three centroid checks,
+  the three simulations and the FRET channel — and leaves every `imp_bff` case
+  and every size check green. That is exactly the blast radius the change should
+  have.
+
+  Two generation bugs were caught by the baselines themselves before they were
+  trusted. **The first run produced identical simulation blocks for both
+  backends** while their accessible volumes differed by 7000 points, which is
+  impossible: `simulate_project` builds its own AV and reads `QUEST_AV_BACKEND`
+  from the environment, ignoring the backend passed to `AV()`. There is now a
+  canary test asserting the two baselines disagree. And `tests/__init__.py` was
+  briefly created so the generator could be imported as a module — that makes
+  `tests/` a package and changes pytest's import mode for every file in it; it
+  is loaded by path instead.
+
+  Recorded because phase 4 will move it: `n_residue_ids_with_more_than_one_cb`
+  is **534** on `mc4r_dimer.cif` — every residue id appears in both chains and
+  `residue_dict` merges them — against **0** on `148l.pdb`.
+
+  | suite | result |
+  |---|---|
+  | browser e2e (Playwright, both servers up) | **26 passed** |
+  | ChiSurf `quenching_estimator` | **1 passed** |
+  | baselines | 28 passed |
+
+  Both italicised rows in [handover.md](handover.md) are now measured. The
+  browser suite ran under `arm64` for the first time — it needed base until
+  phase 1 — and neither had been run since the AV work of 2026-07-27.
+
 * **Phase 1 — one interpreter now runs all four surfaces, and the rule that used
   to be enforced by an interpreter is now enforced by a test.** fastapi,
   uvicorn, python-multipart, pytest-asyncio and httpx installed into `arm64`

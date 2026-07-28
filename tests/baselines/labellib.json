@@ -1,0 +1,154 @@
+{
+  "accessible_volumes": {
+    "E129": {
+      "extent": [
+        8.5,
+        18.0,
+        21.5
+      ],
+      "n_points": 3402,
+      "ng": 86,
+      "occupied_voxels": 3402,
+      "points_centroid": [
+        31.4217,
+        35.0034,
+        26.2366
+      ],
+      "x0": [
+        17.58,
+        38.99,
+        21.535
+      ]
+    },
+    "E139": {
+      "extent": [
+        25.0,
+        31.5,
+        32.0
+      ],
+      "n_points": 35837,
+      "ng": 86,
+      "occupied_voxels": 35837,
+      "points_centroid": [
+        30.9625,
+        53.4086,
+        27.9913
+      ],
+      "x0": [
+        20.862,
+        47.648,
+        30.141
+      ]
+    },
+    "E96": {
+      "extent": [
+        29.0,
+        25.0,
+        32.0
+      ],
+      "n_points": 37859,
+      "ng": 86,
+      "occupied_voxels": 37859,
+      "points_centroid": [
+        -1.0367,
+        24.6678,
+        28.6276
+      ],
+      "x0": [
+        5.736,
+        34.119,
+        27.715
+      ]
+    }
+  },
+  "backend": "labellib",
+  "coarse_graining": {
+    "148l.pdb": {
+      "cb_centroid": [
+        8.2537,
+        45.1658,
+        34.5988
+      ],
+      "chains": [
+        "A",
+        "E",
+        "S"
+      ],
+      "n_atoms": 874,
+      "n_cb": 154,
+      "n_residue_ids_with_more_than_one_cb": 0
+    },
+    "mc4r_dimer.cif": {
+      "cb_centroid": [
+        -1.3997,
+        2.22,
+        1.264
+      ],
+      "chains": [
+        "A",
+        "B"
+      ],
+      "n_atoms": 5704,
+      "n_cb": 1068,
+      "n_residue_ids_with_more_than_one_cb": 534
+    }
+  },
+  "distances": {
+    "pair": [
+      55,
+      124
+    ],
+    "rda_mean": 66.3301,
+    "rda_mean_e": 64.677,
+    "rmp": 64.056
+  },
+  "fret": {
+    "av_volume": 18616.125,
+    "collisions_fraction": 0.0,
+    "contact_to_free_ratio": 0.143699,
+    "contact_volume": 2339.0,
+    "donor_counts_total": 3999.0,
+    "fret_efficiency": 0.47875,
+    "lifetime_donor": 4.117784,
+    "quantum_yield_donor": 1.0,
+    "quantum_yield_fret": 0.52125
+  },
+  "grid_resolution": 0.5,
+  "seed": 5,
+  "simulations": {
+    "E129": {
+      "av_volume": 1991.375,
+      "collisions_fraction": 0.01545,
+      "contact_to_free_ratio": 0.578264,
+      "contact_volume": 729.625,
+      "donor_counts_total": 4000.0,
+      "fret_efficiency": null,
+      "lifetime_donor": 4.069595,
+      "quantum_yield_donor": 0.9655,
+      "quantum_yield_fret": null
+    },
+    "E139": {
+      "av_volume": 9033.25,
+      "collisions_fraction": 0.3143,
+      "contact_to_free_ratio": 0.161851,
+      "contact_volume": 1258.375,
+      "donor_counts_total": 4000.0,
+      "fret_efficiency": null,
+      "lifetime_donor": 3.928294,
+      "quantum_yield_donor": 0.715,
+      "quantum_yield_fret": null
+    },
+    "E96": {
+      "av_volume": 8990.375,
+      "collisions_fraction": 0.9614,
+      "contact_to_free_ratio": 0.442094,
+      "contact_volume": 2756.125,
+      "donor_counts_total": 3999.0,
+      "fret_efficiency": null,
+      "lifetime_donor": 0.752779,
+      "quantum_yield_donor": 0.089,
+      "quantum_yield_fret": null
+    }
+  },
+  "structure": "148l.pdb"
+}
