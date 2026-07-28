@@ -12,10 +12,14 @@ Gaps between the tree and
 unit. Update the row and the totals in the same change that closes it, and say
 so in [okf/log.md](../log.md).
 
-**Status: 9 of 11 closed** (opened 2026-07-26; LAY-02, LAY-03, LAY-05, LAY-08 and
-LAY-09 closed 2026-07-27; LAY-06, LAY-10 and LAY-11 closed 2026-07-27 by the
-AutoForm migration). Open: LAY-04 (`quest.api` is still a re-export shim) and
-LAY-07 (three unrelated long-running mechanisms, none cancelable).
+**Status: 11 of 11 closed** (opened 2026-07-26; LAY-02, LAY-03, LAY-05, LAY-08
+and LAY-09 closed 2026-07-27; LAY-06, LAY-10 and LAY-11 closed 2026-07-27 by the
+AutoForm migration; **LAY-04 and LAY-07 closed 2026-07-28**).
+
+**Still open elsewhere:** LAY-05's ChiSurf half — the `quenching_estimator`
+plugin folder still has no manifest of its own and loads through the host's
+legacy AST discovery. That is phase 10 of
+[programme-2026-07.md](programme-2026-07.md).
 
 | Id | Severity | Status | Gap |
 |---|---|---|---|
@@ -28,7 +32,7 @@ LAY-07 (three unrelated long-running mechanisms, none cancelable).
 | LAY-05 | medium | **closed 2026-07-27** | ~~QuEst declares nothing.~~ `quest/manifest.json` carries the identity, the `gui`/`cli`/`services` entry points and all eleven RPC methods with params/result schemas and `long_running` flags; five tests fail if it and the registry disagree. **Still open elsewhere:** the ChiSurf-side plugin folder has no manifest of its own — `chisurf/plugins/quenching_estimator/` contains only `__init__.py`, `README.md` and `test/`, so it loads through the host's legacy AST-based discovery and declares no entry points, no RPC methods, and no state schema. This is exactly the "one first-class plugin has no manifest at all" case ChiSurf's own plugin spec calls out. |
 | LAY-11 | medium | **closed** (2026-07-27) | **The Qt form drew its own plots.** It built pyqtgraph widgets by hand for the decay, the trajectory and the autocorrelation. Closed with LAY-06, as predicted: the three plots are now `plot` sections in `quest.view.json`, rendered by AutoForm through ChiSurf's `chiplot`, and QuEst supplies only the data (`decay_series`, `trajectory_series`, `autocorrelation_series` on the form model). QuEst owns no plotting code at all. |
 | LAY-06 | medium | **closed** (2026-07-27) | ~~No declarative view spec.~~ The Qt form is `quest/gui/quest.view.json`, **generated** from `quest/settings/parameter_catalog.json` by `quest/gui/generate_view_spec.py` and rendered by ChiSurf's `AutoForm`. Every `.ui` file is gone — `dye_diffusion2.ui`, `pdb_widget.ui`, `ui/*.ui` — and with them the 1,899-line widget, `widgets.py` and the 98 kB generated Qt resource module; `quest/gui/dye_widget.py` is now ~130 lines that put an AutoForm in a QWidget. The form binds to `quest.gui.form_model.ProjectFormModel`, whose state **is** a project dict, so the hand-written `to_project_dict`/`load_project_dict` pair — where the GUI drifted from the CLI before — no longer exists. `quest/gui/autoform_panel.py` remains for rendering a single RPC method's parameters from the manifest. Covered by `tests/test_view_spec.py`, `tests/test_form_model.py`, `tests/test_gui_widget.py` and `tests/test_gui_simulation.py`. |
-| LAY-07 | medium | open | **Long-running work has three mechanisms.** A thread pool in the web backend, a blocking call in the CLI, a `QProgressDialog` in the GUI. None is cancelable from outside; a scan cannot be observed or stopped through any programmatic surface. |
+| LAY-07 | medium | **closed 2026-07-28** | ~~Long-running work has three mechanisms.~~ `quest/tasks.py` owns one: statuses, `progress`, cooperative `should_cancel`, and a `to_dict()` shape all matching `chisurf/server/jobs.py` so a host recognises them — implemented in QuEst, not imported, because a plugin that needs its host to run standalone is not a plugin. `scan_positions` takes a `should_cancel` predicate and a `report_progress` callback (plain callables, so `quest.core` knows nothing about job bookkeeping), `quest.scan` registers a job and returns its `job_id`, and `quest.jobs.list/get/cancel` drive it. **The word was also split:** run artefacts are `quest/runs.py` and `quest.runs.*`; `jobs` now means a running operation, as it does to the host — `quest.jobs.list` would otherwise have handed a ChiSurf caller directories. **Stated limitation:** cancellation is cooperative and a scan's only checkpoint is between sites, so a single `simulate` is effectively atomic — `_simulate_traj` computes a whole trajectory in one `njit` call and a jitted kernel cannot poll a Python flag. `CANCELLING` is a distinct state for exactly that reason. |
 | LAY-08 | low | **closed 2026-07-27** | ~~`sys.path` injection.~~ Every internal import is spelled `quest.lib.…` and `quest/__init__.py` no longer touches `sys.path`. This was not merely cosmetic: `lib.structure.Structure` and `quest.lib.structure.Structure` were **two different classes**, so an `isinstance` check across the boundary failed and a `Structure` got wrapped twice. |
 
 # Deduplication against imp-tricks

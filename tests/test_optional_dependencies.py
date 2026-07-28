@@ -115,7 +115,8 @@ class TestTheDomainImportsWithoutOptionalPackages:
             import quest.core  # noqa: F401
             import quest.api  # noqa: F401
             import quest.project  # noqa: F401
-            import quest.jobs  # noqa: F401
+            import quest.runs  # noqa: F401
+            import quest.tasks  # noqa: F401
             print("ok")
             """
         )

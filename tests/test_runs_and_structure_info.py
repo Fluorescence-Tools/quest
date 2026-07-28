@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from quest import jobs
+from quest import runs
 from quest.structure_info import structure_metadata
 
 STRUCTURE = Path(__file__).parent / "148l.pdb"
@@ -74,31 +74,31 @@ class TestJobListing:
             os.utime(tmp_path / "jobs" / job_id, (time.time() + index, time.time() + index))
             ids.append(job_id)
 
-        page = jobs.list_jobs(tmp_path, limit=2)
+        page = runs.list_runs(tmp_path, limit=2)
         assert page["total"] == 4
-        assert [job["job_id"] for job in page["jobs"]] == ids[::-1][:2]
+        assert [job["job_id"] for job in page["runs"]] == ids[::-1][:2]
 
-        second = jobs.list_jobs(tmp_path, limit=2, offset=2)
-        assert [job["job_id"] for job in second["jobs"]] == ids[::-1][2:]
+        second = runs.list_runs(tmp_path, limit=2, offset=2)
+        assert [job["job_id"] for job in second["runs"]] == ids[::-1][2:]
 
     def test_paging_is_clamped_not_rejected(self, tmp_path: Path) -> None:
-        assert jobs.list_jobs(tmp_path, limit=0)["limit"] == 1
-        assert jobs.list_jobs(tmp_path, limit=10_000)["limit"] == jobs.MAX_JOB_LIST_LIMIT
-        assert jobs.list_jobs(tmp_path, offset=-5)["offset"] == 0
+        assert runs.list_runs(tmp_path, limit=0)["limit"] == 1
+        assert runs.list_runs(tmp_path, limit=10_000)["limit"] == runs.MAX_RUN_LIST_LIMIT
+        assert runs.list_runs(tmp_path, offset=-5)["offset"] == 0
 
     def test_only_uuid_directories_count_as_runs(self, tmp_path: Path) -> None:
         _make_job(tmp_path)
         (tmp_path / "jobs" / "not-a-job").mkdir()
         (tmp_path / "jobs" / "stray.txt").write_text("x", encoding="utf8")
 
-        assert jobs.list_jobs(tmp_path)["total"] == 1
+        assert runs.list_runs(tmp_path)["total"] == 1
 
-    def test_a_missing_jobs_directory_is_empty_not_an_error(self, tmp_path: Path) -> None:
-        assert jobs.list_jobs(tmp_path) == {"jobs": [], "total": 0, "limit": 50, "offset": 0}
+    def test_a_missing_runs_directory_is_empty_not_an_error(self, tmp_path: Path) -> None:
+        assert runs.list_runs(tmp_path) == {"runs": [], "total": 0, "limit": 50, "offset": 0}
 
     def test_the_summary_names_the_labeling_site(self, tmp_path: Path) -> None:
         _make_job(tmp_path, chain="E", residue=132)
-        summary = jobs.list_jobs(tmp_path)["jobs"][0]
+        summary = runs.list_runs(tmp_path)["runs"][0]
         assert summary["labeling_site"] == "E:132"
         assert summary["date"]
         # Summaries only — the project and result stay on disk.
@@ -107,34 +107,34 @@ class TestJobListing:
     def test_an_unfinished_run_says_so(self, tmp_path: Path) -> None:
         job_id = str(uuid.uuid4())
         (tmp_path / "jobs" / job_id).mkdir(parents=True)
-        summary = jobs.list_jobs(tmp_path)["jobs"][0]
+        summary = runs.list_runs(tmp_path)["runs"][0]
         assert summary["labeling_site"] == "No result yet"
 
 
 class TestReadingAndArchiving:
     def test_reads_the_result(self, tmp_path: Path) -> None:
         job_id = _make_job(tmp_path)
-        assert jobs.read_job(job_id, tmp_path)["quantum_yield_donor"] == 0.5
+        assert runs.read_run(job_id, tmp_path)["quantum_yield_donor"] == 0.5
 
     def test_a_non_uuid_is_rejected(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError):
-            jobs.read_job("../etc/passwd", tmp_path)
+            runs.read_run("../etc/passwd", tmp_path)
 
     def test_a_missing_result_is_not_found(self, tmp_path: Path) -> None:
         job_id = _make_job(tmp_path, result=False)
         with pytest.raises(FileNotFoundError):
-            jobs.read_job(job_id, tmp_path)
+            runs.read_run(job_id, tmp_path)
 
     def test_archiving_collects_the_artefacts(self, tmp_path: Path) -> None:
         job_id = _make_job(tmp_path)
-        archive = jobs.archive_job(job_id, tmp_path)
+        archive = runs.archive_run(job_id, tmp_path)
 
         with zipfile.ZipFile(archive) as zipped:
             names = set(zipped.namelist())
         assert {"project.json", "result.json", "decay.csv"} <= names
         # The archive never contains itself, however many times it is built.
         assert archive.name not in names
-        assert jobs.archive_job(job_id, tmp_path) == archive
+        assert runs.archive_run(job_id, tmp_path) == archive
         with zipfile.ZipFile(archive) as zipped:
             assert archive.name not in set(zipped.namelist())
 
@@ -149,24 +149,24 @@ class TestWhereArtefactsGo:
     """
 
     def test_an_explicit_project_dir_still_wins(self, tmp_path: Path) -> None:
-        assert jobs.jobs_directory(tmp_path) == tmp_path / "jobs"
+        assert runs.runs_directory(tmp_path) == tmp_path / "jobs"
 
     def test_without_a_project_dir_it_is_the_user_root_not_cwd(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.chdir(tmp_path)
-        monkeypatch.delenv(jobs.QUEST_JOBS_DIR_ENV, raising=False)
-        resolved = jobs.jobs_directory()
+        monkeypatch.delenv(runs.QUEST_RUNS_DIR_ENV, raising=False)
+        resolved = runs.runs_directory()
 
-        assert resolved == jobs.user_jobs_directory()
+        assert resolved == runs.user_runs_directory()
         assert Path(tmp_path) not in resolved.parents
         assert resolved != tmp_path / "jobs"
 
     def test_the_env_override_redirects_the_user_root(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv(jobs.QUEST_JOBS_DIR_ENV, str(tmp_path / "elsewhere"))
-        assert jobs.jobs_directory() == tmp_path / "elsewhere"
+        monkeypatch.setenv(runs.QUEST_RUNS_DIR_ENV, str(tmp_path / "elsewhere"))
+        assert runs.runs_directory() == tmp_path / "elsewhere"
 
     def test_simulate_project_does_not_write_by_default(self, tmp_path: Path) -> None:
         import inspect
@@ -181,7 +181,7 @@ class TestPurgingRuns:
     def test_it_reports_without_deleting_by_default(self, tmp_path: Path) -> None:
         job_id = _make_job(tmp_path)
 
-        report = jobs.purge_jobs(tmp_path)
+        report = runs.purge_runs(tmp_path)
 
         assert report["dry_run"] is True
         assert report["removed"] == [job_id]
@@ -191,7 +191,7 @@ class TestPurgingRuns:
     def test_it_deletes_when_asked(self, tmp_path: Path) -> None:
         job_id = _make_job(tmp_path)
 
-        report = jobs.purge_jobs(tmp_path, dry_run=False)
+        report = runs.purge_runs(tmp_path, dry_run=False)
 
         assert report["count"] == 1
         assert not (tmp_path / "jobs" / job_id).exists()
@@ -201,7 +201,7 @@ class TestPurgingRuns:
         stray = tmp_path / "jobs" / "notes.txt"
         stray.write_text("mine", encoding="utf8")
 
-        report = jobs.purge_jobs(tmp_path, dry_run=False)
+        report = runs.purge_runs(tmp_path, dry_run=False)
 
         assert report["count"] == 0
         assert stray.exists()
@@ -209,10 +209,10 @@ class TestPurgingRuns:
     def test_an_age_filter_spares_recent_runs(self, tmp_path: Path) -> None:
         job_id = _make_job(tmp_path)
 
-        report = jobs.purge_jobs(tmp_path, older_than_days=1.0, dry_run=False)
+        report = runs.purge_runs(tmp_path, older_than_days=1.0, dry_run=False)
 
         assert report["count"] == 0
         assert (tmp_path / "jobs" / job_id).is_dir()
 
     def test_a_missing_directory_is_not_an_error(self, tmp_path: Path) -> None:
-        assert jobs.purge_jobs(tmp_path / "nothing-here")["count"] == 0
+        assert runs.purge_runs(tmp_path / "nothing-here")["count"] == 0

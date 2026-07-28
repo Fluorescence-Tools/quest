@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from webui.backend.app import main as backend_main
 from webui.backend.app.main import app
-from quest import jobs as quest_jobs
+from quest import runs as quest_runs
 from quest.core import DecaySimulationResult
 
 AAS = [
@@ -217,7 +217,7 @@ def test_scan_uses_adapter(monkeypatch, tmp_path: Path) -> None:
 
 def test_download_zip_includes_mrc_outputs(monkeypatch, tmp_path: Path) -> None:
     client = TestClient(app)
-    monkeypatch.setenv(quest_jobs.QUEST_JOBS_DIR_ENV, str(tmp_path / "jobs"))
+    monkeypatch.setenv(quest_runs.QUEST_RUNS_DIR_ENV, str(tmp_path / "jobs"))
     job_id = str(uuid.uuid4())
     job_dir = tmp_path / "jobs" / job_id
     job_dir.mkdir(parents=True)
@@ -237,9 +237,9 @@ def test_download_zip_includes_mrc_outputs(monkeypatch, tmp_path: Path) -> None:
         assert "quenching_rates.mrc" in archive.namelist()
 
 
-def test_list_jobs_uses_project_sidecar(monkeypatch, tmp_path: Path) -> None:
+def test_list_runs_uses_project_sidecar(monkeypatch, tmp_path: Path) -> None:
     client = TestClient(app)
-    monkeypatch.setenv(quest_jobs.QUEST_JOBS_DIR_ENV, str(tmp_path / "jobs"))
+    monkeypatch.setenv(quest_runs.QUEST_RUNS_DIR_ENV, str(tmp_path / "jobs"))
     job_id = str(uuid.uuid4())
     job_dir = tmp_path / "jobs" / job_id
     job_dir.mkdir(parents=True)
@@ -254,15 +254,15 @@ def test_list_jobs_uses_project_sidecar(monkeypatch, tmp_path: Path) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["total"] == 1
-    assert payload["jobs"][0]["job_id"] == job_id
-    assert payload["jobs"][0]["labeling_site"] == "A:42"
+    assert payload["runs"][0]["job_id"] == job_id
+    assert payload["runs"][0]["labeling_site"] == "A:42"
     # The list is a summary: the full project stays behind /api/jobs/{id}.
-    assert "project" not in payload["jobs"][0]
+    assert "project" not in payload["runs"][0]
 
 
-def test_list_jobs_does_not_parse_result_without_sidecar(monkeypatch, tmp_path: Path) -> None:
+def test_list_runs_does_not_parse_result_without_sidecar(monkeypatch, tmp_path: Path) -> None:
     client = TestClient(app)
-    monkeypatch.setenv(quest_jobs.QUEST_JOBS_DIR_ENV, str(tmp_path / "jobs"))
+    monkeypatch.setenv(quest_runs.QUEST_RUNS_DIR_ENV, str(tmp_path / "jobs"))
     job_id = str(uuid.uuid4())
     job_dir = tmp_path / "jobs" / job_id
     job_dir.mkdir(parents=True)
@@ -272,14 +272,14 @@ def test_list_jobs_does_not_parse_result_without_sidecar(monkeypatch, tmp_path: 
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["jobs"][0]["job_id"] == job_id
-    assert payload["jobs"][0]["labeling_site"] == "Unknown"
+    assert payload["runs"][0]["job_id"] == job_id
+    assert payload["runs"][0]["labeling_site"] == "Unknown"
 
 
-def test_list_jobs_is_paginated_newest_first(monkeypatch, tmp_path: Path) -> None:
+def test_list_runs_is_paginated_newest_first(monkeypatch, tmp_path: Path) -> None:
     """The picker must not grow without bound as runs accumulate."""
     client = TestClient(app)
-    monkeypatch.setenv(quest_jobs.QUEST_JOBS_DIR_ENV, str(tmp_path / "jobs"))
+    monkeypatch.setenv(quest_runs.QUEST_RUNS_DIR_ENV, str(tmp_path / "jobs"))
 
     job_ids = []
     for index in range(5):
@@ -295,27 +295,27 @@ def test_list_jobs_is_paginated_newest_first(monkeypatch, tmp_path: Path) -> Non
     payload = client.get("/api/jobs", params={"limit": 2}).json()
     assert payload["total"] == 5
     assert payload["limit"] == 2
-    assert [job["job_id"] for job in payload["jobs"]] == job_ids[::-1][:2]
+    assert [job["job_id"] for job in payload["runs"]] == job_ids[::-1][:2]
 
     second_page = client.get("/api/jobs", params={"limit": 2, "offset": 2}).json()
-    assert [job["job_id"] for job in second_page["jobs"]] == job_ids[::-1][2:4]
+    assert [job["job_id"] for job in second_page["runs"]] == job_ids[::-1][2:4]
 
     # Out-of-range limits are clamped rather than rejected.
     assert client.get("/api/jobs", params={"limit": 0}).json()["limit"] == 1
     assert (
         client.get("/api/jobs", params={"limit": 10_000}).json()["limit"]
-        == quest_jobs.MAX_JOB_LIST_LIMIT
+        == quest_runs.MAX_RUN_LIST_LIMIT
     )
 
 
-def test_list_jobs_ignores_non_uuid_directories(monkeypatch, tmp_path: Path) -> None:
+def test_list_runs_ignores_non_uuid_directories(monkeypatch, tmp_path: Path) -> None:
     client = TestClient(app)
-    monkeypatch.setenv(quest_jobs.QUEST_JOBS_DIR_ENV, str(tmp_path / "jobs"))
+    monkeypatch.setenv(quest_runs.QUEST_RUNS_DIR_ENV, str(tmp_path / "jobs"))
     (tmp_path / "jobs" / "not-a-job").mkdir(parents=True)
     (tmp_path / "jobs" / "stray.txt").write_text("x", encoding="utf8")
 
     payload = client.get("/api/jobs").json()
-    assert payload["jobs"] == []
+    assert payload["runs"] == []
     assert payload["total"] == 0
 
 

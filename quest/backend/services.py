@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
-from .. import jobs, settings
+from .. import runs, settings
 from .contract import register_payload_converter, service_error, to_payload
 from .dispatcher import InProcessClient, ServiceDispatcher, fail, ok
 
@@ -41,8 +41,11 @@ METHODS: dict[str, str] = {
     "quest.dyes.save": "Add or replace a dye preset.",
     "quest.quenching_defaults": "Return the residue-type PET chemistry defaults.",
     "quest.structure.metadata": "Return the chains, residues and atoms of a structure file.",
-    "quest.jobs.list": "Return job summaries, newest first.",
-    "quest.jobs.get": "Return a finished run's result.",
+    "quest.runs.list": "Return run-artefact summaries, newest first.",
+    "quest.runs.get": "Return a finished run's result.",
+    "quest.jobs.list": "Return the running and recent operations.",
+    "quest.jobs.get": "Return one operation's status and progress.",
+    "quest.jobs.cancel": "Ask a running operation to stop at its next checkpoint.",
     "quest.contract.describe": "Return the contract: methods, schemas, error codes and where serialization happens.",
 }
 
@@ -163,25 +166,50 @@ def scan_handler(
 ) -> dict[str, Any]:
     """Simulate every position and return the records.
 
-    Blocking and sequential: a caller that needs progress or cancellation drives
-    :func:`quest.scan.scan_positions` itself. Making long-running work uniform
-    across the surfaces is tracked as ``LAY-07``.
+    Blocking, but **observable and cancelable**: it registers a job with
+    :mod:`quest.tasks`, reports progress per site, and stops at the next site
+    boundary when `quest.jobs.cancel` is called on the returned ``job_id``. That
+    is one mechanism rather than the three ``LAY-07`` recorded.
+
+    A cancelled scan returns the sites it *did* complete rather than failing:
+    the caller asked to stop, and partial results are the point of stopping.
     """
 
     from ..scan import scan_positions
+    from ..tasks import default_manager
+
+    manager = default_manager()
+    job = manager.create("quest.scan", {"n_positions": len(positions)})
+    manager.start(job.job_id)
 
     start, stop = tac_range
-    records = list(
-        scan_positions(
-            project,
-            positions,
-            pdb_path=pdb_path,
-            nbins=nbins,
-            tac_range=(float(start), float(stop)),
-            project_dir=Path(project_dir) if project_dir else None,
+    try:
+        records = list(
+            scan_positions(
+                project,
+                positions,
+                pdb_path=pdb_path,
+                nbins=nbins,
+                tac_range=(float(start), float(stop)),
+                project_dir=Path(project_dir) if project_dir else None,
+                should_cancel=manager.canceller(job.job_id),
+                report_progress=manager.reporter(job.job_id),
+            )
         )
+    except Exception as exc:
+        from .contract import error_code_for
+
+        manager.fail(job.job_id, str(exc), error_code_for(exc))
+        return service_error(str(exc), error_code_for(exc), type(exc).__name__)
+
+    manager.finish(job.job_id)
+    return ok(
+        {
+            "job_id": job.job_id,
+            "cancelled": manager.get(job.job_id).status.value == "cancelled",
+            "results": {record["name"]: record for record in records},
+        }
     )
-    return ok({"results": {record["name"]: record for record in records}})
 
 
 def locales_handler(locale: str | None = None) -> dict[str, Any]:
@@ -253,19 +281,54 @@ def structure_metadata_handler(pdb_path: str) -> dict[str, Any]:
     return ok(metadata)
 
 
-def jobs_list_handler(
+def runs_list_handler(
     project_dir: Optional[str] = None,
-    limit: int = jobs.DEFAULT_JOB_LIST_LIMIT,
+    limit: int = runs.DEFAULT_RUN_LIST_LIMIT,
     offset: int = 0,
 ) -> dict[str, Any]:
-    return ok(jobs.list_jobs(project_dir, limit=limit, offset=offset))
+    return ok(runs.list_runs(project_dir, limit=limit, offset=offset))
 
 
-def jobs_get_handler(job_id: str, project_dir: Optional[str] = None) -> dict[str, Any]:
+def runs_get_handler(job_id: str, project_dir: Optional[str] = None) -> dict[str, Any]:
     try:
-        return ok(jobs.read_job(job_id, project_dir))
+        return ok(runs.read_run(job_id, project_dir))
     except (ValueError, FileNotFoundError) as exc:
         return fail(str(exc))
+
+
+def jobs_list_handler() -> dict[str, Any]:
+    """Running and recent operations -- **not** run artefacts.
+
+    `quest.runs.list` is the directories on disk. Those were both called "jobs"
+    until 2026-07-28, so a host asking for its running tasks got directories.
+    """
+    from ..tasks import default_manager
+
+    return ok({"jobs": default_manager().list()})
+
+
+def jobs_get_handler(job_id: str) -> dict[str, Any]:
+    from ..tasks import default_manager
+
+    job = default_manager().get(job_id)
+    if job is None:
+        return service_error(f"No such job: {job_id}", "operation_failed")
+    return ok(job.to_dict())
+
+
+def jobs_cancel_handler(job_id: str) -> dict[str, Any]:
+    """Ask a job to stop.
+
+    Cooperative: this sets a flag and returns. A running job moves to
+    `cancelling` and stays there until its worker reaches a checkpoint -- for a
+    scan, the boundary between two sites; for a single simulation, effectively
+    the end, since `_simulate_traj` computes a whole trajectory inside one
+    `njit` call and a jitted kernel cannot poll a Python flag.
+    """
+    from ..tasks import default_manager
+
+    accepted = default_manager().cancel(job_id)
+    return ok({"job_id": job_id, "cancel_requested": accepted})
 
 
 def contract_describe_handler() -> dict[str, Any]:
@@ -309,8 +372,11 @@ def register_services(dispatcher: Any) -> None:
     dispatcher.register(
         "quest.structure.metadata", lambda p: structure_metadata_handler(**(p or {}))
     )
-    dispatcher.register("quest.jobs.list", lambda p: jobs_list_handler(**(p or {})))
+    dispatcher.register("quest.runs.list", lambda p: runs_list_handler(**(p or {})))
+    dispatcher.register("quest.runs.get", lambda p: runs_get_handler(**(p or {})))
+    dispatcher.register("quest.jobs.list", lambda p: jobs_list_handler())
     dispatcher.register("quest.jobs.get", lambda p: jobs_get_handler(**(p or {})))
+    dispatcher.register("quest.jobs.cancel", lambda p: jobs_cancel_handler(**(p or {})))
     dispatcher.register("quest.contract.describe", lambda p: contract_describe_handler())
 
 

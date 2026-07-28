@@ -177,9 +177,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const res = await fetchApi("/api/jobs");
       if (!res.ok) return;
       const data = await res.json();
-      // The endpoint returns {jobs, total, ...}; older builds returned a bare
+      // The endpoint returns {runs, total, ...} since 2026-07-28 -- "job"
+      // now means a *running* operation, matching the host. Older builds
+      // returned {jobs, ...} or a bare
       // array, so accept both.
-      setJobs(Array.isArray(data) ? data : data.jobs ?? []);
+      setJobs(Array.isArray(data) ? data : data.runs ?? data.jobs ?? []);
       if (!Array.isArray(data) && typeof data.total === "number") {
         setJobsTotal(data.total);
       }

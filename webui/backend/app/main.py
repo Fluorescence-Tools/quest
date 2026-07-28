@@ -66,7 +66,7 @@ from quest import settings as quest_settings
 from quest.backend import RemoteError, to_payload
 
 from quest.backend.services import locales_handler, structure_metadata_handler
-from quest import jobs as quest_jobs
+from quest import runs as quest_runs
 from quest.structure_fetch import resolve_structure_path
 
 #: `error_code` -> HTTP status. A malformed project is the caller's fault; a
@@ -102,7 +102,7 @@ UPLOAD_DIR = DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # Run artefacts do **not** live under the repository root. They go to the
-# per-user artefact root that `quest.jobs` owns, which is also what the job
+# per-user artefact root that `quest.runs` owns, which is also what the run
 # routes read -- so a run list no longer depends on where uvicorn was started.
 # The settings files are package data, resolved by `quest.settings` itself.
 
@@ -359,17 +359,17 @@ async def scan(
 
 
 @app.get("/api/jobs")
-async def list_jobs(
-    limit: int = quest_jobs.DEFAULT_JOB_LIST_LIMIT, offset: int = 0
+async def list_runs(
+    limit: int = quest_runs.DEFAULT_RUN_LIST_LIMIT, offset: int = 0
 ) -> dict[str, Any]:
     """Return the most recent job summaries, newest first."""
-    return quest_jobs.list_jobs(None, limit=limit, offset=offset)
+    return quest_runs.list_runs(None, limit=limit, offset=offset)
 
 
 @app.get("/api/jobs/{job_id}")
 async def get_job(job_id: str) -> dict[str, Any]:
     try:
-        return quest_jobs.read_job(job_id, None)
+        return quest_runs.read_run(job_id, None)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
@@ -393,7 +393,7 @@ async def save_dye(dye: dict[str, Any]):
 @app.get("/api/jobs/{job_id}/download")
 async def download_job_zip(job_id: str):
     try:
-        zip_path = quest_jobs.archive_job(job_id, None)
+        zip_path = quest_runs.archive_run(job_id, None)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:

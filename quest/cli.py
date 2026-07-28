@@ -446,11 +446,15 @@ def scan(
 
 
 @cli.group()
-def jobs() -> None:
-    """Inspect and tidy the run artefacts a simulation leaves behind."""
+def runs() -> None:
+    """Inspect and tidy the run artefacts a simulation leaves behind.
+
+    Named `runs`, not `jobs`: a *job* is a running operation (quest.jobs.*),
+    and the two meant the same word until 2026-07-28.
+    """
 
 
-@jobs.command("clean")
+@runs.command("clean")
 @click.option(
     "--project-dir",
     type=click.Path(file_okay=False, path_type=Path),
@@ -471,12 +475,12 @@ def jobs() -> None:
     default=False,
     help="Actually delete. Without it this only reports what would go.",
 )
-def jobs_clean(project_dir: Path | None, older_than_days: float | None, confirmed: bool) -> None:
+def runs_clean(project_dir: Path | None, older_than_days: float | None, confirmed: bool) -> None:
     """Delete run directories. Reports without deleting unless --yes is given."""
 
-    from .jobs import purge_jobs
+    from .runs import purge_runs
 
-    report = purge_jobs(
+    report = purge_runs(
         project_dir, older_than_days=older_than_days, dry_run=not confirmed
     )
     megabytes = report["bytes"] / (1024 * 1024)

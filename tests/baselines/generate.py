@@ -283,5 +283,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    os.environ.setdefault("QUEST_JOBS_DIR", "/tmp/quest-baseline-jobs")
+    os.environ.setdefault("QUEST_RUNS_DIR", "/tmp/quest-baseline-jobs")
     raise SystemExit(main())

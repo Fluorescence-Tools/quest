@@ -64,7 +64,7 @@ pytestmark = pytest.mark.skipif(not BACKENDS, reason="no accessible-volume backe
 
 @pytest.fixture(autouse=True)
 def _isolate_artefacts(tmp_path, monkeypatch):
-    monkeypatch.setenv("QUEST_JOBS_DIR", str(tmp_path / "jobs"))
+    monkeypatch.setenv("QUEST_RUNS_DIR", str(tmp_path / "jobs"))
 
 
 @pytest.mark.parametrize("backend", BACKENDS)

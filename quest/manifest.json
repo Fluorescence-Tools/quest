@@ -242,7 +242,7 @@
         }
       },
       "long_running": true,
-      "cancelable": false
+      "cancelable": true
     },
     {
       "name": "quest.parameter_catalog",
@@ -369,8 +369,8 @@
       "cancelable": false
     },
     {
-      "name": "quest.jobs.list",
-      "summary": "Return job summaries, newest first.",
+      "name": "quest.runs.list",
+      "summary": "Return run-artefact summaries, newest first.",
       "params_schema": {
         "type": "object",
         "properties": {
@@ -411,7 +411,7 @@
       "cancelable": false
     },
     {
-      "name": "quest.jobs.get",
+      "name": "quest.runs.get",
       "summary": "Return a finished run's result.",
       "params_schema": {
         "type": "object",
@@ -463,6 +463,60 @@
       "params_schema": {
         "type": "object",
         "properties": {}
+      },
+      "result_schema": {
+        "type": "object"
+      },
+      "long_running": false,
+      "cancelable": false
+    },
+    {
+      "name": "quest.jobs.list",
+      "summary": "Return the running and recent operations.",
+      "params_schema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "result_schema": {
+        "type": "object"
+      },
+      "long_running": false,
+      "cancelable": false
+    },
+    {
+      "name": "quest.jobs.get",
+      "summary": "Return one operation's status and progress.",
+      "params_schema": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ]
+      },
+      "result_schema": {
+        "type": "object"
+      },
+      "long_running": false,
+      "cancelable": false
+    },
+    {
+      "name": "quest.jobs.cancel",
+      "summary": "Ask a running operation to stop at its next checkpoint.",
+      "params_schema": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ]
       },
       "result_schema": {
         "type": "object"

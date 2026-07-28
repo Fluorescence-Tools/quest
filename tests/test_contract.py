@@ -55,7 +55,7 @@ def _project(residue: int = 96) -> dict[str, Any]:
 
 @pytest.fixture(autouse=True)
 def _isolate_artefacts(tmp_path, monkeypatch):
-    monkeypatch.setenv("QUEST_JOBS_DIR", str(tmp_path / "jobs"))
+    monkeypatch.setenv("QUEST_RUNS_DIR", str(tmp_path / "jobs"))
 
 
 class TestTheDescriptorMatchesTheManifest:

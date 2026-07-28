@@ -15,7 +15,7 @@ because those are transport concerns; what a site *is* and what a result
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Iterator, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, Callable, Iterator, Mapping, MutableMapping, Optional, Tuple
 
 __all__ = [
     "SITE_AV_PARAMETER_KEYS",
@@ -177,15 +177,34 @@ def scan_positions(
     nbins: Optional[int] = None,
     tac_range: Tuple[float, float] = (0.0, 50.0),
     project_dir: Optional[Path | str] = None,
+    should_cancel: Optional[Callable[[], bool]] = None,
+    report_progress: Optional[Callable[..., Any]] = None,
 ) -> Iterator[dict[str, Any]]:
     """Yield one record per entry in *positions*, in order.
 
     Sequential by design: callers that want concurrency own the pool, because
     how many sites run at once depends on the transport (see the web backend's
     ``SCAN_WORKERS``, kept small because the AV kernel holds the GIL).
+
+    Parameters
+    ----------
+    should_cancel : callable, optional
+        Polled **between sites**. Returning true stops the scan; sites already
+        yielded stand. This is the only checkpoint a scan has, and it is a real
+        one: a site takes seconds, so a cancel lands within one.
+
+        A plain predicate rather than a job or a manager, so `quest.core` knows
+        nothing about job bookkeeping and a caller with its own cancellation
+        source -- a host, a Qt dialog -- can pass its own
+        (okf/subsystems/tasks.md).
+    report_progress : callable, optional
+        Called as ``report_progress(percent, message)`` after each site.
     """
 
-    for name, position in positions.items():
+    total = max(1, len(positions))
+    for index, (name, position) in enumerate(positions.items()):
+        if should_cancel is not None and should_cancel():
+            return
         yield simulate_site(
             project,
             position,
@@ -195,3 +214,5 @@ def scan_positions(
             tac_range=tac_range,
             project_dir=project_dir,
         )
+        if report_progress is not None:
+            report_progress(int(100 * (index + 1) / total), name)

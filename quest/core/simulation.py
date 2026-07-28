@@ -983,7 +983,7 @@ def simulate_project(
         2026-07-28. The surfaces whose users asked for a run record (the CLI,
         the web backend) pass ``save_outputs=True`` explicitly; nothing else
         should. When it *is* true and no ``project_dir`` is given, the run goes
-        to :func:`quest.jobs.user_jobs_directory`, never the working directory.
+        to :func:`quest.runs.user_runs_directory`, never the working directory.
     render_data:
         Build the thinned trajectory, autocorrelation and point clouds that a
         plot or a 3D viewer needs. Defaults to ``True``.
@@ -1035,14 +1035,14 @@ def simulate_project(
         if tac_range == (0.0, 50.0) and not project_has_tac_range:
             tac_range = (0.0, float(dt_tac) * float(n_tac))
 
-    # Generate a unique job folder. `jobs_directory` decides *where*: under an
+    # Generate a unique job folder. `runs_directory` decides *where*: under an
     # explicit `project_dir`, else the per-user artefact root -- never `cwd`.
     import uuid
 
-    from quest.jobs import jobs_directory
+    from quest.runs import runs_directory
 
     job_name = str(uuid.uuid4())
-    job_dir = jobs_directory(project_dir) / job_name
+    job_dir = runs_directory(project_dir) / job_name
     if save_outputs:
         job_dir.mkdir(parents=True, exist_ok=True)
 

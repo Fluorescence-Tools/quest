@@ -58,6 +58,47 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **Phase 9 — one mechanism for long-running work, and "job" stopped meaning
+  two things. `LAY-07` closes, and with it the whole `LAY-*` table.**
+
+  `quest/tasks.py` owns the mechanism: the status vocabulary, `progress`,
+  cooperative `should_cancel` and the `to_dict()` shape all match
+  `chisurf/server/jobs.py`, so the host recognises what QuEst reports —
+  **implemented here, not imported**, because a plugin that needs its host in
+  order to run standalone is not a plugin.
+
+  **The vocabulary was split, and it had to be.** `quest/jobs.py` was finished
+  artefact *directories*; a host's `jobs` are *running tasks*. `quest.jobs.list`
+  would have handed a ChiSurf caller directories when it asked for its running
+  work. Artefacts are now `quest/runs.py`, `quest.runs.*`, `quest runs clean`
+  and a `runs` key in the listing payload; `jobs` means a running operation.
+  The frontend takes `data.runs ?? data.jobs ?? []`, so the browser contract
+  survives the rename.
+
+  **The domain takes plain callables**, not a job or a manager: `scan_positions`
+  grew `should_cancel` and `report_progress`. That keeps `quest.core` free of
+  job bookkeeping and lets a caller with its own cancellation source — a host, a
+  Qt dialog — pass its own.
+
+  **Cancellation is cooperative, and the limitation is documented rather than
+  hidden.** A scan's only checkpoint is between sites, so a cancel lands within
+  one site; a single `simulate` is effectively atomic, because `_simulate_traj`
+  computes a whole trajectory inside one `njit` call and a jitted kernel cannot
+  poll a Python flag. `CANCELLING` is a distinct state from `CANCELLED` for
+  exactly that reason — between the request and the worker noticing, the job is
+  still running and may still be touching shared state. A cancel button that
+  implies more than it delivers is worse than none.
+
+  A cancelled scan returns the sites it *did* complete rather than failing, and
+  a worker that returns after observing cancellation is marked `cancelled`, not
+  `completed` — its result is partial, and saying otherwise would be a lie a
+  caller cannot detect.
+
+  **Seen to fail**: replacing the checkpoint with `pass` turns the two
+  "actually stops" tests red while the other 21 stay green. Those two run the
+  real `scan_positions`, because a cancel flag nothing polls still reports
+  success.
+
 * **Phase 8 — `quest.api` is a facade, and serialization left the handlers.
   `LAY-04` closes.**
 
