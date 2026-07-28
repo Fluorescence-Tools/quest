@@ -10,10 +10,13 @@ timestamp: '2026-07-28T18:00:00Z'
 # Read this, then [`specs/programme-2026-07.md`](specs/programme-2026-07.md), then [`log.md`](log.md)
 
 **Everything is committed and clean; nothing is pushed.** A thirteen-phase
-programme was agreed by interview on 2026-07-28 and **phases 0–11 are done**
-(fifteen commits in `quest`, two in `imp-tricks`, one in `chisurf`). **Every
-`LAY-*` row is closed, on both sides.** What remains is publication — which
-needs credentials — and the closeout. The decisions behind it — and
+programme was agreed by interview on 2026-07-28 and **twelve of its thirteen
+phases are done** (seventeen commits in `quest`, two in `imp-tricks`, one in
+`chisurf`). **Every `LAY-*` row is closed, on both sides, and
+`known-issues.md` has no open entry left.**
+
+**Only phase 12 remains, and it needs credentials**: publishing imp-tricks is
+what turns CI green, and nothing else is waiting on it. The decisions behind it — and
 the three places they *reverse* what this bundle used to assert — are in
 [specs/programme-2026-07.md](specs/programme-2026-07.md). Read that before
 proposing work in these areas; several "obvious" next steps there have already
@@ -30,6 +33,7 @@ everything ([workflows/environment.md](workflows/environment.md)).
 | notebooks + examples (`-m notebooks`) | **16 passed, 2 skipped** |
 | browser e2e (Playwright, both servers up) | **26 passed** |
 | ChiSurf `quenching_estimator` | **14 passed** |
+| notebooks + examples (`-m notebooks`, cold cache) | **16 passed** |
 | imp-tricks `tests/bff` | **201 passed, 24 skipped, 5 failed** — the 5 predate all of this |
 
 Nothing in that table is stale: every row was measured on 2026-07-28.
@@ -54,6 +58,7 @@ residue identity were both wrong, on both backends.
 | 9 | `82b75d4`, `8218c22` | **One mechanism for long-running work**, cooperatively cancelable; `jobs` (running) split from `runs` (artefacts). Closes `LAY-07` |
 | 10 | chisurf `669fce499` | **The plugin declares itself**: manifest, `api`/`rpc`/`cli`/`gui`, no `core/`, a dockable widget, and no `quest` import at ChiSurf startup. Closes `LAY-05`'s ChiSurf half |
 | 11 | `0dd0ac5` | i18n gets an end condition: frontend keys must resolve, and the 90-string chrome backlog is a ratchet |
+| 13 | `a78709a` | `known-issues.md` pruned 358 → 263 lines; every entry closed, two that asserted the opposite of the truth inverted |
 
 # Left: phases 12 and 13
 
@@ -68,10 +73,9 @@ residue identity were both wrong, on both backends.
    Publication is what turns CI green — the `*` constraint makes all four jobs
    red today, deliberately.
 
-2. **Phase 13 — OKF closeout**: prune the superseded entries in
-   [references/known-issues.md](references/known-issues.md) (several now carry a
-   "fixed" preamble in front of an obsolete original), and rewrite this file
-   once 10 and 12 land.
+2. **Phase 13 — the last of the closeout**: rewrite this file once 12 lands.
+   The prune of [references/known-issues.md](references/known-issues.md) is
+   done (`a78709a`).
 
 # Still open, needing a decision
 
