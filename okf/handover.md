@@ -73,8 +73,11 @@ residue identity were both wrong, on both backends.
    empty — QuEst is the core. **`quest/gui/` stays in QuEst.** Closes the
    ChiSurf half of `LAY-05`.
 
-2. **Phase 12 — publish imp-tricks 0.2.0** to anaconda.org (`tpeulen`, noarch)
-   **and** PyPI; then pin `imp-tricks >=0.2.0` in `pixi.toml` and the recipe.
+2. **Phase 12 — publish imp-tricks** to anaconda.org (`tpeulen`, noarch)
+   **and** PyPI. **Decide the version at release time**: it is unreleased, so a
+   bump per change distinguishes nothing and spends a number early. Once there
+   is a published version, pin it in `pixi.toml` and the recipe in place of the
+   current `*`.
    **This needs credentials and is the one phase that cannot be done
    unattended.** The recipe is written
    (`~/dev/imp-tricks/rattler-recipe/recipe.yaml`) and the version is bumped.

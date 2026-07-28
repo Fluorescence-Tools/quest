@@ -631,7 +631,7 @@ def dRmp(av1, av2):
     Measured on 148l E15/E90: 47.65 A against 51.53 A, 8 % apart.
 
     QuEst's implementation was contributed to imp-tricks as
-    `IMP.bff.distance_metrics.mean_position_distance` (0.2.0), and slot 1 of
+    `IMP.bff.distance_metrics.mean_position_distance`, and slot 1 of
     `av_pair_statistics` is now **NaN** so that reading it fails loudly rather
     than silently returning a different quantity. This delegates.
     """
@@ -693,7 +693,7 @@ def subav(density, ng, dg, slow_radius, rs, r0):
     * upstream placed the slow centres with the **float corner** and `int()`
       truncation -- the same two registration defects QuEst had just been fixed
       for -- so adopting it as written would have reintroduced both. Fixed
-      upstream first (imp-tricks 0.2.0), and its `r0` is now documented as the
+      upstream first (imp-tricks `3dbefc8`), and its `r0` is now documented as the
       grid *anchor* rather than "grid origin (attachment-site coordinates)",
       which was ambiguous between three different points;
     * it returned `float64` masks, which at `ng = 92` is 12.5 MB per site

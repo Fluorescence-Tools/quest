@@ -166,7 +166,7 @@
 * **Phases 6 and 7 — the dedup rows close, and adopting a kernel meant fixing
   it upstream first. Again.**
 
-  **In imp-tricks** (`3dbefc8`, version **0.2.0**, plus a rattler recipe —
+  **In imp-tricks** (`3dbefc8`, plus a rattler recipe —
   `noarch: python`, since there are no compiled sources there):
 
   - **`av_pair_statistics` stopped returning ⟨R_DA⟩ under the name `R_mp`.**
