@@ -101,4 +101,52 @@ def _import_chisurf_first() -> None:
         pass
 
 
+#: Loader variables ChiSurf exports that must not reach a child process.
+#:
+#: Importing ChiSurf sets ``DYLD_LIBRARY_PATH=<mambaforge>/lib`` -- the *base*
+#: prefix -- into ``os.environ``. In-process that is inert, because dyld reads it
+#: once at exec; but every subprocess inherits it, and an ``arm64`` child then
+#: resolves ``libboost_filesystem.dylib`` against base's copy, so ``import IMP``
+#: dies with ``Symbol not found: ..._ZN5boost10filesystem...filename_v3E``.
+#:
+#: That is the whole of the long-standing "`pytest -m notebooks` fails as one
+#: selection" issue. It was written up as base-versus-arm64 skew and as an
+#: ordering effect between the two test files; it is neither. Measured
+#: 2026-07-28: `tests/test_examples.py tests/test_notebooks.py` together give
+#: **16 passed**, adding *any* other module gives 16 passed, and adding
+#: `tests/test_chisurf_autoform.py` -- the one that calls `autoform_available()`
+#: at import -- gives **6 failed, 10 passed**. Unsetting the variable restores 16.
+_LEAKED_LOADER_VARS = ("DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH")
+
+
+def _drop_foreign_loader_paths() -> None:
+    """Remove loader paths that point outside this interpreter's prefix.
+
+    Anything a *deliberate* caller set inside ``sys.prefix`` is left alone.
+    """
+
+    prefix = str(Path(sys.prefix).resolve())
+    for name in _LEAKED_LOADER_VARS:
+        value = os.environ.get(name)
+        if not value:
+            continue
+        kept = [part for part in value.split(os.pathsep) if part and part.startswith(prefix)]
+        if kept:
+            os.environ[name] = os.pathsep.join(kept)
+        else:
+            os.environ.pop(name, None)
+
+
+def pytest_collection_finish(session) -> None:  # noqa: ARG001 - pytest hook
+    """Scrub the leak once every test module has been imported.
+
+    It has to be here rather than at conftest import time: the variable is set
+    when `tests/test_chisurf_autoform.py` calls `autoform_available()` *during
+    collection*, which is after this file has already run.
+    """
+
+    _drop_foreign_loader_paths()
+
+
 _import_chisurf_first()
+_drop_foreign_loader_paths()

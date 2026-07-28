@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/Fluorescence-Tools/quest.svg?branch=master)](https://travis-ci.org/Fluorescence-Tools/ques)
+[![CI](https://github.com/Fluorescence-Tools/quest/actions/workflows/ci.yml/badge.svg)](https://github.com/Fluorescence-Tools/quest/actions/workflows/ci.yml)
 
 <p align="center">
   <img src="doc/logo.png" alt="QuEst Logo" width="220" />
@@ -143,9 +143,15 @@ if result.fret_counts is not None:
 The API is designed so that it does not depend on any GUI widgets and
 can therefore be safely imported and used in headless environments.
 
-Notebook examples:
-- `modules/quest/notebooks/quest_core_headless_demo.ipynb` – minimal headless API usage.
-- (Legacy) other notebooks for diffusion/quenching/FRET remain available in the same folder.
+Notebook examples (each one is executed by `tests/test_notebooks.py`, so they
+run rather than merely parse):
+- [`notebooks/01_quenching.ipynb`](notebooks/01_quenching.ipynb) – PET quenching of a tethered donor.
+- [`notebooks/02_fret.ipynb`](notebooks/02_fret.ipynb) – adding a FRET acceptor.
+- [`notebooks/03_et_distance_distribution.ipynb`](notebooks/03_et_distance_distribution.ipynb) – donor–acceptor distance distributions.
+- [`notebooks/04_diffusion_modulated_fret.ipynb`](notebooks/04_diffusion_modulated_fret.ipynb) – how dye diffusion changes the transfer.
+
+Scripted equivalents live in [`examples/`](examples/) and are run by
+`tests/test_examples.py`.
 
 ### Command-QuEST (Click CLI)
 

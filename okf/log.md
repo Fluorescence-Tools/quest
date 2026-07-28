@@ -2,6 +2,106 @@
 
 ## 2026-07-28
 
+* **A programme of work was agreed by interview, and it changed three of its own
+  premises before a line was written.** Scope: every open item in
+  [handover.md](handover.md) plus `LAY-04`, `LAY-07` and repository hygiene,
+  across QuEst, imp-tricks and ChiSurf, in thirteen phases with one commit each.
+  Three decisions are worth recording because they *reverse* what the specs said:
+  **`OBJ-02` takes the host route** (QuEst contributes a model; ChiSurf's
+  optimiser drives it — nothing implemented, the decision is the deliverable);
+  **`DUP-06` is promoted from "record only" to work**, because the coarse-grain
+  chain bug turned out not to be a one-line fix; and the **base environment is
+  retired** in favour of `arm64` alone, which reverses "both must stay green".
+  Full decision list and the questions behind them:
+  [specs/programme-2026-07.md](specs/programme-2026-07.md).
+
+* **Three items on that list were mis-scoped in the specs, and reading the code
+  found it before implementing did.** Recorded now so the phases inherit the
+  correction rather than rediscovering it:
+
+  - **The half-voxel offset is not a LabelLib problem.** [known-issues]
+    (references/known-issues.md) described `AV.points` sitting half a voxel off
+    `AV.density` on the LabelLib path. There are **four** sites and two
+    conventions, and the trajectory is one of them: `_center_grid_indices`
+    (`av.py:557`) and `_points_from_centred_grid` (`av.py:265`) use the integer
+    `(ng-1)//2`, while `_simulate_traj*` (`av.py:801`, `av.py:862`),
+    `_sample_grid_at_trajectory` (`dye_diffusion.py:604`) and the LabelLib cloud
+    use the float `(ng-1)/2`. The trajectory pair is *self*-consistent, which is
+    why nothing caught it — but the grids it samples were stamped by the integer
+    kernel, so on an even `ng` **the walk reads the quenching and stickiness maps
+    half a voxel from where the quenchers were placed**, on *both* backends.
+    `ng` is 86 and 92 on the reference sites: even is the normal case. Which
+    convention is true is not a toss-up: on the IMP path
+    `x0 = grid_origin + ((ng-1)//2)·dg`, so voxel *i* sits at
+    `x0 + (i − (ng−1)//2)·dg` **by construction**. Integer wins; float is simply
+    wrong about where the voxels are.
+  - **The coarse-grain chain bug is a residue-identity bug.** known-issues
+    proposed matching `(chain, res_id)` in `move_center_of_mass`. That is a
+    symptom: **`residue_dict` itself is keyed on `res_id` alone**
+    (`structure.py:301`), as is `residue_ids` (`:323`), so chain B's residue 40
+    overwrites chain A's atom-by-atom, and everything derived from it — the
+    CA/CB/C/N/H lookup tables, `sequence`, the dihedrals, which CB a labelling
+    site attaches to — carries the collapse. `l_residue` is also built in
+    `residue_dict` order while `move_center_of_mass` indexes it by position in
+    `residue_ids`: two independently constructed orderings that agree only
+    because both iterate `set()` of small ints.
+  - **`DUP-03` cannot be adopted, and κ² cannot be adopted at all.**
+    `IMP.bff.cgdye.analysis.fret.calculate_fret_exact` takes an `(nd × na)`
+    distance matrix plus **transition matrices for both dyes** and solves a
+    Markov kinetic ensemble via `np.kron(p_d, p_a)` — a rotamer-library model,
+    O((nd·na)²), against QuEst's ~10⁵-point clouds. It is not a slower drop-in,
+    it is a different model at a different scale. And it does not *compute* κ²,
+    it *accepts* a κ² matrix; the real kernel,
+    `IMP.bff.cgdye.rotamer.scoring.kappa2_from_vectors`, needs transition dipole
+    vectors, which QuEst's structureless point-in-a-volume dye does not have.
+    **κ² is therefore blocked on a missing degree of freedom, not on missing
+    code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
+    2/3, explicit), not as *modelled*.
+
+* **Phase 0 — the working tree can no longer accumulate run artefacts, and one
+  long-standing known issue turned out to have the wrong cause.**
+
+  - **39 GB / 2870 run directories deleted**, and the cause fixed rather than
+    swept: `simulate_project(save_outputs=…)` now defaults to **False**, and an
+    opt-in run with no `project_dir` writes to
+    `quest.jobs.user_jobs_directory()` instead of `Path.cwd()`. The web backend
+    stopped passing `REPO_ROOT` — that is what had been steering browser runs
+    into the checkout — and its job list reads the same per-user root, so the
+    run list no longer depends on where uvicorn was started. `quest jobs clean`
+    / `pixi run clean` drive `quest.jobs.purge_jobs`, a domain function with
+    `dry_run=True` by default. Two suite tests were **asserting the old
+    default**, and one of them (`test_scalar_metrics_survive_the_fast_path`)
+    would have gone *vacuous* rather than red — it compared a "full" run against
+    a "fast" one, and both would now be fast.
+  - **`pytest tests -m notebooks` gives 16 passed as one command** — it had
+    given 6 failed / 10 passed since 2026-07-26. **The recorded diagnosis was
+    wrong twice.** It was not base-versus-`arm64` boost skew: with everything
+    under `arm64` the failure reproduced identically. It was not an ordering
+    effect between the two files: the two files together pass. The cause is that
+    **importing ChiSurf sets `DYLD_LIBRARY_PATH=<mambaforge>/lib` into
+    `os.environ`** — the *base* prefix — which is inert in-process (dyld reads it
+    at exec) but is inherited by every subprocess, so an `arm64` child resolves
+    `libboost_filesystem.dylib` against base's copy and `import IMP` dies. It is
+    set during *collection*, by `test_chisurf_autoform.py` calling
+    `autoform_available()` at module scope, which is what made it look like an
+    ordering effect. Bisected: adding any other module keeps 16 passed; adding
+    that one gives 6 failed; `CHISURF_ROOT=/nonexistent` restores 16. Contained
+    in `tests/conftest.py` with a `pytest_collection_finish` hook that drops
+    loader paths outside `sys.prefix` — **a containment, not the fix**; ChiSurf
+    should not export a foreign prefix's `DYLD_LIBRARY_PATH` at all.
+  - **`quest/utils.py` deleted** — nothing imported it. It held a
+    `sitecustomize` coverage hook that wrote `.coverage.*` into the working
+    directory, a `set_search_paths` left over from the `sys.path` injection
+    `LAY-08` removed, and `unittest` monkey-patching for "Python 2.6". The claim
+    in [subsystems/structure-io.md](subsystems/structure-io.md) that
+    `quest/__init__.py` still calls it was stale and is corrected.
+  - **The numpy known-issue is stale**: `arm64` runs numpy **2.4.6** with IMP
+    **2.24.0**, so `pyproject.toml`'s `>=2.0` floor is met. The entry described
+    base.
+  - README: dead Travis badge replaced with the GitHub Actions one, and the
+    notebook links repointed from the vendored `modules/quest/notebooks/…` path
+    to the four notebooks that exist and are executed by the suite.
+
 * **`DUP-01` done — the largest deletion QuEst had left.** `quest/core/imp_av.py`
   (329 lines) and `calculate1R` (69) are gone; `AV.__init__` makes one
   `IMP.bff.av.compute_av` call with an explicit `backend=`. **AV numbers

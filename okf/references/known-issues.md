@@ -85,7 +85,44 @@ checkout in automatically, deliberately **without installing** it, since the
 source tree is what is changing
 ([workflows/environment.md](/workflows/environment.md)).
 
-## `pytest -m notebooks` fails as one selection; the two files pass separately
+## ~~`pytest -m notebooks` fails as one selection~~ — fixed 2026-07-28, and the diagnosis below was wrong
+
+**Resolved.** `pytest tests -m notebooks` under `arm64` now gives **16 passed**
+as one command. Kept here because the recorded cause was wrong in two separate
+ways, and the way it was wrong is the lesson.
+
+The real cause: importing ChiSurf sets **`DYLD_LIBRARY_PATH=<mambaforge>/lib`**
+— the *base* prefix — into `os.environ`. In-process that is inert, since dyld
+reads the variable once at exec. But **every subprocess inherits it**, so an
+`arm64` child resolves `libboost_filesystem.dylib` against base's copy and
+`import IMP` dies with `Symbol not found: …filename_v3E`. It is set during
+*collection*, by `tests/test_chisurf_autoform.py` calling `autoform_available()`
+at module scope — which is why the failure depended on what else was collected
+and looked like an ordering effect.
+
+Bisected 2026-07-28: `test_examples.py` + `test_notebooks.py` together give 16
+passed; adding `test_pdb_id_support.py`, `test_mc4r.py`, `test_use_cases.py`,
+`test_imp_tricks_bridge.py`, `test_service_layer.py` or `test_grid_kernels.py`
+still gives 16 passed; adding **`test_chisurf_autoform.py`** gives 6 failed.
+`CHISURF_ROOT=/nonexistent` restores 16.
+
+Fixed in `tests/conftest.py` with a `pytest_collection_finish` hook that drops
+loader paths pointing outside `sys.prefix`. **That is a containment, not the
+fix** — ChiSurf should not export a foreign prefix's `DYLD_LIBRARY_PATH` into
+`os.environ` at all, and the proper fix belongs there.
+
+What the old entry got wrong:
+
+- It blamed **base-versus-`arm64` skew**. It is not: with base retired and
+  everything running under `arm64`, the failure reproduced identically
+  (6 failed / 10 passed).
+- It blamed **ordering between the two files** ("whichever runs second fails").
+  It is not: the two files together pass.
+
+Both readings were consistent with the symptom, and neither was tested by
+defeating it. The original text follows.
+
+### Original entry (superseded)
 
 Run apart, `tests/test_notebooks.py` gives **9 passed** and
 `tests/test_examples.py` gives **7 passed** — the 16 the handover records. Run
@@ -117,7 +154,17 @@ child that also needs it. *Fix:* give each file its own process (as the
 environment before spawning. Until then **do not report "16 passed" from a
 single command** — it has never produced that.
 
-## `pyproject.toml` requires `numpy>=2.0`; the working env has numpy 1.26.4
+## ~~`pyproject.toml` requires `numpy>=2.0`; the working env has numpy 1.26.4~~ — stale
+
+**Measured 2026-07-28:** the canonical `arm64` environment has **numpy 2.4.6**
+with **IMP 2.24.0**, and both import and run. The declared floor is therefore
+met, and the entry below described the *base* environment (numpy 1.26.4,
+IMP 2.17.0) — which is being retired. The `tests/sim_test.log` failure it cites
+was an older IMP build compiled against numpy 1.x, not a property of numpy 2.
+
+Original entry follows.
+
+### Original entry (superseded)
 
 The declared floor is not met by the interpreter QuEst actually runs on, and
 that is currently the right way round: `tests/sim_test.log` records the failure
@@ -183,7 +230,27 @@ re-baseline. *Fix:* match on `(chain, res_id)`.
 
 # Repository hygiene
 
-## Simulation output accumulates in the working tree
+## ~~Simulation output accumulates in the working tree~~ — fixed 2026-07-28
+
+**Fixed at the cause, not with a broom.** `simulate_project`'s `save_outputs`
+now defaults to **False**, and when a caller does ask for artefacts and gives no
+`project_dir` they go to `quest.jobs.user_jobs_directory()` — the per-user data
+directory — never `Path.cwd()`. The web backend stopped passing `REPO_ROOT`,
+which is what had been steering the browser's runs into the checkout, and its
+job list now reads the same per-user root, so a run list no longer depends on
+where uvicorn was started. The CLI passes `save_outputs=True` explicitly, since
+its user asked for a run record.
+
+`quest.jobs.purge_jobs(project_dir, older_than_days=…, dry_run=True)` is the
+domain operation behind `quest jobs clean` and `pixi run clean`; it deletes only
+UUID-named directories and reports without deleting unless told otherwise.
+`QUEST_JOBS_DIR` overrides the root for tests and bulk work.
+
+The accumulated **2870 directories / 39 GB** were deleted on 2026-07-28.
+
+Original entry follows.
+
+### Original entry (superseded)
 
 `jobs/` at the repo root had grown to **2292** run directories and **32 GB** by
 the time it was measured, alongside the `out.xyz`, `out_slow.xyz`, `test.pdb`,
@@ -197,13 +264,14 @@ the directory still has to be emptied by hand. The real fix is on the writing
 side: tests and bulk work must pass `save_outputs=False` or a temporary
 `project_dir` ([workflows/testing.md](/workflows/testing.md)).
 
-## 30 `.coverage.*` files in the repo root
+## ~~30 `.coverage.*` files in the repo root~~ — fixed 2026-07-28
 
-`quest/utils.py` installs a `sitecustomize.py` coverage hook when `coverage` is
-already imported, writing its data file into `os.getcwd()`. They are git-ignored
-but never cleaned up. *Fix:* point the hook at a temp directory, or drop it —
-it is Python-2-era plumbing (the same module still patches
-`unittest.TestCase` for "Python 2.6").
+`quest/utils.py` is **deleted**. Nothing in the tree imported it: it was a
+`sitecustomize.py` coverage hook writing into `os.getcwd()`, a `set_search_paths`
+helper left over from the `sys.path` injection `LAY-08` removed, and
+`unittest.TestCase` monkey-patching for "Python 2.6". The stale claim in
+[subsystems/structure-io.md](/subsystems/structure-io.md) that
+`quest/__init__.py` calls `utils.set_search_paths` is corrected there.
 
 # Documentation
 

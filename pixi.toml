@@ -70,6 +70,10 @@ quest = { path = ".", editable = true }
 test = "pytest tests -q -p no:pytest-qt"
 simulate = "quest simulate"
 scan = "quest scan"
+# Reports without deleting; `pixi run clean -- --yes` does it. Runs no longer
+# land in the checkout at all (they go to the per-user artefact root), so this
+# is for the per-user root and for an explicit --project-dir.
+clean = "quest jobs clean"
 
 # The desktop surface. Separated so a headless install never pulls Qt.
 [feature.gui.dependencies]

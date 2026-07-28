@@ -254,7 +254,11 @@ async def simulate(
             pdb_path=resolved_pdb,
             nbins=nbins,
             tac_range=(tac_start, tac_stop),
-            project_dir=REPO_ROOT,
+            # No `project_dir`: runs go to the per-user artefact root rather
+            # than the checkout. Passing REPO_ROOT here is what put 39 GB of
+            # `jobs/` into the working tree, and it also made the run list
+            # depend on where uvicorn was started.
+            save_outputs=True,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Simulation failed: {exc}") from exc
@@ -344,13 +348,13 @@ async def list_jobs(
     limit: int = quest_jobs.DEFAULT_JOB_LIST_LIMIT, offset: int = 0
 ) -> dict[str, Any]:
     """Return the most recent job summaries, newest first."""
-    return quest_jobs.list_jobs(REPO_ROOT, limit=limit, offset=offset)
+    return quest_jobs.list_jobs(None, limit=limit, offset=offset)
 
 
 @app.get("/api/jobs/{job_id}")
 async def get_job(job_id: str) -> dict[str, Any]:
     try:
-        return quest_jobs.read_job(job_id, REPO_ROOT)
+        return quest_jobs.read_job(job_id, None)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:
@@ -374,7 +378,7 @@ async def save_dye(dye: dict[str, Any]):
 @app.get("/api/jobs/{job_id}/download")
 async def download_job_zip(job_id: str):
     try:
-        zip_path = quest_jobs.archive_job(job_id, REPO_ROOT)
+        zip_path = quest_jobs.archive_job(job_id, None)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except FileNotFoundError as exc:

@@ -214,7 +214,9 @@ def test_simulate_project_with_custom_amino_acid_kq() -> None:
 def test_simulate_project_job_dir(tmp_path: Path) -> None:
     """Verify that running a simulation writes files to a unique folder under project_dir."""
     project = _make_minimal_project(with_fret=False)
-    result = simulate_project(project, project_dir=tmp_path)
+    # `save_outputs` is opt-in since 2026-07-28; this test is about *where* the
+    # artefacts land once a caller has asked for them.
+    result = simulate_project(project, project_dir=tmp_path, save_outputs=True)
     assert isinstance(result, DecaySimulationResult)
     assert result.job_id is not None
 

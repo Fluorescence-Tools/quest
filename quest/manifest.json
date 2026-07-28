@@ -136,8 +136,8 @@
           },
           "save_outputs": {
             "type": "boolean",
-            "description": "Write the job directory and the display point clouds. Turn off for bulk work.",
-            "default": true
+            "description": "Write the job directory. Opt-in: without it a run leaves nothing behind. When set and no project_dir is given, artefacts go to the per-user artefact root, never the working directory.",
+            "default": false
           }
         },
         "required": [

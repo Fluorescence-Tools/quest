@@ -922,7 +922,7 @@ def simulate_project(
     dt_tac: Optional[float] = None,
     n_tac: Optional[int] = None,
     project_dir: Optional[Path | str] = None,
-    save_outputs: bool = True,
+    save_outputs: bool = False,
     render_data: Optional[bool] = None,
 ) -> DecaySimulationResult:
     """Run a full QuEst simulation from a project dictionary.
@@ -962,9 +962,15 @@ def simulate_project(
         Optional project directory (base path for output jobs).
     save_outputs:
         Write the per-run job directory: ``result.json``, the ``.mrc`` volumes,
-        the ``.xyz`` point clouds, the CSV tables. Set to ``False`` for bulk
-        work such as a residue scan, and for interactive runs that must not
-        litter the working directory.
+        the ``.xyz`` point clouds, the CSV tables.
+
+        **Defaults to False**: artefacts are opt-in. It used to default to
+        ``True`` writing into ``Path.cwd()``, so every library call, notebook
+        and forgetful test left a directory behind -- 2870 of them, 39 GB, by
+        2026-07-28. The surfaces whose users asked for a run record (the CLI,
+        the web backend) pass ``save_outputs=True`` explicitly; nothing else
+        should. When it *is* true and no ``project_dir`` is given, the run goes
+        to :func:`quest.jobs.user_jobs_directory`, never the working directory.
     render_data:
         Build the thinned trajectory, autocorrelation and point clouds that a
         plot or a 3D viewer needs. Defaults to ``True``.
@@ -1016,11 +1022,14 @@ def simulate_project(
         if tac_range == (0.0, 50.0) and not project_has_tac_range:
             tac_range = (0.0, float(dt_tac) * float(n_tac))
 
-    # Generate unique job folder under project_dir
+    # Generate a unique job folder. `jobs_directory` decides *where*: under an
+    # explicit `project_dir`, else the per-user artefact root -- never `cwd`.
     import uuid
-    p_dir = Path(project_dir) if project_dir is not None else Path.cwd()
+
+    from quest.jobs import jobs_directory
+
     job_name = str(uuid.uuid4())
-    job_dir = p_dir / "jobs" / job_name
+    job_dir = jobs_directory(project_dir) / job_name
     if save_outputs:
         job_dir.mkdir(parents=True, exist_ok=True)
 

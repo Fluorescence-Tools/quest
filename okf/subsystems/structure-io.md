@@ -51,15 +51,18 @@ other HTTP or network errors raise. `tests/test_pdb_id_support.py` covers this.
 Anything that takes a structure should call `resolve_structure_path`, not
 `Path(...)` — that is how PDB-ID support stays uniform across CLI, API and web.
 
-# A path quirk to know about
+# A path quirk that is gone — do not reintroduce it
 
-`quest/__init__.py` calls `utils.set_search_paths(<package dir>)`, which inserts
-`quest/` itself onto `sys.path` (and `PYTHONPATH`). That is what makes the
-internal absolute imports — `import lib.fps as fps`, `from lib import Structure`
-— resolve. Consequences:
+This section used to describe `quest/__init__.py` calling
+`utils.set_search_paths(<package dir>)`, which inserted `quest/` itself onto
+`sys.path` so that `import lib.fps` resolved. **Both are gone**: the injection
+with `LAY-08` (2026-07-27), and `quest/utils.py` itself on 2026-07-28 — nothing
+imported it, and the rest of it was Python-2.6 `unittest` monkey-patching plus a
+`sitecustomize` coverage hook that wrote `.coverage.*` files into the working
+directory.
 
-- importing `quest` has a global side effect on `sys.path`;
-- there is a top-level module name `lib` inside this interpreter, which can
-  collide with an unrelated `lib` package;
-- new code should prefer `from quest.lib… import …`, and the legacy `import lib…`
-  spellings should not spread further.
+The rule it leaves behind: every internal import is spelled `quest.lib…`. A bare
+`import lib…` is not a legacy spelling to tolerate, it is a bug — `lib.structure.
+Structure` and `quest.lib.structure.Structure` were two different classes, so an
+`isinstance` check across the boundary failed and a `Structure` got wrapped
+twice.

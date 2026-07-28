@@ -100,7 +100,9 @@ def simulate_handler(
     nbins: Optional[int] = None,
     tac_range: Any = (0.0, 50.0),
     project_dir: Optional[str] = None,
-    save_outputs: bool = True,
+    # Opt-in since 2026-07-28, matching `simulate_project`. An RPC caller is a
+    # host or a notebook; it has to ask for a run directory.
+    save_outputs: bool = False,
 ) -> dict[str, Any]:
     from .. import api
     from ..project import ProjectValidationError, validate_project

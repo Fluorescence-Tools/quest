@@ -137,3 +137,82 @@ class TestReadingAndArchiving:
         assert jobs.archive_job(job_id, tmp_path) == archive
         with zipfile.ZipFile(archive) as zipped:
             assert archive.name not in set(zipped.namelist())
+
+
+class TestWhereArtefactsGo:
+    """The default artefact root is *not* the working directory.
+
+    `simulate_project` used to write `Path.cwd()/jobs/<uuid>` whenever
+    `save_outputs` was true, and `save_outputs` was true by default. Every
+    library call, notebook and forgetful test therefore left a run behind:
+    2870 of them, 39 GB, in this checkout by 2026-07-28.
+    """
+
+    def test_an_explicit_project_dir_still_wins(self, tmp_path: Path) -> None:
+        assert jobs.jobs_directory(tmp_path) == tmp_path / "jobs"
+
+    def test_without_a_project_dir_it_is_the_user_root_not_cwd(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv(jobs.QUEST_JOBS_DIR_ENV, raising=False)
+        resolved = jobs.jobs_directory()
+
+        assert resolved == jobs.user_jobs_directory()
+        assert Path(tmp_path) not in resolved.parents
+        assert resolved != tmp_path / "jobs"
+
+    def test_the_env_override_redirects_the_user_root(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(jobs.QUEST_JOBS_DIR_ENV, str(tmp_path / "elsewhere"))
+        assert jobs.jobs_directory() == tmp_path / "elsewhere"
+
+    def test_simulate_project_does_not_write_by_default(self, tmp_path: Path) -> None:
+        import inspect
+
+        from quest.core import simulate_project
+
+        default = inspect.signature(simulate_project).parameters["save_outputs"].default
+        assert default is False, "artefacts are opt-in; see okf/log.md 2026-07-28"
+
+
+class TestPurgingRuns:
+    def test_it_reports_without_deleting_by_default(self, tmp_path: Path) -> None:
+        job_id = _make_job(tmp_path)
+
+        report = jobs.purge_jobs(tmp_path)
+
+        assert report["dry_run"] is True
+        assert report["removed"] == [job_id]
+        assert report["bytes"] > 0
+        assert (tmp_path / "jobs" / job_id).is_dir(), "a dry run must not delete"
+
+    def test_it_deletes_when_asked(self, tmp_path: Path) -> None:
+        job_id = _make_job(tmp_path)
+
+        report = jobs.purge_jobs(tmp_path, dry_run=False)
+
+        assert report["count"] == 1
+        assert not (tmp_path / "jobs" / job_id).exists()
+
+    def test_it_leaves_anything_that_is_not_a_run(self, tmp_path: Path) -> None:
+        (tmp_path / "jobs").mkdir()
+        stray = tmp_path / "jobs" / "notes.txt"
+        stray.write_text("mine", encoding="utf8")
+
+        report = jobs.purge_jobs(tmp_path, dry_run=False)
+
+        assert report["count"] == 0
+        assert stray.exists()
+
+    def test_an_age_filter_spares_recent_runs(self, tmp_path: Path) -> None:
+        job_id = _make_job(tmp_path)
+
+        report = jobs.purge_jobs(tmp_path, older_than_days=1.0, dry_run=False)
+
+        assert report["count"] == 0
+        assert (tmp_path / "jobs" / job_id).is_dir()
+
+    def test_a_missing_directory_is_not_an_error(self, tmp_path: Path) -> None:
+        assert jobs.purge_jobs(tmp_path / "nothing-here")["count"] == 0

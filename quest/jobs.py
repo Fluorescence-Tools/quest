@@ -14,6 +14,10 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
+import shutil
+import sys
+import time
 import uuid
 import zipfile
 from pathlib import Path
@@ -22,12 +26,15 @@ from typing import Any, Optional
 __all__ = [
     "DEFAULT_JOB_LIST_LIMIT",
     "MAX_JOB_LIST_LIMIT",
+    "QUEST_JOBS_DIR_ENV",
+    "user_jobs_directory",
     "jobs_directory",
     "is_job_id",
     "job_summary",
     "list_jobs",
     "read_job",
     "archive_job",
+    "purge_jobs",
 ]
 
 #: Page size for :func:`list_jobs`, and the ceiling a caller can ask for. The
@@ -36,12 +43,44 @@ __all__ = [
 DEFAULT_JOB_LIST_LIMIT = 50
 MAX_JOB_LIST_LIMIT = 500
 
+#: Overrides the default artefact root. Set it in tests and in bulk work so a
+#: run cannot reach the real one.
+QUEST_JOBS_DIR_ENV = "QUEST_JOBS_DIR"
+
+
+def user_jobs_directory() -> Path:
+    """The per-user artefact root, used when no ``project_dir`` is given.
+
+    **Deliberately not the working directory.** ``simulate_project`` used to
+    write ``Path.cwd()/jobs/<uuid>``, so every run started from a checkout left
+    a directory behind: 2870 of them, 39 GB, by 2026-07-28. A per-user location
+    also makes a run list stable — it no longer depends on where uvicorn or the
+    notebook kernel happened to be started.
+    """
+
+    override = os.environ.get(QUEST_JOBS_DIR_ENV)
+    if override:
+        return Path(override).expanduser()
+    if sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+    elif os.name == "nt":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    else:
+        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    return base / "quest" / "jobs"
+
 
 def jobs_directory(project_dir: Optional[Path | str] = None) -> Path:
-    """Return the ``jobs/`` directory under *project_dir* (default: cwd)."""
+    """Return the artefact directory for *project_dir*.
 
-    base = Path(project_dir) if project_dir is not None else Path.cwd()
-    return base / "jobs"
+    With a *project_dir* the runs live under ``<project_dir>/jobs``, which is
+    what a caller asking for a specific location means. Without one they go to
+    :func:`user_jobs_directory` rather than the current directory.
+    """
+
+    if project_dir is None:
+        return user_jobs_directory()
+    return Path(project_dir) / "jobs"
 
 
 def is_job_id(value: Any) -> bool:
@@ -168,3 +207,44 @@ def archive_job(job_id: str, project_dir: Optional[Path | str] = None) -> Path:
             if file_path.is_file() and file_path.name != archive_name:
                 archive.write(file_path, file_path.name)
     return archive_path
+
+
+def purge_jobs(
+    project_dir: Optional[Path | str] = None,
+    *,
+    older_than_days: Optional[float] = None,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    """Delete run directories, reporting what went (or would go).
+
+    A domain function rather than a shell script so the CLI, a pixi task and a
+    host application all drive one implementation
+    (okf/architecture/surfaces.md).
+
+    ``dry_run`` defaults to **True**: this deletes, and the caller has to say so.
+    Only UUID-named directories are considered, which is the same validity check
+    :func:`list_jobs` uses -- anything else in the directory was not written by a
+    run and is left alone.
+    """
+
+    root = jobs_directory(project_dir)
+    removed: list[str] = []
+    freed = 0
+    if root.is_dir():
+        cutoff = None if older_than_days is None else time.time() - older_than_days * 86400.0
+        for entry in sorted(root.iterdir()):
+            if not entry.is_dir() or not is_job_id(entry.name):
+                continue
+            if cutoff is not None and entry.stat().st_mtime >= cutoff:
+                continue
+            freed += sum(f.stat().st_size for f in entry.rglob("*") if f.is_file())
+            removed.append(entry.name)
+            if not dry_run:
+                shutil.rmtree(entry, ignore_errors=True)
+    return {
+        "directory": str(root),
+        "removed": removed,
+        "count": len(removed),
+        "bytes": freed,
+        "dry_run": dry_run,
+    }

@@ -249,6 +249,11 @@ def simulate(
                 nbins=nbins,
                 tac_range=(tac_start, tac_stop),
                 project_dir=project_path.parent,
+                # Explicit since 2026-07-28: `save_outputs` defaults to False,
+                # and the CLI is one of the two surfaces whose user asked for a
+                # run record. Next to the project, because that is where a CLI
+                # user looks for it.
+                save_outputs=True,
             )
         except Exception as exc:  # pragma: no cover - defensive
             raise click.ClickException(f"Simulation failed: {exc}")
@@ -438,6 +443,47 @@ def scan(
         click.echo(f"Wrote scan results to {output_path}")
     except Exception as exc:
         raise click.ClickException(f"Failed to write output file: {exc}")
+
+
+@cli.group()
+def jobs() -> None:
+    """Inspect and tidy the run artefacts a simulation leaves behind."""
+
+
+@jobs.command("clean")
+@click.option(
+    "--project-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Clean this project's jobs/ instead of the per-user artefact root.",
+)
+@click.option(
+    "--older-than",
+    "older_than_days",
+    type=float,
+    default=None,
+    help="Only remove runs untouched for this many days.",
+)
+@click.option(
+    "--yes",
+    "confirmed",
+    is_flag=True,
+    default=False,
+    help="Actually delete. Without it this only reports what would go.",
+)
+def jobs_clean(project_dir: Path | None, older_than_days: float | None, confirmed: bool) -> None:
+    """Delete run directories. Reports without deleting unless --yes is given."""
+
+    from .jobs import purge_jobs
+
+    report = purge_jobs(
+        project_dir, older_than_days=older_than_days, dry_run=not confirmed
+    )
+    megabytes = report["bytes"] / (1024 * 1024)
+    verb = "Would remove" if report["dry_run"] else "Removed"
+    click.echo(f"{verb} {report['count']} run(s), {megabytes:.1f} MB from {report['directory']}")
+    if report["dry_run"] and report["count"]:
+        click.echo("Nothing was deleted. Pass --yes to do it.")
 
 
 @cli.command()

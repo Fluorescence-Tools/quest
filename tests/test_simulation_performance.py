@@ -80,8 +80,18 @@ class TestSaveOutputs:
         simulate_project(_project(QUENCHED_SITES[0]), project_dir=tmp_path, save_outputs=False)
         assert not (tmp_path / "jobs").exists()
 
-    def test_job_directory_is_written_by_default(self, tmp_path: Path) -> None:
+    def test_nothing_is_written_unless_asked(self, tmp_path: Path) -> None:
+        """Artefacts are opt-in.
+
+        This asserted the opposite until 2026-07-28, when the default flipped:
+        writing by default put 2870 run directories and 39 GB into this
+        checkout, because every library call and forgetful test inherited it.
+        """
         simulate_project(_project(QUENCHED_SITES[0]), project_dir=tmp_path)
+        assert not (tmp_path / "jobs").exists()
+
+    def test_the_job_directory_is_written_when_asked(self, tmp_path: Path) -> None:
+        simulate_project(_project(QUENCHED_SITES[0]), project_dir=tmp_path, save_outputs=True)
         jobs = list((tmp_path / "jobs").iterdir())
         assert len(jobs) == 1
         written = {path.name for path in jobs[0].iterdir()}
@@ -90,7 +100,9 @@ class TestSaveOutputs:
 
     def test_scalar_metrics_survive_the_fast_path(self, tmp_path: Path) -> None:
         """Everything a scan reports must still be there without the artefacts."""
-        full = simulate_project(_project(QUENCHED_SITES[0]), project_dir=tmp_path)
+        full = simulate_project(
+            _project(QUENCHED_SITES[0]), project_dir=tmp_path, save_outputs=True
+        )
         fast = simulate_project(_project(QUENCHED_SITES[0]), project_dir=tmp_path, save_outputs=False)
 
         assert fast.quantum_yield_donor == pytest.approx(full.quantum_yield_donor)
@@ -128,7 +140,9 @@ class TestSaveOutputs:
         assert gui.av_points is not None
         assert gui.trajectory_distance_to_mean is not None
 
-        full = simulate_project(_project(QUENCHED_SITES[0]), project_dir=tmp_path)
+        full = simulate_project(
+            _project(QUENCHED_SITES[0]), project_dir=tmp_path, save_outputs=True
+        )
         assert full.av_points is not None
         assert full.acv_points is not None
 
