@@ -76,7 +76,7 @@ class TestStructureCoarseGraining:
         """A bound ligand is a steric obstacle at every resolution.
 
         Dropping untemplated residues here would silently reinstate the HETATM
-        stripping `quest/core/pdb.py` stopped doing, and coarse-graining would
+        stripping `quest/core/structure/reader.py` stopped doing, and coarse-graining would
         quietly open pockets that are physically closed.
         """
         all_atom = Structure(str(PDB_PATH), make_coarse=False)

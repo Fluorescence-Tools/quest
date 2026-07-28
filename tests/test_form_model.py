@@ -213,7 +213,7 @@ class TestSurfacesShareTheState:
         """End to end across surfaces, through the service layer's own methods."""
         pytest.importorskip("fastapi", reason="the web extra is not installed")
 
-        from quest.backend.services import local_client
+        from quest.rpc.services import local_client
 
         structure = tmp_path / "structure.pdb"
         structure.write_text("ATOM\n", encoding="utf8")

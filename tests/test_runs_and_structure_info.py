@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from quest import runs
-from quest.structure_info import structure_metadata
+from quest.core.structure import structure_metadata
 
 STRUCTURE = Path(__file__).parent / "148l.pdb"
 

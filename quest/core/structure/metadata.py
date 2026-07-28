@@ -25,7 +25,7 @@ def structure_metadata(path: Path | str) -> dict[str, Any]:
     ----------
     path : path
         Structure file. Resolve PDB IDs with
-        :func:`quest.structure_fetch.resolve_structure_path` first.
+        :func:`quest.core.structure.fetch.resolve_structure_path` first.
 
     Returns
     -------

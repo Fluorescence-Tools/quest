@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 
 from quest import api
-from quest.backend import (
+from quest.rpc import (
     CONTRACT_VERSION,
     ERROR_CODES,
     METHODS,
@@ -269,7 +269,7 @@ class TestTheFacadeResolvesToAClient:
         assert recorder.calls == ["quest.template"]
 
     def test_the_default_client_is_in_process(self) -> None:
-        from quest.backend import InProcessClient
+        from quest.rpc import InProcessClient
 
         assert isinstance(api.client(), InProcessClient)
 

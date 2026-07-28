@@ -83,6 +83,45 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **The package layout is by *kind*, not by prefix.** `quest/` had a flat top
+  level where the names carried the structure the directories did not:
+
+  | was | is |
+  |---|---|
+  | `quest/structure_fetch.py` | `quest/core/structure/fetch.py` |
+  | `quest/structure_info.py` | `quest/core/structure/metadata.py` |
+  | `quest/core/structure.py` | `quest/core/structure/model.py` |
+  | `quest/core/pdb.py` | `quest/core/structure/reader.py` |
+  | `quest/imp_tricks.py` | `quest/hosts/imp_tricks.py` |
+  | `quest/chisurf_host.py` | `quest/hosts/chisurf.py` |
+  | `quest/backend/` | `quest/rpc/` |
+
+  **The rule, now written down** in
+  [architecture/package-layout.md](architecture/package-layout.md): a module's
+  *directory* says what kind of thing it is, its *name* says which. A prefix
+  like `structure_fetch` is a directory that was never created — four aspects of
+  one subject were split across two packages, and `core/pdb.py` did not even
+  carry the prefix while reading mmCIF too. Likewise `imp_tricks.py` and
+  `chisurf_host.py` do the same job (splice a sibling checkout onto the import
+  path) and looked unrelated; they are `hosts/`.
+
+  `backend/` → `rpc/` is the smaller one and is about matching what exists
+  already: ChiSurf plugins use `rpc/services.py`, QuEst's own plugin does, and
+  the manifest calls the entry point `services`. "Backend" already meant three
+  other things here — the *AV* backend, the *web* backend, the transport.
+
+  **No boundary moved**, which is the point: `core/` still has no Qt, no host
+  and no job bookkeeping; `hosts/` is still optional in both directions; `rpc/`
+  is still where serialization stops. 51 files rewritten in QuEst plus 6 in the
+  ChiSurf plugin, verified across all four surfaces — **531 passed**, 16
+  notebooks, 27 browser, 14 plugin.
+
+  Two things the rename surfaced that the rewrite script could not: a layering
+  test still pointed at `quest/backend/` by path and would have gone quietly
+  vacuous had it been a glob rather than a list, and `quest/hosts/__init__.py`
+  needed the *whole* of `imp_tricks`'s public surface re-exported, not the one
+  name the package doc happened to mention.
+
 * **The browser suite found what the browser suite could not: κ² never reached
   the web UI.** `fret.kappa2` landed in the parameter catalog, the project
   template, the domain and the Qt form on 2026-07-28 — and **not** in the web
@@ -160,9 +199,9 @@
   `gui/` — with **no `core/`**, because QuEst is an installable package and *is*
   the core. Nothing in the plugin reimplements anything:
   `rpc/services.py` hands ChiSurf's dispatcher to
-  `quest.backend.services.register_services` (duck-typed on
+  `quest.rpc.services.register_services` (duck-typed on
   `register(name, handler)` for exactly this, so both surfaces run the same
-  handlers), `api/contract.py` re-exports `quest.backend.contract`, and
+  handlers), `api/contract.py` re-exports `quest.rpc.contract`, and
   `rpc_methods` is **copied verbatim** from `quest/manifest.json` with a test
   that fails if they diverge.
 
@@ -283,7 +322,7 @@
   construction, since a typo would otherwise produce an envelope no host
   recognises and fail silently as "some error".
 
-  `quest/backend/contract.py` follows ChiSurf's per-plugin pattern —
+  `quest/rpc/contract.py` follows ChiSurf's per-plugin pattern —
   `PLUGIN_ID`, `CONTRACT_VERSION`, `contract_descriptor()`,
   `quest.contract.describe`. The descriptor is **built from the manifest**
   rather than written beside it: a second hand-maintained copy of the method
@@ -324,7 +363,7 @@
   a kernel that was verified first.
 
   **One item was never a defect, and the error was mine.** "Fix the `IMP.cgmol`
-  import" entered the plan from a probe written as `import quest.imp_tricks` —
+  import" entered the plan from a probe written as `import quest.hosts.imp_tricks` —
   the module, without *calling* `enable_imp_tricks()`. `IMP.cgmol.sterics`
   imports fine. In correcting it,
   [workflows/environment.md](workflows/environment.md) turned out to be wrong
@@ -385,7 +424,7 @@
   closed, and its "low severity, has not bitten yet" was wrong.**
 
   Identity now comes from **IMP's hierarchy, at the reader**:
-  `quest/core/pdb.py` assigns a `residue_index` per distinct
+  `quest/core/structure/reader.py` assigns a `residue_index` per distinct
   `(chain, res_id, insertion_code)` in file order, and keeps the
   `insertion_code` it had been discarding. `residue_dict`, `residue_indices`,
   `n_residues`, the CA/CB/C/N/H lookup tables and `move_center_of_mass` all
@@ -802,7 +841,7 @@
   changes cannot be attributed. Decision 4 depends on the upstream fixes in
   `~/dev/imp-tricks` being committed and released first.
 * **Radii now come from IMP, and the structure layer is one thin reader**
-  (`quest/core/pdb.py`, per [specs/structure-io.md](/specs/structure-io.md)).
+  (`quest/core/structure/reader.py`, per [specs/structure-io.md](/specs/structure-io.md)).
   `read_pdb` already decorates every particle with a radius, so the reader takes
   `IMP.core.XYZR(p).get_radius()` and `IMP.atom.Mass(p).get_mass()` directly —
   no helper, no fallback table, no `add_radii` call (redundant: the parser has
@@ -902,7 +941,7 @@
   subpackages that are themselves compiled, which is why imp-tricks' own test
   suite could not import `IMP.bff.av` (28 collection errors → **191 passed, 5
   failed, 24 skipped**); QuEst had solved the same problem privately in
-  `quest/imp_tricks.py`. Two of its tests asserted `ImportError` "without a
+  `quest/hosts/imp_tricks.py`. Two of its tests asserted `ImportError` "without a
   backend" and passed only *because* of the LabelLib probe bug; they now
   monkeypatch the flags instead. The 5 residual failures (rotamer R0, dye_io,
   polymer PDF) reference none of this and had never been collected before.
@@ -913,7 +952,7 @@
   so the only thing stopping the deletion is that imp-tricks is a development
   path shim rather than a declared dependency. That is a decision about what
   QuEst depends on.
-* **`quest/core/structure.py`: 623 → 345 lines.** RMSD, clustering, the torsion
+* **`quest/core/structure/model.py`: 623 → 345 lines.** RMSD, clustering, the torsion
   subsystem (`coord_i`, `internal_coordinates`, `phi`/`psi`/`omega`/`chi`) and
   the geometry primitives behind them had no readers. Three traps, all caught by
   *running* rather than reading: "no callers outside this module" is the wrong
@@ -1350,7 +1389,7 @@
   cli/ gui/ server/ manifest.json`).
 
 * **The PDB parser is IMP's now (`DUP-06` closed for reading).**
-  `quest/core/pdb.py` went from ~400 hand-written lines of PDB/PQR/mmCIF
+  `quest/core/structure/reader.py` went from ~400 hand-written lines of PDB/PQR/mmCIF
   parsing to a reader over `IMP.atom.read_pdb` / `read_mmcif`. IMP is present in
   **both** environments (2.24 in `arm64`, 2.17 in base), so this needed no new
   dependency.
@@ -1386,7 +1425,7 @@
 * **More duplication found, this time against ChiSurf (`DUP-07`).** Its
   `fps_json_editor` plugin carries `payload.py` (fps.json normalise/validate),
   `pdb.py` (RCSB download and cache) and `mrc.py` (`save_av_mrc`) — the same
-  three things as `quest/core/fps_json.py`, `quest/structure_fetch.py` and
+  three things as `quest/core/fps_json.py`, `quest/core/structure/fetch.py` and
   `write_mrc`. It cannot be consumed where it is: a plugin is not a library, and
   QuEst's domain importing another plugin would couple them through the host's
   plugin tree and pull tttrlib/mdtraj/pandas into a headless run. They belong in
@@ -1463,7 +1502,7 @@
   QuEst-side UI code**. Screenshotted and read back through
   `form.model.params()`.
 
-  `quest/chisurf_host.py` reaches the checkout the same way `quest.imp_tricks`
+  `quest/hosts/chisurf.py` reaches the checkout the same way `quest.hosts.imp_tricks`
   does (source tree, `CHISURF_ROOT`, never fatal), and deliberately **never
   overrides a ChiSurf already imported** — a host that loaded QuEst as a plugin
   is already running its own copy. Nothing outside `quest.gui` imports it, so
@@ -1537,7 +1576,7 @@
   `DonorDecay.update_all`** — the simulation rendering its own UI. It now takes
   a `progress(fraction, message)` callback; the widget passes one that drives
   the dialog. A subprocess guardrail asserts that importing `quest.api`,
-  `quest.backend`, `quest.core` and `quest.lib.tools` loads **no** Qt binding,
+  `quest.rpc`, `quest.core` and `quest.lib.tools` loads **no** Qt binding,
   so "the service layer is GUI-free" is now checked rather than intended.
 
   Verified before and after by 11 characterisation tests written first
@@ -1568,7 +1607,7 @@
   methods.** Two capabilities existed only inside the web backend and were
   therefore reachable only from a browser. Both are now domain modules:
 
-  - `quest/structure_info.py::structure_metadata` — the ~150-line PDB/mmCIF
+  - `quest/core/structure/metadata.py::structure_metadata` — the ~150-line PDB/mmCIF
     chain–residue–atom extraction that populates labeling-site pickers, moved
     verbatim (extracted programmatically rather than retyped) and given a real
     error for a missing file;
@@ -1675,7 +1714,7 @@
   *and* restores independence. Seeded runs are untouched and still reproduce.
 
 * **imp-tricks can be spliced into the live interpreter** —
-  `quest/imp_tricks.py::enable_imp_tricks()`, at the user's request. The obvious
+  `quest/hosts/imp_tricks.py::enable_imp_tricks()`, at the user's request. The obvious
   approach does not work: imp-tricks ships `IMP/<name>/` as *namespace*
   directories, and in `arm64` the compiled `IMP` and `IMP.bff` are **regular**
   packages that shadow them completely, so `PYTHONPATH` alone leaves
@@ -1899,7 +1938,7 @@
   stays with the callers, because how many sites run at once is a transport
   concern (the web backend keeps its GIL-aware `SCAN_WORKERS` pool).
 
-* **LAY-03 in progress: QuEst has an RPC surface.** `quest/backend/` adds a
+* **LAY-03 in progress: QuEst has an RPC surface.** `quest/rpc/` adds a
   `ServiceDispatcher`, an `InProcessClient` and `register_services(dispatcher)`
   registering **eight methods** — `quest.template`, `quest.validate`,
   `quest.simulate`, `quest.scan`, `quest.parameter_catalog`, `quest.dyes.list`,
@@ -2072,7 +2111,7 @@
 * **State of the tree at bundle creation.** The working tree carries a large
   amount of uncommitted work — 20 modified files (~4.2k insertions, notably
   `dye_diffusion.py`, `core.py`, `fps/__init__.py`, `cli.py`) plus untracked
-  `webui/`, `quest/structure_fetch.py`, `quest/settings/*.json`, `pixi.toml` and
+  `webui/`, `quest/core/structure/fetch.py`, `quest/settings/*.json`, `pixi.toml` and
   twelve new test modules. None of it was committed as part of creating this
   bundle. Anything that touches git here must assume other work is in flight
   ([workflows/change-tracking.md](/workflows/change-tracking.md)).

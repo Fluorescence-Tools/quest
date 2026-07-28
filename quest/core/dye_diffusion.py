@@ -18,7 +18,7 @@ import numexpr as ne
 
 from . import photon
 
-from . import pdb as PDB
+from .structure import reader as PDB
 from .structure import Structure
 from . import av as fps
 from .av import AV

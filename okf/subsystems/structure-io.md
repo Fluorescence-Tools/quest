@@ -35,7 +35,7 @@ used by the project's `coarse_grained` flag
 
 # Structure sources: path or PDB ID
 
-`quest/structure_fetch.py` lets every surface accept a bare four-character RCSB
+`quest/core/structure/fetch.py` lets every surface accept a bare four-character RCSB
 identifier wherever a file path is accepted:
 
 - `is_pdb_id(value)` — a 4-character alphanumeric string;

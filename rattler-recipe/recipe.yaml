@@ -36,7 +36,7 @@ requirements:
     # Accessible volumes. `imp-tricks` owns the AV computation itself
     # (`IMP.bff.av.compute_av`) and its IMP.bff/LabelLib backend dispatch;
     # QuEst calls it rather than carrying a second copy. `imp` additionally
-    # provides the structure reader (quest/core/pdb.py), and `labellib` is the
+    # provides the structure reader (quest/core/structure/reader.py), and `labellib` is the
     # fallback backend on platforms without a compiled IMP.bff.
     #
     # `imp-tricks` does not resolve from any public channel yet — it lives on a
@@ -60,7 +60,7 @@ tests:
         - quest
         - quest.api
         - quest.core
-        - quest.backend
+        - quest.rpc
       pip_check: true
   - script:
       # The CLI must actually start, not merely import.

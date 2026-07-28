@@ -99,7 +99,10 @@ quest/
     analysis.py            residue attribution, autocorrelation
     project.py             the project schema: template, validate, normalise
     grids.py               MRC + density writers
-  backend/services.py      register_services(dispatcher) -> the table above
+  rpc/services.py          register_services(dispatcher) -> the table above
+                           (was `backend/`; renamed 2026-07-28 to match ChiSurf's
+                           plugin layout and the manifest's `services` entry
+                           point — see architecture/package-layout.md)
   api.py                   the facade: verb-oriented, plain data in and out
   cli/                     Click commands -> facade
   gui/                     widget + client.py
@@ -134,7 +137,7 @@ and it is what makes the UI deduplication possible at all: without it, a
 declarative form means QuEst reimplementing a form renderer.
 
 **It is optional, and that is what keeps QuEst standalone.** ChiSurf is reached
-through `quest.chisurf_host.enable_chisurf()` — a source checkout, resolved from
+through `quest.hosts.chisurf.enable_chisurf()` — a source checkout, resolved from
 `CHISURF_ROOT`, never fatal, and never overriding a ChiSurf already imported by a
 host that loaded QuEst as a plugin. Nothing outside `quest.gui` imports it.
 

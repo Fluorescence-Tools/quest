@@ -26,13 +26,13 @@ Neighbouring domain modules, reachable directly:
 | `quest/project.py` | The project document: `template_project`, `validate_project`, `ProjectValidationError`, `REQUIRED_TOP_LEVEL_KEYS` |
 | `quest/scan.py` | One labeling site: `site_project`, `simulate_site` (never raises), `scan_positions` |
 | `quest/settings/` | The shipped data: `parameter_catalog()`, `dye_repository()`, `save_dye()`, `quenching_defaults()`, resolved package-relative |
-| `quest/structure_info.py` | `structure_metadata(path)` — chains, residues and atom names a dye could attach to (PDB and mmCIF) |
+| `quest/core/structure/metadata.py` | `structure_metadata(path)` — chains, residues and atom names a dye could attach to (PDB and mmCIF) |
 | `quest/jobs.py` | Past runs: `list_jobs`, `job_summary`, `read_job`, `archive_job`, and `is_job_id` (a run is a UUID directory) |
-| `quest/imp_tricks.py` | `enable_imp_tricks()` — splice an imp-tricks checkout into the live interpreter |
-| `quest/backend/` | The RPC surface: `ServiceDispatcher`, `InProcessClient`, `register_services`, `result_payload` |
+| `quest/hosts/imp_tricks.py` | `enable_imp_tricks()` — splice an imp-tricks checkout into the live interpreter |
+| `quest/rpc/` | The RPC surface: `ServiceDispatcher`, `InProcessClient`, `register_services`, `result_payload` |
 
 `quest/api.py` is a re-export shim; the implementation is `quest/core.py`
-(plus `structure_fetch.py` and `lib/fps_json.py`). Import from `quest.api` in
+(plus `core/structure/fetch.py` and `core/fps_json.py`). Import from `quest.api` in
 new code — see [architecture/surfaces.md](/architecture/surfaces.md).
 
 None of it touches Qt, so it is safe in notebooks, servers and CI.

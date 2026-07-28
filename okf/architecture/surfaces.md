@@ -20,7 +20,7 @@ timestamp: '2026-07-26T00:00:00Z'
         DonorDecay / SimulateDiffusion / AV / photon kernels
 ```
 
-`quest/api.py` re-exports from `quest/core.py` (plus `structure_fetch` and
+`quest/api.py` is a verb facade over the RPC client (plus re-exports from `quest/core/` and
 `fps_json`) and is the **stable import surface**: downstream code and the web
 backend import `quest.api`, not the internals. `quest/core.py` is where the
 logic lives.

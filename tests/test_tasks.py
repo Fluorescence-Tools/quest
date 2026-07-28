@@ -272,7 +272,7 @@ class TestTheScanActuallyStops:
 
 class TestTheRpcSurface:
     def test_cancel_reports_whether_it_was_accepted(self) -> None:
-        from quest.backend import local_client
+        from quest.rpc import local_client
         from quest.tasks import default_manager
 
         job = default_manager().create("quest.scan")
@@ -287,14 +287,14 @@ class TestTheRpcSurface:
         )
 
     def test_an_unknown_job_is_an_error_not_a_null(self) -> None:
-        from quest.backend import local_client
+        from quest.rpc import local_client
 
         response = local_client().call("quest.jobs.get", {"job_id": "nope"})
         assert response["ok"] is False
 
     def test_runs_and_jobs_are_different_methods(self) -> None:
         """The whole point of the rename."""
-        from quest.backend import METHODS
+        from quest.rpc import METHODS
 
         assert "quest.runs.list" in METHODS
         assert "quest.jobs.list" in METHODS

@@ -1,7 +1,7 @@
 """QuEst's RPC surface: the operations every front end shares.
 
 Each handler takes plain data, calls the domain, and returns the envelope
-described in :mod:`quest.backend.dispatcher`. Nothing here computes anything —
+described in :mod:`quest.rpc.dispatcher`. Nothing here computes anything —
 if a handler grows logic, that logic belongs in the domain where the CLI and
 notebooks can reach it too.
 
@@ -62,7 +62,7 @@ def simulation_payload(result: Any) -> dict[str, Any]:
     numpy->list conversion of every decay channel whether it wanted one or not
     -- including the fitting loop `OBJ-02` chose as QuEst's primary consumer,
     which calls `simulate` thousands of times. See
-    `quest.backend.contract`.
+    `quest.rpc.contract`.
     """
 
     def _list(value: Any) -> Any:
@@ -265,8 +265,8 @@ def quenching_defaults_handler() -> dict[str, Any]:
 
 
 def structure_metadata_handler(pdb_path: str) -> dict[str, Any]:
-    from ..structure_fetch import resolve_structure_path
-    from ..structure_info import structure_metadata
+    from ..core.structure import resolve_structure_path
+    from ..core.structure import structure_metadata
 
     try:
         resolved = resolve_structure_path(pdb_path)
@@ -349,7 +349,7 @@ def register_services(dispatcher: Any) -> None:
     ----------
     dispatcher : object
         Anything exposing ``register(name, handler)`` — QuEst's own
-        :class:`~quest.backend.dispatcher.ServiceDispatcher`, or a host
+        :class:`~quest.rpc.dispatcher.ServiceDispatcher`, or a host
         application's.
     """
 

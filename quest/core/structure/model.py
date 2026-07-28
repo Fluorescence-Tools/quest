@@ -5,7 +5,7 @@ import tempfile
 
 import numpy as np
 
-from . import pdb as PDB
+from . import reader as PDB
 
 import os.path
 
@@ -260,7 +260,7 @@ class Structure(object):
         # residues -- are kept **whole**. Coarse-graining reduces an amino acid
         # to its backbone plus CB; a bound sugar has no such reduction, and
         # dropping it would silently reinstate the HETATM stripping that
-        # `quest/core/pdb.py` deliberately stopped doing. Before this, keeping
+        # `quest/core/structure/reader.py` deliberately stopped doing. Before this, keeping
         # HETATM records raised `KeyError: 'FGA'` here.
         tmp = [
             atom for atom in all_atoms

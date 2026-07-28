@@ -1,8 +1,8 @@
 """QuEst's service layer: named operations behind one call contract.
 
-See :mod:`quest.backend.contract` for the identity, error codes and the
-serialization boundary, :mod:`quest.backend.services` for the method table, and
-:mod:`quest.backend.dispatcher` for the envelope and the in-process client.
+See :mod:`quest.rpc.contract` for the identity, error codes and the
+serialization boundary, :mod:`quest.rpc.services` for the method table, and
+:mod:`quest.rpc.dispatcher` for the envelope and the in-process client.
 """
 
 from .contract import (

@@ -18,7 +18,7 @@ exercises the same registry, the same validation and the same error codes.
 # The results are native, not JSON
 
 `simulate` hands back a `DecaySimulationResult` with its numpy arrays intact.
-Serialization happens at a **transport** (`quest.backend.contract.to_payload`),
+Serialization happens at a **transport** (`quest.rpc.contract.to_payload`),
 not in a handler, because `OBJ-02` made a fitting loop QuEst's primary consumer
 and converting every decay channel to a Python list per iteration is a tax it
 would pay forever.
@@ -55,7 +55,7 @@ from .project import (
     template_project,
     validate_project,
 )
-from .structure_fetch import (
+from .core.structure import (
     download_pdb_id,
     is_pdb_id,
     resolve_structure_path,
@@ -79,7 +79,7 @@ def client():
 
     global _CLIENT
     if _CLIENT is None:
-        from .backend import local_client
+        from .rpc import local_client
 
         _CLIENT = local_client()
     return _CLIENT

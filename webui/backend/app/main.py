@@ -63,11 +63,11 @@ from quest.core import top_quenchers
 from quest.scan import simulate_site
 from quest import i18n as quest_i18n
 from quest import settings as quest_settings
-from quest.backend import RemoteError, to_payload
+from quest.rpc import RemoteError, to_payload
 
-from quest.backend.services import locales_handler, structure_metadata_handler
+from quest.rpc.services import locales_handler, structure_metadata_handler
 from quest import runs as quest_runs
-from quest.structure_fetch import resolve_structure_path
+from quest.core.structure import resolve_structure_path
 
 #: `error_code` -> HTTP status. A malformed project is the caller's fault; a
 #: buried labelling site is a 422 (well-formed, unprocessable) rather than a

@@ -172,7 +172,7 @@ from the specification, not from the code under test.
 ## Threading — the lock lives upstream now
 
 `IMP` builds its decorators through SWIG, which is not safe from several
-threads at once — `quest/core/pdb.py` already serialises the parse for this
+threads at once — `quest/core/structure/reader.py` already serialises the parse for this
 reason, and the AV path hits the identical failure one layer down
 (`'XYZR_setup_particle'` receiving a particle *name*) as soon as a scan runs
 sites in a pool, which the web backend does.

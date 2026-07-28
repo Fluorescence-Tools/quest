@@ -1,21 +1,21 @@
 ---
 type: Subsystem
 title: RPC service layer
-description: quest/backend/ — the named methods every surface shares, the result envelope, and how a host registers them.
-resource: quest/backend/services.py
+description: quest/rpc/ — the named methods every surface shares, the result envelope, and how a host registers them.
+resource: quest/rpc/services.py
 tags: [rpc, service-layer, plugin, boundary]
 timestamp: '2026-07-26T00:00:00Z'
 ---
 
 # One operation, one name
 
-`quest/backend/` exposes QuEst's capabilities as named methods so the CLI, the
+`quest/rpc/` exposes QuEst's capabilities as named methods so the CLI, the
 web backend, the GUI and a host application call the *same* operation with the
 *same* result shape. It is the concrete first half of
 [specs/plugin-integration.md](/specs/plugin-integration.md).
 
 ```python
-from quest.backend import local_client
+from quest.rpc import local_client
 
 client = local_client()
 project = client.result("quest.template", {"with_fret": False})["project"]
@@ -71,7 +71,7 @@ a host application's dispatcher works unchanged and QuEst never imports the
 host:
 
 ```python
-from quest.backend import register_services
+from quest.rpc import register_services
 register_services(host_dispatcher)     # ChiSurf's ServiceDispatcher, say
 ```
 

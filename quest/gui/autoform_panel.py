@@ -7,7 +7,7 @@ the UI.
 
 `build_method_panel("quest.simulate")` returns a bound form whose values come
 back as a plain params dict — exactly what
-:func:`quest.backend.services.simulate_handler` takes, so the panel and the
+:func:`quest.rpc.services.simulate_handler` takes, so the panel and the
 service cannot drift apart.
 
 Nothing here is required: where ChiSurf is absent :func:`autoform_supported`
@@ -60,7 +60,7 @@ def method_declaration(name: str) -> dict[str, Any]:
 
 def autoform_supported() -> bool:
     """Whether the host's AutoForm can be reached from here."""
-    from ..chisurf_host import autoform_available
+    from ..hosts import autoform_available
 
     return autoform_available()
 

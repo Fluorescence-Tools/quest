@@ -131,7 +131,7 @@ The run is synchronous and blocks the form — `LAY-07`, still open.
 QuEst's Qt form is rendered by the host. Without a ChiSurf checkout there is no
 form: `dye_widget.py` shows a panel saying so, because there is no second
 in-tree renderer to fall back to and an empty window explains nothing. The host
-is found through `quest.chisurf_host.enable_chisurf()`, so no caller has to set
+is found through `quest.hosts.chisurf.enable_chisurf()`, so no caller has to set
 `PYTHONPATH`.
 
 This does **not** weaken the optional-Qt rule. Qt lives in `quest/gui/` and

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from quest.chisurf_host import autoform_available, chisurf_root
+from quest.hosts import autoform_available, chisurf_root
 
 pytestmark = pytest.mark.skipif(
     not autoform_available(),

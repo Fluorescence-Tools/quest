@@ -7,7 +7,7 @@ result shape.
 
 This module is deliberately small: it exists so QuEst works standalone. When a
 host application provides its own dispatcher, pass that one to
-:func:`quest.backend.services.register_services` instead — the registration only
+:func:`quest.rpc.services.register_services` instead — the registration only
 needs a ``register(name, handler)`` method, so the two interoperate without
 QuEst depending on the host.
 
@@ -59,7 +59,7 @@ def ok(result: Any) -> dict[str, Any]:
 def fail(error: str, error_code: str = "operation_failed") -> dict[str, Any]:
     """Wrap *error* in a failure envelope.
 
-    Thin wrapper over :func:`quest.backend.contract.service_error`, kept because
+    Thin wrapper over :func:`quest.rpc.contract.service_error`, kept because
     handlers read better with a short name. Use the contract directly when you
     want to attach an exception type or details.
     """

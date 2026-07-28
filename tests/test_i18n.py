@@ -217,7 +217,7 @@ class TestTheScienceIsNotTranslated:
 
 class TestTheServiceLayerServesLanguages:
     def test_it_lists_them(self) -> None:
-        from quest.backend.services import local_client
+        from quest.rpc.services import local_client
 
         response = local_client().call("quest.locales", {})
         assert response["ok"]
@@ -225,7 +225,7 @@ class TestTheServiceLayerServesLanguages:
         assert response["result"]["strings"]["button.simulate"]
 
     def test_it_translates_the_catalog(self) -> None:
-        from quest.backend.services import local_client
+        from quest.rpc.services import local_client
 
         response = local_client().call("quest.parameter_catalog", {"locale": "fr"})
         assert response["ok"]
@@ -235,7 +235,7 @@ class TestTheServiceLayerServesLanguages:
 
     def test_no_locale_means_english_not_the_servers_language(self, monkeypatch) -> None:
         """A shared backend must not answer in whatever the host is set to."""
-        from quest.backend.services import local_client
+        from quest.rpc.services import local_client
 
         monkeypatch.setenv(i18n.LOCALE_ENV_VAR, "de")
         i18n.clear_cache()

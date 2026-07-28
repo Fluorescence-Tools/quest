@@ -38,7 +38,7 @@ def _shared_downloader():
     and keeps its own only for running without a host.
     """
     try:
-        from .chisurf_host import enable_chisurf
+        from .hosts import enable_chisurf
 
         if not enable_chisurf():
             return None

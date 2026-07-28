@@ -30,7 +30,7 @@ lifetime.
 | `quest/core.py` | The headless service layer: `load_project`, `build_donor_from_project`, `simulate_project`, residue-resolved quenching analysis, MRC/grid writers |
 | `quest/api.py` | Thin public re-export of `core` + structure fetch + FPS scan; the stable import surface |
 | `quest/cli.py` | The Click CLI (`quest simulate/scan/template/validate/gui`) |
-| `quest/structure_fetch.py` | Resolve a path *or* a bare 4-character RCSB PDB ID, with an on-disk cache |
+| `quest/core/structure/fetch.py` | Resolve a path *or* a bare 4-character RCSB PDB ID, with an on-disk cache |
 | `quest/quest_gui.py` | Entry point for the legacy Qt GUI |
 | `quest/lib/fps/` | Accessible-volume calculation, the AV grid kernels, and the diffusion trajectory kernels (numba) |
 | `quest/lib/imp_av.py` | Optional IMP.bff accessible-volume backend |

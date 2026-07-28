@@ -93,7 +93,7 @@ now verified point-for-point identical to QuEst's on 148l E118, E36 and E90.
 `DUP-01` is no longer blocked on correctness — only on packaging, since QuEst
 still reaches imp-tricks through a path shim rather than a declared dependency.
 
-*Not* an issue: reaching imp-tricks from source. `quest.imp_tricks` splices the
+*Not* an issue: reaching imp-tricks from source. `quest.hosts.imp_tricks` splices the
 checkout in automatically, deliberately **without installing** it, since the
 source tree is what is changing
 ([workflows/environment.md](/workflows/environment.md)).
@@ -207,7 +207,7 @@ independently constructed orderings that agreed only because both iterated a
 `set()` of small integers.
 
 Residue identity now comes from **IMP's hierarchy, at the reader**:
-`quest/core/pdb.py` assigns a `residue_index` per distinct
+`quest/core/structure/reader.py` assigns a `residue_index` per distinct
 `(chain, res_id, insertion_code)` in file order, and adds an `insertion_code`
 column it had been discarding. Everything groups on `residue_index`;
 `residue_ids` survives for *display* with a docstring saying so.

@@ -176,7 +176,7 @@ def contract_descriptor() -> dict[str, Any]:
         # converts them.
         "serialization": {
             "in_process": "native Python objects (numpy arrays preserved)",
-            "wire": "JSON, produced by quest.backend.contract.to_payload",
+            "wire": "JSON, produced by quest.rpc.contract.to_payload",
         },
     }
 

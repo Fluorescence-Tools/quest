@@ -18,7 +18,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quest import cli
-from quest.structure_fetch import download_pdb_id, is_pdb_id, resolve_structure_path
+from quest.core.structure import download_pdb_id, is_pdb_id, resolve_structure_path
 from webui.backend.app.main import app
 
 AMINO_ACIDS = [
@@ -74,8 +74,8 @@ def test_download_pdb_id_caches_rcsb_file(monkeypatch: pytest.MonkeyPatch, tmp_p
     # These cover QuEst's *standalone* fetch. When a ChiSurf checkout is
     # reachable the real call delegates to the host's shared implementation,
     # which this monkeypatched urlopen would never see.
-    monkeypatch.setattr("quest.structure_fetch._shared_downloader", lambda: None)
-    monkeypatch.setattr("quest.structure_fetch.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("quest.core.structure.fetch._shared_downloader", lambda: None)
+    monkeypatch.setattr("quest.core.structure.fetch.urllib.request.urlopen", fake_urlopen)
 
     path = download_pdb_id("148l", cache_dir=tmp_path)
 
@@ -98,8 +98,8 @@ def test_download_pdb_id_falls_back_to_cif(monkeypatch: pytest.MonkeyPatch, tmp_
     # These cover QuEst's *standalone* fetch. When a ChiSurf checkout is
     # reachable the real call delegates to the host's shared implementation,
     # which this monkeypatched urlopen would never see.
-    monkeypatch.setattr("quest.structure_fetch._shared_downloader", lambda: None)
-    monkeypatch.setattr("quest.structure_fetch.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("quest.core.structure.fetch._shared_downloader", lambda: None)
+    monkeypatch.setattr("quest.core.structure.fetch.urllib.request.urlopen", fake_urlopen)
 
     path = download_pdb_id("1abc", cache_dir=tmp_path)
 
@@ -114,7 +114,7 @@ def test_download_pdb_id_falls_back_to_cif(monkeypatch: pytest.MonkeyPatch, tmp_
 def test_resolve_structure_path_accepts_files_and_pdb_ids(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     local = tmp_path / "local.pdb"
     local.write_text("ATOM\n", encoding="utf8")
-    monkeypatch.setattr("quest.structure_fetch.download_pdb_id", lambda pdb_id, cache_dir=None: tmp_path / f"{pdb_id.lower()}.pdb")
+    monkeypatch.setattr("quest.core.structure.fetch.download_pdb_id", lambda pdb_id, cache_dir=None: tmp_path / f"{pdb_id.lower()}.pdb")
 
     assert resolve_structure_path(local) == local
     assert resolve_structure_path("1abc") == tmp_path / "1abc.pdb"

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from quest.backend import (
+from quest.rpc import (
     METHODS,
     InProcessClient,
     RemoteError,
@@ -301,7 +301,7 @@ class TestLayering:
         import sys
 
         code = (
-            "import sys, quest.api, quest.backend, quest.core, quest.core;"
+            "import sys, quest.api, quest.rpc, quest.core, quest.core;"
             "loaded = [m for m in sys.modules if m.split('.')[0] in "
             "('qtpy', 'PyQt5', 'PyQt6', 'PySide2', 'PySide6')];"
             "print(','.join(sorted(set(loaded))))"
@@ -316,6 +316,6 @@ class TestLayering:
 
     def test_the_service_layer_is_gui_free(self) -> None:
         """The backend must import without any Qt binding present."""
-        for name in ("dispatcher.py", "services.py", "__init__.py"):
-            modules = _imported_modules(REPO_ROOT / "quest" / "backend" / name)
+        for name in ("dispatcher.py", "services.py", "contract.py", "__init__.py"):
+            modules = _imported_modules(REPO_ROOT / "quest" / "rpc" / name)
             assert not any(m.startswith(("qtpy", "PyQt5", "PySide")) for m in modules)

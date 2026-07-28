@@ -2,7 +2,7 @@
 type: Specification
 title: One seam for structure input
 description: Every structure enters QuEst through a single loader that yields an atom array; nothing downstream ever sees a filename or a format.
-resource: quest/core/pdb.py
+resource: quest/core/structure/reader.py
 tags: [io, structure, pdb, cif, radii, architecture]
 timestamp: '2026-07-27T00:00:00Z'
 ---
@@ -28,7 +28,7 @@ downstream re-derived the structure instead of being handed it.
    all-atom measured byte-identical at 13883.805 Å³.
 2. **The same re-read is `read_pdb` only**, so `.cif` projects fail outright
    under that backend ("No molecule read from file … mc4r_dimer.cif") while
-   working perfectly through `quest/core/pdb.py`, which handles mmCIF. One
+   working perfectly through `quest/core/structure/reader.py`, which handles mmCIF. One
    format, two answers, depending on which backend you happened to pick.
 3. **Two radius tables.** LabelLib was fed QuEst's Bondi-like radii (C 1.76,
    N 1.65, O 1.40) and IMP.bff its own (C 2.10, N 1.85, O 1.71) — 19 % larger
@@ -139,7 +139,7 @@ Done 2026-07-27:
 
 - `quest/core/elements.py` **deleted** (271 lines) — radii and masses come off
   the IMP particle, and the `assignCharge` path it also served had no caller.
-- `quest/core/structure.py` 623 → ~345 lines: RMSD, clustering and the torsion
+- `quest/core/structure/model.py` 623 → ~345 lines: RMSD, clustering and the torsion
   subsystem had no readers.
 - `imp_av.py` takes the atom array; its file handling is gone, which fixed both
   the discarded coarse-graining and the mmCIF failure above.

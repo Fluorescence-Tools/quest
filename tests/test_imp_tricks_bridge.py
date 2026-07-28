@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from quest.imp_tricks import enable_imp_tricks, imp_tricks_src
+from quest.hosts import enable_imp_tricks, imp_tricks_src
 
 pytestmark = pytest.mark.skipif(
     imp_tricks_src() is None, reason="no imp-tricks checkout found"
@@ -117,7 +117,7 @@ class TestTheUpstreamAvMatchesQuEsts:
     @pytest.fixture(scope="class", params=["labellib", "imp_bff"])
     def clouds(self, request):
         backend = request.param
-        from quest.imp_tricks import enable_imp_tricks
+        from quest.hosts import enable_imp_tricks
 
         enable_imp_tricks()
         compute = pytest.importorskip(

@@ -53,7 +53,7 @@ os.environ.setdefault("NUMBA_THREADING_LAYER", "omp")
 os.environ.setdefault("NUMBA_NUM_THREADS", str(max(1, (os.cpu_count() or 1))))
 
 #: Where ChiSurf lives unless told otherwise. Exported so subprocesses and
-#: `quest.chisurf_host` agree without every caller setting PYTHONPATH.
+#: `quest.hosts.chisurf` agree without every caller setting PYTHONPATH.
 DEFAULT_CHISURF_ROOT = Path.home() / "dev" / "chisurf"
 os.environ.setdefault("CHISURF_ROOT", str(DEFAULT_CHISURF_ROOT))
 
@@ -90,7 +90,7 @@ def _import_chisurf_first() -> None:
     if not _qt_binding_available():
         return
 
-    from quest.chisurf_host import enable_chisurf
+    from quest.hosts import enable_chisurf
 
     if not enable_chisurf():
         return

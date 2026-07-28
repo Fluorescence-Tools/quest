@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
-from .structure_fetch import resolve_structure_path
+from .core.structure import resolve_structure_path
 
 __all__ = [
     "DEFAULT_FORSTER_RADIUS",

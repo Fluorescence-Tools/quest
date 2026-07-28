@@ -33,7 +33,7 @@ __all__ = ["TransientDecayGenerator"]
 # Reach the host the same way everything else in QuEst does, so a plain
 # `python -m quest.gui` finds ChiSurf without the caller setting PYTHONPATH.
 try:
-    from ..chisurf_host import enable_chisurf
+    from ..hosts import enable_chisurf
 
     enable_chisurf()
 except Exception:  # pragma: no cover - never fatal; QuEst runs standalone

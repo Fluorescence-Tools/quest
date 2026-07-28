@@ -32,7 +32,7 @@
   "entrypoints": {
     "gui": "quest.gui:TransientDecayGenerator",
     "cli": "quest.cli:cli",
-    "services": "quest.backend.services:register_services"
+    "services": "quest.rpc.services:register_services"
   },
   "rpc_methods": [
     {

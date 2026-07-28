@@ -9,7 +9,7 @@ from numba import njit, prange
 # Qt-free: the accessible-volume widget that used to live here was unused, and
 # it was the only reason this module imported a GUI toolkit.
 
-from . import pdb as PDB
+from .structure import reader as PDB
 from .structure import Structure
 from .io import write_xyz
 
@@ -28,7 +28,7 @@ try:  # pragma: no cover - development convenience
     # importable from source without installing anything. imp-tricks is under
     # active development, so the source tree -- not an installed copy -- is the
     # thing that has to work.
-    from ..imp_tricks import enable_imp_tricks
+    from ..hosts import enable_imp_tricks
 
     IMP_TRICKS_ENABLED = enable_imp_tricks()
 except Exception:  # pragma: no cover - never fatal
@@ -49,7 +49,7 @@ try:  # pragma: no cover - optional heavy dependency
     #:
     #: `compute_av` is imported here rather than probed with `hasattr` because
     #: `IMP.bff.av` is a namespace subpackage spliced in by
-    #: `quest.imp_tricks.enable_imp_tricks`, and its presence on `IMP.bff` is
+    #: `quest.hosts.imp_tricks.enable_imp_tricks`, and its presence on `IMP.bff` is
     #: not something an attribute lookup answers.
     def _imp_bff_backend_available() -> bool:
         if not hasattr(IMP.bff, "AV"):
@@ -92,7 +92,7 @@ def _compute_av():
                 "QuEst's accessible volume requires `IMP.bff.av` from "
                 "imp-tricks, which is not importable. Install imp-tricks, or "
                 "place a checkout at ~/dev/imp-tricks (or $IMP_TRICKS_SRC) so "
-                "`quest.imp_tricks` can splice it in."
+                "`quest.hosts.imp_tricks` can splice it in."
             ) from exc
         _UPSTREAM_COMPUTE_AV = compute_av
     return _UPSTREAM_COMPUTE_AV
@@ -132,7 +132,7 @@ def _density2points_kernel():
             raise ImportError(
                 "QuEst's accessible volume requires `IMP.bff.av` from imp-tricks, "
                 "which is not importable. Install imp-tricks, or place a checkout "
-                "at ~/dev/imp-tricks (or $IMP_TRICKS_SRC) so `quest.imp_tricks` "
+                "at ~/dev/imp-tricks (or $IMP_TRICKS_SRC) so `quest.hosts.imp_tricks` "
                 "can splice it in."
             ) from exc
         _UPSTREAM_DENSITY2POINTS = density2points
@@ -339,7 +339,7 @@ def _pair_distance_kernels():
                 "QuEst's donor-acceptor distances require `IMP.bff` from "
                 "imp-tricks, which is not importable. Install imp-tricks, or "
                 "place a checkout at ~/dev/imp-tricks (or $IMP_TRICKS_SRC) so "
-                "`quest.imp_tricks` can splice it in."
+                "`quest.hosts.imp_tricks` can splice it in."
             ) from exc
         _UPSTREAM_PAIR_KERNELS = (random_distances, av_pair_statistics)
     return _UPSTREAM_PAIR_KERNELS

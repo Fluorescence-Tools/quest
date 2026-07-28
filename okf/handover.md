@@ -149,7 +149,7 @@ Ordered by how much. The first four were all learned or corrected on
   The most recent: an upstream test asserted `r_mp == 50.0` and passed only
   because the function returned the wrong quantity under that name.
 - **Check the bridge was invoked before blaming the other repository.** A probe
-  written `import quest.imp_tricks` (the module, without calling
+  written `import quest.hosts.imp_tricks` (the module, without calling
   `enable_imp_tricks()`) reported `IMP.bff.av` and `IMP.cgmol` missing, and
   "fix the `IMP.cgmol` import" was carried into a work plan as an upstream
   defect. There was none. `import quest` alone does not splice; `quest.core`,

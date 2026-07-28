@@ -9,7 +9,7 @@ files. That is the deduplication: one declaration, rendered by the host.
 Where ChiSurf is absent, QuEst still runs: the in-tree form remains the
 fallback, and nothing outside :mod:`quest.gui` imports this module.
 
-Like :mod:`quest.imp_tricks`, this works from a **source checkout** rather than
+Like :mod:`quest.hosts.imp_tricks`, this works from a **source checkout** rather than
 an install, because that is what is under active development.
 """
 

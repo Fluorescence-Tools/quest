@@ -10,7 +10,7 @@ import click
 from . import api
 from .project import ProjectValidationError, template_project, validate_project
 from .scan import simulate_site
-from .structure_fetch import resolve_structure_path
+from .core.structure import resolve_structure_path
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})

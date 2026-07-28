@@ -24,7 +24,7 @@ import pytest
 pytest.importorskip("qtpy", reason="no Qt binding in this environment")
 QtWidgets = pytest.importorskip("qtpy.QtWidgets", reason="no Qt binding")
 
-from quest.chisurf_host import autoform_available  # noqa: E402
+from quest.hosts import autoform_available  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     not autoform_available(),

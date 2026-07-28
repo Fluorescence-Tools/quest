@@ -77,7 +77,7 @@ QuEst modules are shadowed by ChiSurf's **`fps_json_editor` plugin**
 | QuEst | ChiSurf equivalent |
 |---|---|
 | `quest/core/fps_json.py` — load and normalise fps.json positions | `core/payload.py` — `normalize_payload`, `validate_payload`, `summarize_payload` |
-| `quest/structure_fetch.py` — RCSB download and cache | `core/pdb.py` — `download_pdb_file`, `default_cache_dir`, `pdb_source_url` |
+| `quest/core/structure/fetch.py` — RCSB download and cache | `core/pdb.py` — `download_pdb_file`, `default_cache_dir`, `pdb_source_url` |
 | `write_mrc` in `quest/core/simulation.py` | `core/mrc.py` — `save_av_mrc` |
 
 **It cannot be consumed as it stands.** All three live inside a ChiSurf
@@ -204,7 +204,7 @@ Two more upstream fixes went with them:
   `IMP.__path__` for its children and `import IMP.bff.av` failed however
   `sys.path` was arranged — imp-tricks' own test suite could not import its own
   AV code (28 collection errors). QuEst had solved this independently in
-  `quest/imp_tricks.py`; the same handling is now upstream. Its `bff` suite goes
+  `quest/hosts/imp_tricks.py`; the same handling is now upstream. Its `bff` suite goes
   from *uncollectable* to **191 passed, 5 failed, 24 skipped**.
 - Two tests asserted `ImportError` "without a backend" and passed only *because*
   of fault 2 — a usable LabelLib was being reported as missing. They now
@@ -220,7 +220,7 @@ suite could not be collected. Newly *visible*, not newly broken.
 `IMP.bff.av` resolves in **both** environments once the checkout is on the path —
 including the base interpreter, where there is no compiled `IMP.bff` to shadow
 it. So the barrier was never "it does not work"; it was that imp-tricks was a
-development path shim (`quest/imp_tricks.py`) rather than a declared dependency.
+development path shim (`quest/hosts/imp_tricks.py`) rather than a declared dependency.
 
 **It is now declared**, on the owner's instruction that installability is not a
 constraint ("nobody installs quest; imp-tricks goes public later"). Declared in
@@ -237,7 +237,7 @@ fix is publication, and then nothing else: the version constraint is `*`, so a
 package appearing on conda-forge under the name `imp-tricks` is enough.
 
 Day-to-day work is unaffected because it does not go through pixi: the canonical
-`arm64` conda environment reaches the checkout through `quest/imp_tricks.py`
+`arm64` conda environment reaches the checkout through `quest/hosts/imp_tricks.py`
 ([workflows/environment.md](/workflows/environment.md)). That shim stays until
 publication — it is what makes the source tree, rather than a stale install, the
 thing that runs.
@@ -357,7 +357,7 @@ work**; an installed copy goes stale the moment the checkout changes. A real
 
 # Reaching a checkout from the live interpreter
 
-`quest.imp_tricks.enable_imp_tricks()` splices a checkout in at runtime
+`quest.hosts.imp_tricks.enable_imp_tricks()` splices a checkout in at runtime
 (`~/dev/imp-tricks/src`, or `$IMP_TRICKS_SRC`), returning the subpackages it
 made importable. **It runs automatically** when `quest.lib.imp_av` is imported —
 which every QuEst entry point does — so using QuEst is enough to reach

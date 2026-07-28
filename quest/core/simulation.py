@@ -22,7 +22,7 @@ from numba import njit, prange
 
 from .dye_diffusion import DonorDecay, normalize_amino_acid_interactions
 from .photon import simulate_decay_quench
-from ..structure_fetch import resolve_structure_path
+from ..core.structure import resolve_structure_path
 
 
 def autocorr(x: np.ndarray, axis: int = 0, normalize: bool = True) -> np.ndarray:
