@@ -15,8 +15,9 @@ phases are done** (seventeen commits in `quest`, two in `imp-tricks`, one in
 `chisurf`). **Every `LAY-*` row is closed, on both sides, and
 `known-issues.md` has no open entry left.**
 
-**Only phase 12 remains, and it needs credentials**: publishing imp-tricks is
-what turns CI green, and nothing else is waiting on it. The decisions behind it — and
+**Phase 12 is closed as "not doing it": imp-tricks stays local.** The owner
+ruled publication out on 2026-07-28, reversing the interview decision. Nothing
+in the code is waiting on it — the consequence is CI, below. The decisions behind it — and
 the three places they *reverse* what this bundle used to assert — are in
 [specs/programme-2026-07.md](specs/programme-2026-07.md). Read that before
 proposing work in these areas; several "obvious" next steps there have already
@@ -62,11 +63,31 @@ residue identity were both wrong, on both backends.
 
 # Left: phases 12 and 13
 
-1. **Phase 12 — publish imp-tricks** to anaconda.org (`tpeulen`, noarch)
-   **and** PyPI. **Decide the version at release time**: it is unreleased, so a
-   bump per change distinguishes nothing and spends a number early. Once there
-   is a published version, pin it in `pixi.toml` and the recipe in place of the
-   current `*`.
+1. ~~**Phase 12 — publish imp-tricks**~~ — **not doing it.** Everything stays
+   local by owner ruling (2026-07-28). The recipe is written
+   (`~/dev/imp-tricks/rattler-recipe/recipe.yaml`, `noarch: python`) and the
+   version is deliberately still `0.1.0`, to be decided at release. If that ever
+   changes: publish to anaconda.org (`tpeulen`) and PyPI, then pin the version
+   in `pixi.toml` and `rattler-recipe/recipe.yaml` in place of the current `*`.
+
+   **The standing consequence is that two CI jobs cannot solve.** `pixi.toml`
+   declares `imp-tricks = "*"` on the `py` feature, and no public channel has
+   it, so the `default` and `desktop` environments are unsolvable:
+
+   | CI job | environment | state |
+   |---|---|---|
+   | `test` | `default` (`py` + web + test) | **red — cannot solve** |
+   | `gui` | `desktop` (`py` + gui + web + test) | **red — cannot solve** |
+   | `frontend` | `frontend` (separate solve-group) | green |
+   | `package` | `build` (`no-default-feature`) | green |
+
+   **Earlier notes said "all four jobs", which is wrong** — `frontend` and
+   `build` never carry the `py` feature. Corrected 2026-07-28 by reading
+   `pixi.toml`'s `[environments]` against `.github/workflows/ci.yml`.
+
+   A permanently red job is worse than a missing one, because it trains people
+   to ignore the light. **This is unresolved and wants a decision** — see the
+   next section.
    **This needs credentials and is the one phase that cannot be done
    unattended.** The recipe is written
    (`~/dev/imp-tricks/rattler-recipe/recipe.yaml`) and the version is bumped.
@@ -79,6 +100,13 @@ residue identity were both wrong, on both backends.
 
 # Still open, needing a decision
 
+- **What to do about the two permanently red CI jobs**, now that publication is
+  off the table indefinitely. Three options, none taken: make `imp-tricks` an
+  *optional* pixi feature so `default`/`desktop` solve and the IMP-dependent
+  tests skip explicitly; disable the two jobs with a comment pointing here; or
+  leave them red and accept that CI signals nothing for the library and GUI.
+  The first is the only one that keeps CI meaningful, and it costs an honest
+  accounting of what is then untested.
 - **Where ChiSurf's fps.json `payload.py` belongs** (`DUP-07` remainder). The
   owner is not convinced `chisurf/core` is right. Nothing depends on it.
 - **`asa`/`spherePoints` → `IMP.cgmol.sterics.asa`** (`DUP-05` remainder). Cold

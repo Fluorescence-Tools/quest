@@ -58,6 +58,25 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **Phase 12 closed as "not doing it": imp-tricks stays local**, reversing the
+  interview decision. The recipe is written and the version deliberately left at
+  `0.1.0`; nothing in the code waits on publication.
+
+  **The recorded consequence was wrong, and overstated.** Both this log and the
+  handover said declaring `imp-tricks` turns "all four CI jobs red". It is
+  **two**: `pixi.toml` puts `imp-tricks = "*"` on the `py` feature, and only
+  `default` and `desktop` carry it, so the `test` and `gui` jobs cannot solve
+  while `frontend` (its own solve-group) and `package` (`no-default-feature`)
+  are unaffected. The original note even contained the contradiction — "every
+  pixi environment in the `py` solve-group … and therefore all four CI jobs" —
+  and nobody read `[environments]` against `ci.yml` until now.
+
+  **Left unresolved on purpose, and flagged rather than fixed:** two
+  permanently red jobs are worse than two missing ones, because a light that is
+  always red gets ignored. Making `imp-tricks` an optional pixi feature would
+  restore a meaningful signal at the cost of stating plainly what CI then does
+  *not* cover. That is a decision, not a cleanup.
+
 * **Phase 13 (part) — `known-issues.md` pruned: 358 lines to 263, and every
   entry in it is now closed.** Each fixed entry had accumulated a correction
   *in front of* its obsolete original, which meant the wrong text was still the
