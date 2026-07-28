@@ -159,15 +159,32 @@ PDB→mmCIF, `polymer` Gaussian-chain PDF) touch none of this — zero reference
 `av.compute`, LabelLib or `compute_av` — and had never run before, since the
 suite could not be collected. Newly *visible*, not newly broken.
 
-## What still stops the deletion: packaging, not capability
+## Declared 2026-07-28 — imp-tricks is a dependency, and it does not resolve yet
 
 `IMP.bff.av` resolves in **both** environments once the checkout is on the path —
 including the base interpreter, where there is no compiled `IMP.bff` to shadow
-it. So the barrier is no longer "it does not work". It is that imp-tricks is a
-development path shim (`quest/imp_tricks.py`), not a declared dependency:
-deleting QuEst's `AV` today would break any install that does not happen to have
-a checkout. Declaring it in `pyproject.toml` and the rattler recipe is the next
-step, and it is a decision about what QuEst depends on, not a code change.
+it. So the barrier was never "it does not work"; it was that imp-tricks was a
+development path shim (`quest/imp_tricks.py`) rather than a declared dependency.
+
+**It is now declared**, on the owner's instruction that installability is not a
+constraint ("nobody installs quest; imp-tricks goes public later"). Declared in
+`rattler-recipe/recipe.yaml` (run) and `pixi.toml` (`feature.py.dependencies`),
+**not** in `pyproject.toml` — which is the convention `imp` itself already
+follows here, because neither is pip-installable. A `pip install quest` has
+never produced a working science stack and still does not.
+
+**Consequence, stated plainly:** `imp-tricks` is on a private GitLab and is on
+no public channel, so every pixi environment in the `py` solve-group now fails
+to solve, and with it **all four CI jobs** — library, GUI, frontend-adjacent and
+packaging — not merely the packaging one. This is accepted, not overlooked. The
+fix is publication, and then nothing else: the version constraint is `*`, so a
+package appearing on conda-forge under the name `imp-tricks` is enough.
+
+Day-to-day work is unaffected because it does not go through pixi: the canonical
+`arm64` conda environment reaches the checkout through `quest/imp_tricks.py`
+([workflows/environment.md](/workflows/environment.md)). That shim stays until
+publication — it is what makes the source tree, rather than a stale install, the
+thing that runs.
 
 ## Superseded — the original diagnosis, for reference
 

@@ -40,8 +40,16 @@ desktop = { cmd = "npm run start", cwd = "webui/desktop", depends-on = ["desktop
 desktop-dist = { cmd = "npm run dist", cwd = "webui/desktop", depends-on = ["desktop-install"] }
 
 # --- Python: the library, its surfaces, and the packaging -------------------
-# The science stack. IMP carries the structure reader and the accessible-volume
-# backend; LabelLib is the AV implementation that actually runs.
+# The science stack. `imp-tricks` owns the accessible-volume computation and
+# its backend dispatch; IMP carries the structure reader and the compiled
+# IMP.bff backend; LabelLib is the fallback backend.
+#
+# `imp-tricks` is not on conda-forge yet (it lives on a private GitLab), so
+# every pixi environment below fails to solve until it is published. That is
+# accepted rather than worked around: QuEst really does require it now, and a
+# manifest that pretended otherwise would be lying about what it needs. Day-to-
+# day work uses the `arm64` conda environment plus the checkout path shim in
+# `quest/imp_tricks.py` — see okf/workflows/environment.md.
 [feature.py.dependencies]
 python = ">=3.10,<3.13"
 numpy = ">=2.0"
@@ -52,6 +60,7 @@ pyyaml = "*"
 tqdm = "*"
 labellib = "*"
 imp = "*"
+imp-tricks = "*"
 pytables = "*"
 
 [feature.py.pypi-dependencies]

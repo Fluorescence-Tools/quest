@@ -33,10 +33,19 @@ requirements:
     - click
     - pyyaml
     - tqdm
-    # Accessible volumes. LabelLib is the backend QuEst actually runs; IMP
-    # additionally provides the structure reader (quest/core/pdb.py).
+    # Accessible volumes. `imp-tricks` owns the AV computation itself
+    # (`IMP.bff.av.compute_av`) and its IMP.bff/LabelLib backend dispatch;
+    # QuEst calls it rather than carrying a second copy. `imp` additionally
+    # provides the structure reader (quest/core/pdb.py), and `labellib` is the
+    # fallback backend on platforms without a compiled IMP.bff.
+    #
+    # `imp-tricks` does not resolve from any public channel yet — it lives on a
+    # private GitLab. Declaring it here is deliberate: QuEst genuinely requires
+    # it as of the AV deletion, and a recipe that omitted it would build a
+    # package that cannot run. See okf/specs/imp-tricks-dedup.md.
     - labellib
     - imp
+    - imp-tricks
     # Desktop surface. Optional at runtime — every Qt import is guarded — but
     # shipped so `cs.quest` works out of the box.
     - pyqt

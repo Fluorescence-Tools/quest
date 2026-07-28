@@ -2,6 +2,17 @@
 
 ## 2026-07-28
 
+* **Decision 4 taken: imp-tricks is a declared dependency.** Unblocked by the
+  owner rather than by publication — installability is explicitly not a
+  constraint here. Declared in `rattler-recipe/recipe.yaml` and `pixi.toml`,
+  deliberately **not** in `pyproject.toml`, which is the convention `imp` itself
+  already follows: neither is pip-installable, so a pip install of QuEst has
+  never yielded a working science stack. **This turns every pixi environment in
+  the `py` solve-group unsolvable, and therefore all four CI jobs red**, until
+  imp-tricks reaches a public channel — the constraint is `*`, so publication
+  alone fixes it. Recorded rather than worked around; day-to-day work goes
+  through the `arm64` conda environment and the checkout shim, not pixi.
+  [specs/imp-tricks-dedup.md](specs/imp-tricks-dedup.md).
 * **Decisions 1–3 implemented, one at a time, with a re-baseline between each**
   — `1b997ec` (IMP.bff primary), `5b8fc2a` (keep HETATM, strip water),
   `4f3dad2` (`allowed_sphere_radius` 2.1 Å), `ea74ca9` (pin against upstream).
