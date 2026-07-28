@@ -134,6 +134,36 @@ collection. Every test invocation in this repo must pass `-p no:pytest-qt`
 (the plugin name; `-p no:qt` does not match). *Fix:* install a Qt binding, or
 make the plugin a conditional dev dependency.
 
+## On the LabelLib path the point cloud sits half a voxel off its own grid
+
+`AV.points` and `AV.density` describe the same volume, and on the LabelLib
+backend they are **offset from each other by half a voxel on every axis** —
+measured on 148l E55 at `dg` 0.5 Å: the centroid of `AV.points` is
+`(−0.25, −0.25, −0.25)` Å from the centroid of the cloud rebuilt out of
+`AV.density` with `AV.x0`. On the IMP.bff path the two are identical.
+
+The cause is two conventions for the same offset. Every grid kernel —
+`_center_grid_indices`, and therefore `subav`, `_slow_factor_grid`,
+`_additive_factor_grid` and `calc_slow_av`'s `points_slow` — uses the **integer**
+`(ng - 1) // 2`. The LabelLib point cloud instead comes from the true geometric
+corner, `origin = source − (ng − 1) / 2 · dg`. For odd `ng` the two coincide;
+LabelLib's grid is **92** on this structure, and even.
+
+The consequence is that on the fallback backend the fast cloud (`AV.points`,
+which feeds ⟨R_DA⟩, `Rmp` and the saved `.xyz`) is shifted relative to the
+contact cloud and the grid the walk actually runs on. It is small — 0.43 Å on a
+distance — but systematic, and it is the same *class* of defect as the IMP grid
+registration bug fixed on 2026-07-27, which is worth noting because that one
+looked equally harmless and silently removed all quenching.
+
+Found 2026-07-28 while verifying `DUP-01`, and **deliberately not fixed there**:
+routing through `compute_av` reproduces the existing behaviour on both backends
+exactly, and unifying the conventions moves LabelLib results. Which convention
+is right is also a genuine judgement call — the float corner is geometrically
+true for the grid, the integer one is what the kernels index with — so it wants
+its own change, its own re-baseline, and probably its own decision. *Fix:* pick
+one offset and use it in both places.
+
 ## Coarse-graining matches residues by `res_id` alone, ignoring the chain
 
 `move_center_of_mass` in `quest/core/structure.py` selects a residue's atoms

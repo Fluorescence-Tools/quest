@@ -79,12 +79,31 @@ that difference decisive.
 **Results are not comparable across backends**; anything pinned to a number has
 to say which one produced it.
 
-> The whole dance already exists as `IMP.bff.av.compute_av`, with the same
-> ordering, an explicit `backend=` override, and maintenance against IMP's
-> current API. QuEst should call it rather than carry a second copy —
-> [specs/imp-tricks-dedup.md](/specs/imp-tricks-dedup.md). **Both** its branches
-> are now verified point-for-point identical to QuEst's, so that deletion is
-> blocked only on packaging.
+## It is `compute_av` now (`DUP-01`, 2026-07-28)
+
+**QuEst no longer implements either backend.** `AV.__init__` makes one call to
+`IMP.bff.av.compute_av`, passing `backend=` explicitly so the choice is never
+implicit, and both in-tree implementations are deleted: `quest/core/imp_av.py`
+(329 lines) and `calculate1R` (69). QuEst keeps the site selection, the cubic-grid
+and binarisation adapter, and `AV`'s grids — the application, not the algorithm.
+
+Verified before the swap and again after, on 148l E36/E55/E118 under **both**
+backends: identical grid shape, identical binary density voxel-for-voxel,
+identical point counts — 147 011 / 164 783 / 67 889 (IMP.bff) and
+172 964 / 200 283 / 91 585 (LabelLib), unchanged to the last point. A green suite
+was not treated as evidence here; the volumes were compared directly.
+
+Two things had to go upstream first, both contributed rather than worked around:
+
+- **A build lock.** `compute_av` had no synchronisation, so a threaded scan died
+  in `XYZR_setup_particle` exactly as QuEst's own backend used to. imp-tricks
+  `9cd5c13` adds `_IMP_BUILD_LOCK` with the same construction/resample split
+  described below, so QuEst's lock moved rather than disappeared.
+- **A test that reproduces the race.** The first version used the 165-atom slab
+  and four workers and **passed with the lock defeated** — the construction
+  window is too short to overlap. It takes ~2000 atoms and 8 workers.
+
+`simulation_type` is validated separately; upstream has no AV3 either.
 
 An empty AV raises with a diagnostic naming the residue ("might be buried inside
 the protein"), because a zero-point volume otherwise fails much later and much
@@ -117,17 +136,27 @@ The test that catches both: `AV(av_backend="imp_bff").points` must equal
 `build_imp_accessible_volume(...).points` **exactly**, as a set. Comparing
 counts or centroids alone passes with the grid transposed.
 
-## Threading
+## Threading — the lock lives upstream now
 
 `IMP` builds its decorators through SWIG, which is not safe from several
 threads at once — `quest/core/pdb.py` already serialises the parse for this
 reason, and the AV path hits the identical failure one layer down
 (`'XYZR_setup_particle'` receiving a particle *name*) as soon as a scan runs
-sites in a pool, which the web backend does. `_IMP_BUILD_LOCK` guards object
-construction and density extraction but **not** `av.resample()`: measured on
-148l E36, resample is 636 ms of a 662 ms build (96 %) and the SWIG construction
-is 22 ms (3 %), so locking the compute would cost a threaded scan nearly all
-its parallelism to guard the phase that is not failing.
+sites in a pool, which the web backend does.
+
+`_IMP_BUILD_LOCK` is in **`IMP.bff.av.compute`** as of `DUP-01`; QuEst's copy went
+with `imp_av.py`. It guards object construction and density extraction but
+**not** `av.resample()`: measured on 148l E36, resample is 636 ms of a 662 ms
+build (96 %) and the SWIG construction is 22 ms (3 %), so locking the compute
+would cost a threaded scan nearly all its parallelism to guard the phase that is
+not failing.
+
+**Do not assume a thread-safety test is testing anything.** The upstream one
+first used a 165-atom system over four workers and passed with the lock replaced
+by a no-op — the construction window was too short for two threads to collide.
+It needs ~2000 atoms over 8 workers to fail reliably, and the docstring says so.
+Same trap as the vacuous grid test of 2026-07-27: a concurrency test that has
+never been seen to fail is not evidence.
 
 # The three grids
 

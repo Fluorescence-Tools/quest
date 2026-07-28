@@ -67,9 +67,9 @@ def test_a_missing_checkout_is_not_an_error(tmp_path) -> None:
 
 def test_importing_quest_bridges_the_checkout_automatically() -> None:
     """No ceremony: using QuEst is enough to reach imp-tricks from source."""
-    imp_av = importlib.import_module("quest.core.imp_av")
-    assert "IMP.bff" in imp_av.IMP_TRICKS_ENABLED
-    assert imp_av.imp_tricks_av_available()
+    av = importlib.import_module("quest.core.av")
+    assert "IMP.bff" in av.IMP_TRICKS_ENABLED
+    assert av.imp_tricks_av_available()
 
 
 def test_the_compiled_and_source_avs_are_distinguished() -> None:
@@ -78,9 +78,9 @@ def test_the_compiled_and_source_avs_are_distinguished() -> None:
     Conflating them is what made QuEst select a broken backend: the flag was
     read as "imp-tricks is available" when it means "IMP was built with bff".
     """
-    imp_av = importlib.import_module("quest.core.imp_av")
-    compiled = imp_av.HAS_IMP_BFF
-    from_source = imp_av.imp_tricks_av_available()
+    av = importlib.import_module("quest.core.av")
+    compiled = av.HAS_IMP_BFF
+    from_source = av.imp_tricks_av_available()
     assert isinstance(compiled, bool) and isinstance(from_source, bool)
     # The checkout is present in this test session, the compiled decorator may
     # or may not be — they are independent.
@@ -128,7 +128,7 @@ class TestTheUpstreamAvMatchesQuEsts:
             if not getattr(compute, "_HAS_LABELLIB", False):
                 pytest.skip("imp-tricks reports no usable LabelLib backend")
         else:
-            from quest.core.imp_av import HAS_IMP_BFF
+            from quest.core.av import HAS_IMP_BFF
 
             if not (HAS_IMP_BFF and getattr(compute, "_HAS_IMP_BFF", False)):
                 pytest.skip("no compiled IMP.bff (the C++ AV class) in this interpreter")
@@ -223,24 +223,29 @@ class TestThePrimaryBackendStaysFitToBePrimary:
 
         assert AV_BACKENDS == ("imp_bff", "labellib")
 
-    def test_the_imp_backend_uses_the_structure_it_is_given(self) -> None:
-        """Fixed 2026-07-27: it used to re-read the file from disk.
+    def test_the_backend_cannot_re_read_the_file(self) -> None:
+        """Fixed 2026-07-27, and structural since `DUP-01`.
 
-        That discarded every in-memory transformation, so a coarse-grained
-        project silently got the all-atom volume, and `.cif` failed because the
-        re-read was `read_pdb` only. It now builds the IMP model from the atom
-        array, which makes both impossible — and means format support lives in
-        exactly one place (okf/specs/structure-io.md).
+        The IMP backend used to re-read the file from disk, which discarded
+        every in-memory transformation: a coarse-grained project silently got
+        the all-atom volume, and `.cif` failed because the re-read was
+        `read_pdb` only. This was an assertion about the *source text* of
+        `build_imp_accessible_volume`; that function is gone, and the property
+        is now guaranteed by the signature instead — `IMP.bff.av.compute_av`
+        takes `(atoms_xyz, atoms_vdw, source_xyz)` and has no path to a file at
+        all. So this checks the signature, and
+        `TestTheImpAvBackendRuns.test_it_honours_the_structure_it_is_given`
+        checks the behaviour.
         """
         import inspect
 
-        from quest.core import imp_av
+        from quest.core.av import _compute_av
 
-        source = inspect.getsource(imp_av.build_imp_accessible_volume)
-        assert "read_pdb" not in source and "read_mmcif" not in source, (
-            "the IMP backend is parsing files again; it must take the atom array"
+        parameters = inspect.signature(_compute_av()).parameters
+        assert "atoms_xyz" in parameters and "source_xyz" in parameters
+        assert not any("file" in name or "path" in name for name in parameters), (
+            "compute_av grew a file argument; the AV must take the atom array"
         )
-        assert "structure.atoms" in source
 
     def test_the_allowed_sphere_floor_is_enforced(self) -> None:
         """Below ~2 A IMP's path search starts nowhere and returns nothing."""
@@ -264,8 +269,9 @@ class TestTheImpAvBackendRuns:
     PARAMS = dict(
         linker_length=21.5,
         linker_width=0.5,
-        radii=(3.5, 0.0, 0.0),
-        allowed_sphere_radius=2.0,
+        radius1=3.5,
+        radius2=0.0,
+        radius3=0.0,
         simulation_grid_resolution=0.5,
     )
 
@@ -285,15 +291,28 @@ class TestTheImpAvBackendRuns:
         C++ `IMP.bff.AV` this backend needs is absent. `HAS_IMP_BFF` is the
         flag that actually asks that question.
         """
-        from quest.core.imp_av import HAS_IMP_BFF
+        from quest.core.av import HAS_IMP_BFF
 
         if not HAS_IMP_BFF:
             pytest.skip("no compiled IMP.bff (the C++ AV class) in this interpreter")
 
     def _build(self, structure):
-        from quest.core.imp_av import build_imp_accessible_volume
+        """`AV` pinned to the IMP.bff backend.
 
-        return build_imp_accessible_volume(structure, **self.SITE, **self.PARAMS)
+        This went through `build_imp_accessible_volume` until `DUP-01` deleted
+        it; the backend is `IMP.bff.av.compute_av` now, and `AV` is the only
+        thing left in QuEst that reaches it.
+        """
+        from quest.core.av import AV
+
+        return AV(
+            structure,
+            save_av=False,
+            verbose=False,
+            av_backend="imp_bff",
+            **self.SITE,
+            **self.PARAMS,
+        )
 
     def test_it_produces_a_volume(self, structure) -> None:
         result = self._build(structure)

@@ -2,6 +2,40 @@
 
 ## 2026-07-28
 
+* **`DUP-01` done — the largest deletion QuEst had left.** `quest/core/imp_av.py`
+  (329 lines) and `calculate1R` (69) are gone; `AV.__init__` makes one
+  `IMP.bff.av.compute_av` call with an explicit `backend=`. **AV numbers
+  verified unchanged**, which a green suite would not have shown: 148l
+  E36/E55/E118 under both backends give identical grid shape, identical binary
+  density voxel-for-voxel and identical point counts — 147 011 / 164 783 /
+  67 889 (IMP.bff), 172 964 / 200 283 / 91 585 (LabelLib).
+* **Adopting `compute_av` would have re-introduced the SWIG race.** It had no
+  thread safety at all, so a pooled scan would have died in
+  `XYZR_setup_particle` exactly as QuEst's own backend used to before
+  2026-07-27. Contributed upstream (`9cd5c13`) with the same
+  construction-locked / resample-unlocked split rather than wrapping the whole
+  call, which would have cost a threaded scan 96 % of its parallelism.
+  **The first version of that test was vacuous** — 165 atoms over 4 workers
+  passed with the lock replaced by a no-op, because the construction window is
+  too short to overlap. It takes ~2000 atoms over 8 workers. Second time a
+  concurrency/grid test here has proved nothing until it was seen to fail.
+* **Found while verifying `DUP-01`, left unfixed on purpose:** on the LabelLib
+  path `AV.points` sits **half a voxel off its own density grid** on every axis
+  (measured: centroid gap 0.25 Å per axis on 148l E55, `ng` 92). The grid
+  kernels offset by the integer `(ng-1)//2`; the LabelLib cloud uses the float
+  corner `(ng-1)/2`. Identical for odd `ng`, half a voxel apart for even. The
+  IMP path is consistent. Same class as the registration bug that silently
+  removed all quenching, so it is written up in
+  [references/known-issues.md](references/known-issues.md) — but which
+  convention is *correct* is a real judgement call, and unifying moves LabelLib
+  numbers, so it wants its own change and its own re-baseline.
+* **The `DUP-*` numbers in [handover.md](handover.md) did not match
+  [specs/assessment.md](specs/assessment.md).** The handover called the
+  `density2points` adoption "DUP-02" (assessment: **DUP-05**) and the distance
+  metrics "DUP-03" (assessment: **DUP-04**), and commits `78dc4c8` / `9b1192e`
+  followed the handover, so their labels are wrong against the authoritative
+  table. Recorded there rather than rewritten; assessment.md is the table to
+  cite.
 * **`simulation_type="AV3"` has been a crash, not a feature.** Found while
   scoping `DUP-01`: the branch called `calculate3R`, **deleted in `7ecf209`**,
   so a project field a scan can set raised `NameError: name 'calculate3R' is not

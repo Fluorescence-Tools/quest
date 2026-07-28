@@ -13,7 +13,6 @@ module                        owns
 :mod:`~quest.core.av`          accessible volumes, grids, FRET rate traces
 :mod:`~quest.core.structure`   the ``Structure`` object
 :mod:`~quest.core.pdb`         structure reading, through IMP
-:mod:`~quest.core.imp_av`      the IMP.bff accessible-volume backend
 :mod:`~quest.core.fps_json`    fps.json labeling files
 :mod:`~quest.core.io`          point-cloud output
 ============================  ====================================================

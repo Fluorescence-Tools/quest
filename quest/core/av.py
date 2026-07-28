@@ -14,15 +14,69 @@ from .structure import Structure
 from .io import write_xyz
 
 try:
-    import LabelLib as ll
+    # An availability probe only. QuEst no longer calls LabelLib itself --
+    # `IMP.bff.av.compute_av` owns both backends as of `DUP-01` -- but
+    # `available_av_backends` still has to answer whether this interpreter can
+    # reach the LabelLib one.
+    import LabelLib  # noqa: F401
     HAS_LABELLIB = True
 except Exception:  # pragma: no cover - optional dependency
     HAS_LABELLIB = False
 
-from .imp_av import (
-    HAS_IMP_BFF,
-    build_imp_accessible_volume,
-)
+try:  # pragma: no cover - development convenience
+    # Splice an imp-tricks checkout in before probing IMP, so `IMP.bff.av` is
+    # importable from source without installing anything. imp-tricks is under
+    # active development, so the source tree -- not an installed copy -- is the
+    # thing that has to work.
+    from ..imp_tricks import enable_imp_tricks
+
+    IMP_TRICKS_ENABLED = enable_imp_tricks()
+except Exception:  # pragma: no cover - never fatal
+    IMP_TRICKS_ENABLED = []
+
+try:  # pragma: no cover - optional heavy dependency
+    import IMP.bff
+
+    #: True when the *compiled* IMP.bff AV decorator is present. This is a
+    #: different question from whether imp-tricks' pure-Python `IMP.bff.av`
+    #: imports: in the base environment the latter does and the former does not,
+    #: and `compute_av`'s `imp_bff` backend needs the C++ class.
+    HAS_IMP_BFF = hasattr(IMP.bff, "AV")
+except Exception:  # pragma: no cover - keep the optional dependency lazy
+    HAS_IMP_BFF = False
+
+
+def imp_tricks_av_available() -> bool:
+    """Whether imp-tricks' ``compute_av`` can be imported."""
+    try:  # pragma: no cover - depends on the checkout
+        from IMP.bff.av import compute_av  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
+#: Resolved on first use by :func:`_compute_av`, never at import.
+_UPSTREAM_COMPUTE_AV = None
+
+
+def _compute_av():
+    """`IMP.bff.av.compute_av`, imported on first use.
+
+    Lazy for the same reason as :func:`_density2points_kernel`.
+    """
+    global _UPSTREAM_COMPUTE_AV
+    if _UPSTREAM_COMPUTE_AV is None:
+        try:
+            from IMP.bff.av.compute import compute_av
+        except ImportError as exc:  # pragma: no cover - depends on environment
+            raise ImportError(
+                "QuEst's accessible volume requires `IMP.bff.av` from "
+                "imp-tricks, which is not importable. Install imp-tricks, or "
+                "place a checkout at ~/dev/imp-tricks (or $IMP_TRICKS_SRC) so "
+                "`quest.imp_tricks` can splice it in."
+            ) from exc
+        _UPSTREAM_COMPUTE_AV = compute_av
+    return _UPSTREAM_COMPUTE_AV
 
 #: Resolved on first use by :func:`_density2points_kernel`, never at import.
 _UPSTREAM_DENSITY2POINTS = None
@@ -69,12 +123,12 @@ def _density2points_kernel():
 #: Accessible-volume backends, in the order ``"auto"`` prefers them.
 #:
 #: **IMP.bff is primary; LabelLib is the fallback for platforms without a
-#: compiled IMP.bff — Windows above all.** Promoted 2026-07-27, once the two
-#: defects that had kept it second were fixed: `build_imp_accessible_volume`
-#: used to re-read the file from disk with `IMP.atom.read_pdb`, which silently
-#: discarded coarse-graining and made `.cif` projects fail outright. It now
-#: builds the IMP model from the atom array it is handed, so it cannot do
-#: either ([specs/structure-io.md](okf/specs/structure-io.md)).
+#: compiled IMP.bff — Windows above all.** Promoted 2026-07-27.
+#:
+#: Both are now reached through `IMP.bff.av.compute_av`, which performs this
+#: same dispatch itself; this constant is what QuEst validates a requested
+#: backend against and what `"auto"` consults, and it is passed on as
+#: `compute_av(backend=...)` so the choice is never left implicit.
 #:
 #: The backends do not agree exactly, and this order decides which answer QuEst
 #: gives: on 148l E36 they return 136 707 (IMP.bff) against 151 869 (LabelLib)
@@ -83,10 +137,6 @@ def _density2points_kernel():
 #: when a platform falls back to LabelLib, so contact fractions and quenching
 #: rates are not bit-comparable across the two.
 #:
-#: The direction of travel is still to route through
-#: `IMP.bff.av.compute.compute_av` rather than carry `imp_av.py` at all
-#: ([specs/imp-tricks-dedup.md](okf/specs/imp-tricks-dedup.md)); this only
-#: changes which of the two in-tree paths runs first.
 AV_BACKENDS = ("imp_bff", "labellib")
 
 #: Radius around the attachment atom inside which obstacles are ignored, so the
@@ -100,9 +150,8 @@ AV_BACKENDS = ("imp_bff", "labellib")
 #: volume with no error**; imp.bff's own reference test uses 2.0 and expects zero
 #: points at 1.0.
 #:
-#: **Only the IMP.bff backend honours it.** `calculate1R`/`calculate3R` accept a
-#: `linkersphere` argument and never pass it on -- `ll.dyeDensityAV1` has no such
-#: parameter, and the wrapper zeroes the attachment atom's own vdW radius
+#: **Only the IMP.bff backend honours it.** `ll.dyeDensityAV1` has no such
+#: parameter; the LabelLib path zeroes the attachment atom's own vdW radius
 #: instead. Measured: raising the default from 0.5 to 2.1 moves LabelLib's
 #: labelable-site count on 148l chain E by exactly nothing (43/151 before and
 #: after), while IMP.bff goes 147 -> 151/151 and quenching sites 60 -> 67.
@@ -938,75 +987,6 @@ def density2points(nx, ny, nz, dg, density, r0):
     return points[:n, :3]
 
 
-def calculate1R(l: float,
-                w: float,
-                r: float,
-                atom_i: int,
-                x: np.array,
-                y: np.array,
-                z: np.array,
-                vdw: np.array,
-                linkersphere: float = DEFAULT_ALLOWED_SPHERE_RADIUS,
-                linknodes: int = 3,
-                vdwRMax: float = 1.8,
-                dg: float = 0.5,
-                verbose: bool = False
-                ):
-    """
-    :param l: linker length
-    :param w: linker width
-    :param r: dye-radius
-    :param atom_i: attachment-atom index
-    :param x: Cartesian coordinates of atoms (x)
-    :param y: Cartesian coordinates of atoms (y)
-    :param z: Cartesian coordinates of atoms (z)
-    :param vdw: Van der Waals radii (same length as number of atoms)
-    :param linkersphere: Initial linker-sphere to start search of allowed dye positions (not used anymore)
-    :param linknodes: By default 3 (not used anymore)
-    :param vdwRMax: Maximal Van der Waals radius (not used anymore)
-    :param dg: Resolution of accessible volume in Angstrom
-    :param verbose: If true informative output is printed on std-out
-    :return:
-    """
-    if verbose:
-        print("AV: calculate1R")
-    n_atoms = len(vdw)
-    x0, y0, z0 = x[atom_i], y[atom_i], z[atom_i]
-    r0 = np.array([x0, y0, z0])
-
-    vdw_copy = np.copy(vdw)
-    vdw_copy[atom_i] = 0.0
-    atoms = np.vstack([x, y, z, vdw_copy])
-    source = r0
-    av1 = ll.dyeDensityAV1(
-        atoms,
-        source,
-        l, w, r, dg
-    )
-    nx, ny, nz = av1.shape
-    # LabelLib hands back a plain Python list of nx*ny*nz floats. ``fromiter``
-    # with an explicit count preallocates and skips the type probing np.array
-    # does, which is worth ~5 ms on a typical 92^3 grid.
-    grid = av1.grid
-    g = np.fromiter(grid, dtype=np.float64, count=len(grid)).reshape([nx, ny, nz], order='F')
-    if verbose:
-        print(nx, ny, nz, dg, dg, dg, x0, y0, z0)
-    ox = x0 - (nx - 1) / 2.0 * dg
-    oy = y0 - (ny - 1) / 2.0 * dg
-    oz = z0 - (nz - 1) / 2.0 * dg
-    points = density2points(nx, ny, nz, dg, g, (ox, oy, oz))
-    g[g < 0] = 0
-    g[g > 0] = 1
-    density = g.astype(np.uint8)
-    ng = nx
-
-    if verbose:
-        print("Number of atoms: %i" % n_atoms)
-        print("Attachment atom coordinates: %s" % r0)
-
-    return points, density, ng, r0
-
-
 class AV(object):
 
     def __init__(self, structure, residue_seq_number=None, atom_name=None, chain_identifier=None,
@@ -1128,10 +1108,8 @@ class AV(object):
             if verbose:
                 print("Loading PDB")
             atoms = PDB.read(structure, verbose=verbose)
-        x = atoms['coord'][:, 0]
-        y = atoms['coord'][:, 1]
-        z = atoms['coord'][:, 2]
-        vdw = atoms['radius']
+        # The split-out x/y/z/vdw columns went with `calculate1R`; `compute_av`
+        # takes the coordinate and radius arrays whole.
         self.structure = structure
         self.dg = simulation_grid_resolution
         self.output_file = output_file
@@ -1207,48 +1185,67 @@ class AV(object):
         self.av_backend = backend
         if verbose:
             print("AV backend    : %s" % backend)
-        if backend == "imp_bff":
-            av_result = build_imp_accessible_volume(
-                structure=structure,
-                residue_seq_number=residue_seq_number,
-                atom_name=atom_name,
-                chain_identifier=chain_identifier,
-                linker_length=linker_length,
-                linker_width=linker_width,
-                radii=(radius1, radius2, radius3),
-                allowed_sphere_radius=_clamped_allowed_sphere_radius(
-                    allowed_sphere_radius
-                ),
-                simulation_grid_resolution=simulation_grid_resolution,
+        # One call, both backends: `IMP.bff.av.compute_av` performs the same
+        # dispatch QuEst used to reimplement, and `DUP-01` deleted both of the
+        # in-tree implementations behind it (`imp_av.py` and `calculate1R`).
+        # Verified before the swap on 148l E36/E55/E118 under both backends:
+        # identical grid shape, identical binary density voxel-for-voxel, and
+        # identical point counts.
+        av_result = _compute_av()(
+            np.ascontiguousarray(atoms["coord"], dtype=np.float64),
+            np.ascontiguousarray(atoms["radius"], dtype=np.float64),
+            np.ascontiguousarray(atoms["coord"][attachment_atom_index], dtype=np.float64),
+            linker_length=linker_length,
+            linker_width=linker_width,
+            dye_radii=(radius1, radius2, radius3),
+            grid_resolution=simulation_grid_resolution,
+            backend=backend,
+            allowed_sphere_radius=_clamped_allowed_sphere_radius(
+                allowed_sphere_radius
+            ),
+        )
+
+        nx, ny, nz = av_result.grid_shape
+        if not (nx == ny == nz):
+            raise ValueError(
+                "Accessible-volume grid is not cubic (%d, %d, %d); every grid "
+                "kernel here takes a single edge length." % (nx, ny, nz)
             )
-            density = av_result.density
-            ng = av_result.grid_size
+        ng = int(nx)
+        # QuEst's kernels test `density > 0`; upstream's LabelLib branch returns
+        # a *normalised* grid and its IMP branch a binary one, so binarise both
+        # and keep the uint8 the in-tree code produced.
+        density = np.ascontiguousarray(
+            np.where(np.asarray(av_result.density) > 0.0, 1, 0).astype(np.uint8)
+        )
+        grid_origin = np.asarray(av_result.grid_origin, dtype=np.float64)
+
+        # **The two backends anchor the cloud differently, and that is
+        # preserved rather than unified here.** `_center_grid_indices` -- every
+        # stickiness and quenching grid -- offsets by the integer `(ng - 1) // 2`,
+        # which the IMP path matches. The LabelLib path instead places its points
+        # from the true float corner `origin = source - (ng - 1) / 2 * dg`, and
+        # for an even `ng` (92 on 148l at 0.5 A) the two differ by half a voxel.
+        # Unifying them would move LabelLib results, so it is left alone and
+        # recorded as a defect in okf/references/known-issues.md rather than
+        # changed silently inside a deduplication.
+        if backend == "imp_bff":
             npm = int((ng - 1) // 2)
             # Anchor on the map's own origin rather than on the attachment atom.
             # IMP sizes the grid itself and the atom lands on the middle voxel
             # only when the edge length is odd; on the 148l reference site it is
             # 86, so assuming otherwise put `x0` -- and therefore every grid the
             # quenching and stickiness kernels index with it -- one voxel out.
-            x0 = np.asarray(av_result.origin, dtype=np.float64) + npm * float(
-                simulation_grid_resolution
-            )
-            n = density.sum()
+            x0 = grid_origin + npm * float(simulation_grid_resolution)
             points = _points_from_centred_grid(
-                density.reshape(ng, ng, ng), ng, simulation_grid_resolution, x0
+                density, ng, simulation_grid_resolution, x0
             )
         else:
-            points, density, ng, x0 = calculate1R(
-                linker_length,
-                linker_width,
-                radius1,
-                attachment_atom_index,
-                x,
-                y,
-                z,
-                vdw,
-                verbose=verbose,
-                linkersphere=allowed_sphere_radius,
-                dg=simulation_grid_resolution,
+            x0 = np.asarray(
+                atoms["coord"][attachment_atom_index], dtype=np.float64
+            )
+            points = density2points(
+                ng, ng, ng, simulation_grid_resolution, density, grid_origin
             )
 
         self.ng = ng

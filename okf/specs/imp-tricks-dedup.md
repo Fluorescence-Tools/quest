@@ -272,9 +272,17 @@ Acceptance: upstream and QuEst return point-for-point identical clouds on 148l
 E118, E36 and E90 under **both** backends, pinned by
 `TestTheUpstreamAvMatchesQuEsts`, which is now parametrised over both.
 
-What remains before the deletion can happen is packaging, not correctness:
-imp-tricks has to be a declared dependency rather than a path shim — decision 4
-in [handover.md](../handover.md).
+**Done 2026-07-28.** `quest/core/imp_av.py` (329 lines) and `calculate1R` (69)
+are deleted; `AV.__init__` makes one `compute_av` call with an explicit
+`backend=`. AV numbers verified unchanged on 148l E36/E55/E118 under both
+backends — identical grid shape, identical binary density voxel-for-voxel,
+identical point counts. What QuEst keeps is the application: site selection, the
+cubic/binarisation adapter, and `AV`'s derived grids.
+
+One blocker was found only by looking: `compute_av` had **no thread safety**, so
+adopting it would have re-introduced the SWIG race QuEst had just fixed.
+Contributed upstream (`9cd5c13`) with the same construction/resample split, so
+the lock moved rather than vanished.
 
 ## The arrow points the other way — QuEst is right, upstream is wrong
 
