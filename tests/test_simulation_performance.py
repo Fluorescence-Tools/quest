@@ -188,7 +188,15 @@ class TestSeededReproducibility:
 
 class TestDensityToPoints:
     def test_matches_a_plain_python_scan_of_the_grid(self) -> None:
-        """The jitted kernel replaced a Python triple loop; keep them equivalent."""
+        """The kernel is upstream's now; keep it equivalent to the obvious loop.
+
+        Compared as a **set of coordinates, not a sequence**. QuEst's own kernel
+        enumerated ``iz`` outermost and `IMP.bff.av._kernels.density2points`
+        enumerates ``ix`` outermost, so adopting it (`DUP-02`) permuted the rows.
+        That is safe only because nothing reads ``AV.points`` positionally, and
+        this test asserting a sequence was the only thing that said otherwise —
+        so it is relaxed on purpose, and no further.
+        """
         rng = np.random.default_rng(3)
         nx, ny, nz = 7, 5, 6
         grid = np.asfortranarray(rng.normal(size=(nx, ny, nz)))
@@ -203,7 +211,12 @@ class TestDensityToPoints:
         points = density2points(nx, ny, nz, 0.5, grid, (-1.0, 2.0, 0.25))
 
         assert points.shape == (len(expected), 3)
-        assert np.allclose(points, np.array(expected))
+        # Lexicographic sort on both sides: same voxels, any order.
+        def _sorted(a):
+            a = np.asarray(a, dtype=np.float64)
+            return a[np.lexsort((a[:, 2], a[:, 1], a[:, 0]))]
+
+        assert np.allclose(_sorted(points), _sorted(expected))
 
     def test_an_empty_grid_yields_no_points(self) -> None:
         grid = np.zeros((4, 4, 4))

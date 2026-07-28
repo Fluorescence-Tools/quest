@@ -98,6 +98,16 @@ science: an example launched as a subprocess (or a notebook kernel) resolves
 `Symbol not found: ..._ZN5boost10filesystem6detail15path_algorithms11filename_v3E...`.
 Whichever of the two files runs second is the one that fails.
 
+**It is not confined to the notebooks.** Any QuEst test that probes the domain
+layer in a subprocess hits the same fault the moment `import quest.core` reaches
+IMP at module scope — `test_importing_the_domain_does_not_import_qt` and
+`test_the_model_needs_no_qt` both did, when `DUP-02` first imported
+`IMP.bff.av._kernels` at the top of `quest/core/av.py`. The import was made lazy
+instead ([subsystems/accessible-volume.md](/subsystems/accessible-volume.md)),
+which is the right shape anyway, but it means **this environment fault is being
+routed around rather than fixed**, and the constraint is now load-bearing: the
+domain layer must not import IMP until something actually needs it.
+
 **Pre-existing**, verified 2026-07-28 by running the same selection in a
 worktree at `1807e72`, before the AV decisions: identical 6 failed / 10 passed.
 It is the same shape as the browser suite's exclusion already documented in

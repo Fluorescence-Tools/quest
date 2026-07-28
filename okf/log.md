@@ -2,6 +2,30 @@
 
 ## 2026-07-28
 
+* **`DUP-02` done: `density2points` is upstream's.** QuEst's `_density2points`
+  is deleted; `quest.core.av.density2points` is now an adapter over
+  `IMP.bff.av._kernels.density2points`. Same voxels on 5×7×9, 8×8×8 and
+  11×11×11 grids. Two preconditions had to be created first, neither of which
+  the plan mentioned: upstream's kernels were bare `@nb.njit`, so adopting them
+  as-is would have **re-serialised threaded site scans on the GIL** in the loop
+  that visits every voxel (fixed upstream, `a49e17c`, contributing QuEst's
+  `cache=True, nogil=True`); and upstream enumerates `ix` outermost where QuEst
+  enumerated `iz`, so the cloud comes back **permuted** — safe only because
+  nothing reads `AV.points` positionally, which was checked against every
+  consumer rather than assumed. General rule for the rest of the migration: an
+  upstream kernel returning a collection may not return it in the same order.
+* **A lazy import is now a load-bearing constraint on the domain layer.**
+  Importing `IMP.bff.av._kernels` at the top of `quest/core/av.py` failed
+  `test_importing_the_domain_does_not_import_qt` and `test_the_model_needs_no_qt`
+  — not with an `ImportError` but with the *documented* dylib conflict, where a
+  subprocess of a process that has loaded IMP resolves `libimp_kernel` against
+  the base environment's `libboost_filesystem`. Both tests probe the domain layer
+  in a subprocess, so a module-scope import promoted a latent environment fault
+  into a hard failure of the service layer. Every future adoption from imp-tricks
+  has to be imported on first use, or the web backend stops being able to run in
+  the base environment. Noted in
+  [references/known-issues.md](references/known-issues.md) that this is a
+  route-around, not a fix.
 * **Decision 4 taken: imp-tricks is a declared dependency.** Unblocked by the
   owner rather than by publication — installability is explicitly not a
   constraint here. Declared in `rattler-recipe/recipe.yaml` and `pixi.toml`,

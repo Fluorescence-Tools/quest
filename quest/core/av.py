@@ -24,6 +24,47 @@ from .imp_av import (
     build_imp_accessible_volume,
 )
 
+#: Resolved on first use by :func:`_density2points_kernel`, never at import.
+_UPSTREAM_DENSITY2POINTS = None
+
+
+def _density2points_kernel():
+    """`IMP.bff.av._kernels.density2points`, imported on first use.
+
+    **Deliberately lazy, and two separate tests depend on it.** Importing
+    `IMP.bff.av` pulls in `IMP` itself, and `import quest.core` must not do that:
+    `test_importing_the_domain_does_not_import_qt` and `test_the_model_needs_no_qt`
+    both probe the domain layer in a subprocess, and a module-scope import here
+    made both fail. Not with an ImportError either -- with the dylib conflict in
+    [references/known-issues.md](../../okf/references/known-issues.md), where a
+    child of a process that has already loaded IMP resolves
+    `libimp_kernel` against the *base* environment's `libboost_filesystem`. So a
+    module-scope import would have taken a documented latent environment fault
+    and made it a hard failure of the service layer.
+
+    Deferring costs nothing: this is reached once per accessible volume, and the
+    result is cached in a module global.
+
+    Not guarded, once it is actually needed. imp-tricks is a declared dependency
+    as of 2026-07-28 ([specs/imp-tricks-dedup.md](../../okf/specs/imp-tricks-dedup.md)),
+    and a fallback could only mean keeping the second copy of this kernel that
+    the import exists to delete. The message names the cause, because a bare
+    ImportError deep inside a simulation names nothing.
+    """
+    global _UPSTREAM_DENSITY2POINTS
+    if _UPSTREAM_DENSITY2POINTS is None:
+        try:
+            from IMP.bff.av._kernels import density2points
+        except ImportError as exc:  # pragma: no cover - depends on the environment
+            raise ImportError(
+                "QuEst's accessible volume requires `IMP.bff.av` from imp-tricks, "
+                "which is not importable. Install imp-tricks, or place a checkout "
+                "at ~/dev/imp-tricks (or $IMP_TRICKS_SRC) so `quest.imp_tricks` "
+                "can splice it in."
+            ) from exc
+        _UPSTREAM_DENSITY2POINTS = density2points
+    return _UPSTREAM_DENSITY2POINTS
+
 
 #: Accessible-volume backends, in the order ``"auto"`` prefers them.
 #:
@@ -783,51 +824,41 @@ def asa(r, vdw, probe_atom_indices, sphere_points, probe=1.0, radius=2.5):
     return _asa(r, vdw, probe_atom_indices, sphere_points, float(probe), float(radius))
 
 
-# ``nogil`` so that callers scanning many labelling sites in parallel are not
-# serialised here -- this loop visits every voxel of the LabelLib grid and used
-# to be the single most expensive step of a site simulation.
-@njit(cache=True, nogil=True)
-def _density2points(nx, ny, nz, dg, density, r0):
-    points = np.empty((nx * ny * nz, 3), dtype=np.float64)
-    iat = 0
-    for iz in range(nz):
-        for iy in range(ny):
-            for ix in range(nx):
-                if density[ix, iy, iz] <= 0.0:
-                    continue
-                points[iat, 0] = ix * dg + r0[0]
-                points[iat, 1] = iy * dg + r0[1]
-                points[iat, 2] = iz * dg + r0[2]
-                iat += 1
-    return points[:iat]
-
-
 def density2points(nx, ny, nz, dg, density, r0):
     """Occupied voxels of a density grid, as an (n, 3) cloud in Angstrom.
 
     *r0* is the centre of voxel ``(0, 0, 0)``. A grid described by its *centre*
-    is the same thing with the origin shifted by ``-(n - 1) / 2 * dg`` per axis;
+    is the same thing with the origin shifted by ``-(n - 1) // 2 * dg`` per axis;
     :func:`_points_from_centred_grid` does that, so this stays one kernel.
 
-    There used to be two of these — a flat, centre-origin one for the in-tree AV
-    and this corner-origin one for LabelLib's grid — differing only in that
-    shift, which is not a reason for a second implementation of the same loop.
+    **The loop itself is `IMP.bff.av._kernels.density2points`** as of 2026-07-28
+    (`DUP-02`). QuEst carried its own for years; upstream's is a strict superset,
+    keeping the per-voxel weight this signature discards, and the two select
+    exactly the same voxels. Verified on 5x7x9, 8x8x8 and 11x11x11 grids: the
+    point *sets* are equal.
 
-    The argument order matches `IMP.bff.av._kernels.density2points`, which is
-    where this belongs once imp-tricks is a real dependency rather than a
-    development path shim. Upstream's is a superset: it also keeps the per-voxel
-    weight, which QuEst discards. See
-    [imp-tricks-dedup](../../okf/specs/imp-tricks-dedup.md).
+    What differs is the **enumeration order** — upstream runs ``ix`` outermost,
+    QuEst's ran ``iz`` outermost — so the rows come back permuted. That is safe
+    only because nothing reads ``AV.points`` positionally: the walk runs on the
+    density grid, :func:`_ran_dist` samples indices at random, :meth:`AV.Rmp`
+    averages, and the acceptor cloud is averaged over in full. The one visible
+    effect is the row order of a saved ``.xyz``.
+
+    See [imp-tricks-dedup](../../okf/specs/imp-tricks-dedup.md).
     """
-    # Keep whatever memory layout the caller has: the loop runs ``ix`` innermost,
-    # so the Fortran-ordered grid LabelLib produces is already the cache-friendly
-    # one and copying it to C order would only add a pass over every voxel.
-    return _density2points(
+    # Keep whatever memory layout the caller has: the Fortran-ordered grid
+    # LabelLib produces is passed straight through rather than copied to C order,
+    # which would add a pass over every voxel.
+    n, points = _density2points_kernel()(
         int(nx), int(ny), int(nz),
         float(dg),
         np.asarray(density, dtype=np.float64),
         np.asarray(r0, dtype=np.float64),
     )
+    # Upstream returns an oversized (nx*ny*nz, 4) buffer of (x, y, z, weight)
+    # with only the first *n* rows valid. QuEst's grids are binary, so the
+    # weight column carries nothing here; drop it and the slack.
+    return points[:n, :3]
 
 
 def calculate1R(l: float,

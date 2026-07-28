@@ -109,13 +109,42 @@ same date.
 
 ## Belongs in imp-tricks — and is adoptable **today**
 
-| what | upstream | evidence |
-|---|---|---|
-| `density2points` **and** `density2points_ll` (two copies!) | `IMP.bff.av._kernels.density2points` | Numerically identical on a test grid. Theirs is a strict superset: arbitrary grid dimensions and it keeps the per-voxel weight, which QuEst throws away. QuEst carries a flat/centre-origin variant *and* a 3-D/corner-origin one; upstream needs neither. |
-| `RDAMean`, `RDAMeanE`, `_ran_dist` | `random_distances` + `av_pair_statistics` | Agree within sampling noise on 148l E15/E90: ⟨R_DA⟩ 51.56 vs 51.53 Å, ⟨R_DA⟩_E 51.36 vs 51.53 Å. |
+| what | upstream | evidence | state |
+|---|---|---|---|
+| `density2points` | `IMP.bff.av._kernels.density2points` | Selects exactly the same voxels on 5×7×9, 8×8×8 and 11×11×11 grids. Theirs is a strict superset: it keeps the per-voxel weight, which QuEst throws away. | **`DUP-02` done 2026-07-28** |
+| `RDAMean`, `RDAMeanE`, `_ran_dist` | `random_distances` + `av_pair_statistics` | Agree within sampling noise on 148l E15/E90: ⟨R_DA⟩ 51.56 vs 51.53 Å, ⟨R_DA⟩_E 51.36 vs 51.53 Å. | `DUP-03` |
 
 Neither is blocked by anything. `IMP.bff.av._kernels` and
 `IMP.bff.distance_metrics` import and run in `arm64` today.
+
+### What `DUP-02` actually cost
+
+The stale claim above — "two copies" of `density2points` — was already wrong
+when it was written: an earlier change had merged the flat/centre-origin and
+3-D/corner-origin variants into one kernel plus
+`_points_from_centred_grid`. Only one copy was deleted.
+
+Two things had to be fixed before the swap was a swap rather than a regression:
+
+- **Upstream's kernels were bare `@nb.njit`.** QuEst's carried
+  `cache=True, nogil=True`. `nogil` is what keeps a threaded site scan — the web
+  backend — from serialising on the GIL in the loop that visits every voxel;
+  `cache` is what stops a short CLI run paying a fresh compile. Contributed
+  upstream (`a49e17c`) rather than worked around: the annotations belong with the
+  kernel, not with one of its callers.
+- **The enumeration order differs**, so the point cloud comes back permuted. It
+  is safe here only because nothing reads `AV.points` positionally — checked
+  rather than assumed. Rule for the rest of this migration: **an upstream kernel
+  that returns a collection may not return it in the same order**, and that has
+  to be verified against every consumer before the swap, not after.
+
+And one that surfaced only by running it: importing `IMP.bff.av._kernels` at
+module scope broke `test_importing_the_domain_does_not_import_qt` and
+`test_the_model_needs_no_qt`, via the dylib conflict in
+[references/known-issues.md](/references/known-issues.md). **Every adoption in
+this document has to be imported lazily**, or the domain layer stops being
+importable without IMP — which is the property that lets the web backend run in
+the base environment at all.
 
 ## Unblocked 2026-07-27 — fixed upstream
 

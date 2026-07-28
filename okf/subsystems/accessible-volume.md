@@ -138,11 +138,45 @@ moiety ([quenching-model.md](quenching-model.md)).
 # Kernels
 
 All hot loops are `@njit` in `quest/core/av.py`, most with
-`parallel=True`: `_density2points`, `_subav`, `_slow_factor_grid`,
-`_additive_factor_grid`, `_center_grid_indices`, `_ran_dist` (RDA sampling),
-`_asa` (solvent accessibility), and the trajectory kernels `_simulate_traj` /
+`parallel=True`: `_subav`, `_slow_factor_grid`, `_additive_factor_grid`,
+`_center_grid_indices`, `_ran_dist` (RDA sampling), `_asa` (solvent
+accessibility), and the trajectory kernels `_simulate_traj` /
 `_simulate_traj_grid`. `tests/test_grid_kernels.py` pins their equivalence and
 behaviour — that is the file to extend when a kernel changes.
+
+## `density2points` is upstream's now (`DUP-02`, 2026-07-28)
+
+`quest.core.av.density2points` is a thin adapter over
+`IMP.bff.av._kernels.density2points`; QuEst's own `_density2points` is deleted.
+The two select exactly the same voxels — verified on 5×7×9, 8×8×8 and 11×11×11
+grids — and upstream's is a strict superset, keeping the per-voxel weight
+QuEst's signature discards. The adapter drops that column and the oversized
+buffer's slack.
+
+Two things had to be true first, and neither was:
+
+1. **Upstream's kernels were bare `@nb.njit`.** QuEst's carried
+   `cache=True, nogil=True`, and both are load-bearing: this loop visits every
+   voxel and is the most expensive step of a site computation, so a threaded
+   scan — which the web backend runs — would have re-serialised on the GIL
+   exactly where the work is. Contributed upstream (imp-tricks `a49e17c`) rather
+   than worked around, so the swap is not a regression.
+2. **The enumeration order differs** — upstream runs `ix` outermost, QuEst's ran
+   `iz` outermost — so the rows come back permuted. Safe *only* because nothing
+   reads `AV.points` positionally: the walk runs on the density grid,
+   `_ran_dist` samples indices at random, `Rmp` averages, and the acceptor cloud
+   is averaged over in full. The single visible effect is the row order of a
+   saved `.xyz`. `TestDensityToPoints` was the only thing asserting a sequence
+   and now compares sorted.
+
+**The import is lazy, and that is not an optimisation.** `_density2points_kernel()`
+imports on first use and caches in a module global, because importing
+`IMP.bff.av` pulls in `IMP`, and `import quest.core` must not. A module-scope
+import failed `test_importing_the_domain_does_not_import_qt` and
+`test_the_model_needs_no_qt` — not with an `ImportError`, but with the dylib
+conflict in [references/known-issues.md](/references/known-issues.md), because
+both probe the domain layer in a subprocess. It would have promoted a documented
+latent environment fault into a hard failure of the service layer.
 
 # FRET distance observables
 
