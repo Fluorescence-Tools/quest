@@ -1101,6 +1101,19 @@ class AV(object):
         -------------------
 
         """
+        # Rejected first, before the structure is even read. `simulation_type` is
+        # a project field a scan can set, and "AV3" used to reach a `calculate3R`
+        # deleted back in 7ecf209 -- so it raised `NameError: name 'calculate3R'
+        # is not defined`, from eight frames inside a simulation, naming nothing
+        # a caller could act on. Neither backend has ever implemented AV3 here:
+        # the IMP.bff path ignores `simulation_type` outright, and `calculate1R`
+        # drives `ll.dyeDensityAV1`. Say so, and say it before doing any work.
+        if str(simulation_type).upper() != "AV1":
+            raise ValueError(
+                "simulation_type=%r is not supported; QuEst computes AV1 only. "
+                "The three-radius model (AV3) reached a function that no longer "
+                "exists and has never worked in this tree." % (simulation_type,)
+            )
         self.verbose = verbose
         self.points_slow = None
         self.position_name = position_name
@@ -1224,36 +1237,19 @@ class AV(object):
                 density.reshape(ng, ng, ng), ng, simulation_grid_resolution, x0
             )
         else:
-            if simulation_type == 'AV3':
-                points, density, ng, x0 = calculate3R(
-                    linker_length,
-                    linker_width,
-                    radius1,
-                    radius2,
-                    radius3,
-                    attachment_atom_index,
-                    x,
-                    y,
-                    z,
-                    vdw,
-                    dg=simulation_grid_resolution,
-                    verbose=verbose,
-                    linkersphere=allowed_sphere_radius,
-                )
-            else:
-                points, density, ng, x0 = calculate1R(
-                    linker_length,
-                    linker_width,
-                    radius1,
-                    attachment_atom_index,
-                    x,
-                    y,
-                    z,
-                    vdw,
-                    verbose=verbose,
-                    linkersphere=allowed_sphere_radius,
-                    dg=simulation_grid_resolution,
-                )
+            points, density, ng, x0 = calculate1R(
+                linker_length,
+                linker_width,
+                radius1,
+                attachment_atom_index,
+                x,
+                y,
+                z,
+                vdw,
+                verbose=verbose,
+                linkersphere=allowed_sphere_radius,
+                dg=simulation_grid_resolution,
+            )
 
         self.ng = ng
         self.points = points

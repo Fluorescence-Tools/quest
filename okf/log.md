@@ -2,6 +2,18 @@
 
 ## 2026-07-28
 
+* **`simulation_type="AV3"` has been a crash, not a feature.** Found while
+  scoping `DUP-01`: the branch called `calculate3R`, **deleted in `7ecf209`**,
+  so a project field a scan can set raised `NameError: name 'calculate3R' is not
+  defined` from eight frames inside a simulation. Nothing caught it because no
+  test set the field and reachability analysis cannot see a value-driven branch.
+  Now validated in `AV.__init__` before the structure is even read, naming AV1
+  as the only supported value. **This corrects
+  [subsystems/accessible-volume.md](subsystems/accessible-volume.md)**, which
+  claimed AV3 "only takes effect on the LabelLib path" — it took effect on
+  neither, and the concept was confidently wrong rather than merely silent.
+  Upstream has no AV3 either, so `DUP-01` loses no capability by not carrying
+  one.
 * **`DUP-03` done: the RDA sampling is upstream's, and it is 5× slower.**
   `RDAMean`/`RDAMeanE` now aggregate `IMP.bff.av._kernels.random_distances` +
   `av_pair_statistics`; `_ran_dist` is deleted. Numbers agree inside sampling

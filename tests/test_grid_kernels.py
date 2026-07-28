@@ -145,3 +145,35 @@ def test_empty_voxels_are_left_untouched():
     assert np.all(
         slow_factor_grid(density, ng, dg, np.array([5.0]), centers, origin, np.array([0.1])) == 1.0
     )
+
+
+class TestUnsupportedSimulationTypesFailLegibly:
+    """`simulation_type="AV3"` used to raise `NameError` from inside a run.
+
+    `calculate3R` was deleted in 7ecf209 and the call site survived, so a
+    project field that a scan can set reached an undefined name eight frames
+    down. Neither backend has ever implemented AV3: the IMP.bff path ignores
+    `simulation_type` and `calculate1R` drives `ll.dyeDensityAV1`.
+    """
+
+    def test_av3_is_rejected_by_name(self) -> None:
+        """And rejected *before* the structure is read — `structure=None` here
+        would fail on any later line, so this also pins the ordering."""
+        import pytest
+
+        from quest.core.av import AV
+
+        with pytest.raises(ValueError, match="AV1 only"):
+            AV(None, attachment_atom_index=0, simulation_type="AV3")
+
+    def test_av1_is_accepted_in_either_case(self) -> None:
+        """The guard must not become a new way to break a valid project."""
+        import pytest
+
+        from quest.core.av import AV
+
+        for value in ("AV1", "av1"):
+            # Gets past the guard and fails later, on the null structure.
+            with pytest.raises(Exception) as excinfo:
+                AV(None, attachment_atom_index=0, simulation_type=value)
+            assert "AV1 only" not in str(excinfo.value)

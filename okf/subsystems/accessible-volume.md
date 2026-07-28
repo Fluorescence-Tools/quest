@@ -30,7 +30,16 @@ An unavailable or misspelled backend raises immediately, naming what *is*
 usable, rather than failing later with an empty volume. `AV.av_backend` records
 which one ran, and `verbose=True` prints it.
 
-`simulation_type='AV3'` only takes effect on the LabelLib path.
+**`simulation_type` must be `"AV1"`; anything else raises.** This concept
+previously said AV3 "only takes effect on the LabelLib path" — it took effect on
+neither. The LabelLib branch called `calculate3R`, which was deleted in
+`7ecf209`, so `simulation_type="AV3"` raised `NameError: name 'calculate3R' is
+not defined` from inside a running simulation; the IMP.bff branch ignores
+`simulation_type` outright. Since `simulation_type` is a project field a scan can
+set, it is now validated in `AV.__init__` **before the structure is read**, and
+names AV1 as the only supported value. QuEst has no three-radius dye model, and
+`IMP.bff.av.compute_av` has none either — its LabelLib branch also drives
+`dyeDensityAV1` and uses `dye_radii[0]` alone.
 
 **IMP.bff is primary as of 2026-07-27**; LabelLib is the fallback for platforms
 without a compiled `IMP.bff`, Windows above all. Before that flip the IMP path
