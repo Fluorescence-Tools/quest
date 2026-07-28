@@ -86,9 +86,10 @@ DATA_DIR = _data_dir()
 UPLOAD_DIR = DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# Job directories live under the repository root; the settings files are
-# package data and are resolved by `quest.settings` itself.
-REPO_ROOT = Path(__file__).resolve().parents[3]
+# Run artefacts do **not** live under the repository root. They go to the
+# per-user artefact root that `quest.jobs` owns, which is also what the job
+# routes read -- so a run list no longer depends on where uvicorn was started.
+# The settings files are package data, resolved by `quest.settings` itself.
 
 app = FastAPI(title="QuEst Web API")
 

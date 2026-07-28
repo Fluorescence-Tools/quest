@@ -58,6 +58,37 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **Phase 1 — one interpreter now runs all four surfaces, and the rule that used
+  to be enforced by an interpreter is now enforced by a test.** fastapi,
+  uvicorn, python-multipart, pytest-asyncio and httpx installed into `arm64`
+  from conda-forge; **playwright had to come from pip** — conda-forge's
+  `playwright` is the *Node* package, and installing it leaves `import
+  playwright` failing. Baseline in one command: **404 passed, 1 skipped**
+  (library + Qt GUI + web backend), against the previous 358 in `arm64` and 319
+  in base separately.
+
+  The consolidation broke four backend tests, all correctly: they monkeypatched
+  `backend_main.REPO_ROOT`, which phase 0 stopped consulting. They now set
+  `QUEST_JOBS_DIR`, which is the documented override, and `REPO_ROOT` is gone
+  from the module.
+
+  **Retiring base takes the enforcement of "keep the optional dependencies
+  optional" with it.** That rule held because base genuinely lacked Qt and a
+  compiled `IMP.bff`, so every fallback ran for free; `arm64` has all three, so
+  nothing would enter those branches again on its own — the exact condition
+  under which `imp_av.py` shipped a `Model.get_particles()` call that does not
+  exist. `tests/test_optional_dependencies.py` simulates each absence instead:
+  backend resolution with `HAS_LABELLIB`/`HAS_IMP_BFF` forced false in each
+  combination, and `import quest.core` in a subprocess with `PyQt5`, `qtpy`,
+  `LabelLib` or `IMP` blocked at import. **Seen to fail**: adding a module-scope
+  `import IMP` to `quest/core/av.py` turns the `IMP` case red.
+
+  Base was *not* measured to be broken — its web backend suite gave 16 passed
+  and `import quest.core` succeeded on the day it was retired. That is recorded
+  as an owner ruling in
+  [specs/programme-2026-07.md](specs/programme-2026-07.md) rather than dressed
+  up as a measurement.
+
 * **Phase 0 — the working tree can no longer accumulate run artefacts, and one
   long-standing known issue turned out to have the wrong cause.**
 

@@ -25,41 +25,58 @@ The conda package comes from `rattler-recipe/recipe.yaml`; `conda-recipe/` and
 its `conda mambabuild` workflow are gone, as is the CI that filtered on
 `modules/quest/**` and therefore never ran.
 
-**For day-to-day work on this machine the `arm64` conda environment is still
+**For day-to-day work on this machine the `arm64` conda environment is
 canonical** — it carries the compiled `IMP.bff`, which a pixi-solved `imp` may
 not. The two coexist: pixi for reproducible CI and packaging, `arm64` for
 development against the real IMP build.
 
-# `arm64` is the canonical environment
+# `arm64` is the *only* environment — one interpreter, all four surfaces
 
-**Use `/Users/tpeulen/mambaforge/envs/arm64/bin/python`.** It is the only
-environment with the full stack: CPython 3.12, numpy 2.4.6 (so
-`pyproject.toml`'s `numpy>=2.0` is right for it), **IMP 2.24 with a compiled
-`IMP.bff`**, PyQt5, LabelLib and numba. Both other candidates are partial.
+**Use `/Users/tpeulen/mambaforge/envs/arm64/bin/python`, for everything.**
 
-| | `arm64` (canonical) | mambaforge base | `chisurf` |
-|---|---|---|---|
-| Python / numpy | 3.12 / 2.4.6 | 3.10.14 / 1.26.4 | 3.10.13 |
-| compiled `IMP.bff` | **yes** | no | not checked |
-| Qt (PyQt5) | **yes** | no | yes |
-| LabelLib, numba | yes | yes | yes |
-| fastapi / uvicorn / playwright | **no** | yes | not checked |
+This changed on **2026-07-28** ([specs/programme-2026-07.md](/specs/programme-2026-07.md),
+decision 4). Until then the project ran on two interpreters and the rule was
+*"both must stay green"*: `arm64` for the library, the GUI and the science, and
+the mambaforge base for the web layer, because fastapi and playwright were only
+there. The owner ruled base out of scope, so the web stack moved into `arm64`:
 
-Consequences worth knowing before choosing an interpreter:
+    mamba install -n arm64 -c conda-forge fastapi uvicorn python-multipart pytest-asyncio httpx
+    <arm64>/bin/python -m pip install playwright pytest-playwright
+    <arm64>/bin/python -m playwright install chromium
 
-- The **web** suites (`tests/test_webui_e2e.py`, `tests/test_pdb_id_support.py`,
-  `webui/backend/tests/`) need fastapi/playwright and therefore run in the
-  **base** environment today. Installing `".[web]"` plus playwright into `arm64`
-  would consolidate that.
-- The **GUI** suite needs Qt and runs in `arm64` (or `chisurf`).
-- `arm64` is the only place the **IMP.bff AV backend** is even reachable —
-  which is how it was discovered to be broken; see
-  [references/known-issues.md](/references/known-issues.md).
-- All three import `quest` straight from this working tree, so no install step
-  is needed to switch between them.
+**`playwright` must come from pip, not conda-forge.** conda-forge's `playwright`
+is the *Node* package; the Python bindings are not in it, and installing it
+leaves `import playwright` failing.
 
-Both interpreters must stay green: `arm64` for the library and GUI, base for the
-library and the web layer ([testing.md](testing.md)).
+| | `arm64` (the environment) | ~~mambaforge base~~ (retired) |
+|---|---|---|
+| Python / numpy | 3.12 / **2.4.6** | 3.10.14 / 1.26.4 |
+| IMP | **2.24.0, compiled `IMP.bff`** | 2.17.0, no `IMP.bff` |
+| Qt (PyQt5), pytest-qt | **yes** | no |
+| LabelLib, numba | yes | yes |
+| fastapi, uvicorn, playwright | **yes** (since 2026-07-28) | yes |
+
+**Base was not measured to be broken.** On 2026-07-28 its web backend suite gave
+16 passed and `import quest.core` succeeded. Retiring it is an owner ruling, and
+is recorded as one rather than dressed up as a measurement.
+
+Consequences of the consolidation:
+
+- **`-p no:pytest-qt` is no longer used, and passing it is now harmful.** The
+  flag existed because base had no Qt binding and the plugin aborted collection.
+  `arm64` *has* pytest-qt, and the flag removes the `qtbot` fixture.
+- **The optional-dependency rule lost its enforcement and gained a test.** Qt,
+  LabelLib and `IMP.bff` stay behind `try`/`except` — a Windows box without a
+  compiled `IMP.bff` still needs the LabelLib path — but nothing exercises those
+  branches by accident any more, because `arm64` has all three.
+  `tests/test_optional_dependencies.py` simulates each absence instead: the
+  backend resolution with either flag forced false, and `import quest.core` in a
+  subprocess with `PyQt5`, `qtpy`, `LabelLib` or `IMP` blocked at import.
+  Without it, a fallback path rots exactly the way `imp_av.py` did.
+- `arm64` imports `quest` straight from this working tree, so there is no
+  install step.
+
+One interpreter, one command, all four surfaces ([testing.md](testing.md)).
 
 Install for development:
 
@@ -71,21 +88,22 @@ pip install -e ".[web]"     # + fastapi / uvicorn / python-multipart
 Optional dependencies are optional *by design* — every import of Qt, LabelLib
 and IMP is guarded ([subsystems/gui.md](/subsystems/gui.md),
 [subsystems/accessible-volume.md](/subsystems/accessible-volume.md)). Keep it
-that way: the base environment has no Qt and no `IMP.bff`, and everything except
-the GUI must still work there.
+that way. Since `arm64` now has all three, the rule is held by
+`tests/test_optional_dependencies.py` rather than by an interpreter that lacks
+them — if you add a guarded import, add its absence case there too.
 
 # QuEst resolves to *this* checkout, from anywhere
 
-Both interpreters now import QuEst from `~/dev/quest` regardless of the working
-directory:
+`arm64` imports QuEst from `~/dev/quest` regardless of the working directory: a
+`quest-src.pth` in site-packages adds the checkout to the path. It previously
+had no QuEst at all and worked only because the shell happened to sit in the
+repo.
 
-- **base** — the editable install was re-pointed here. It previously mapped
-  `quest` to `/Users/tpeulen/dev/chisurf/modules/quest/quest`, a **separate,
-  older checkout**, through a meta-path finder that outranks the current
-  directory. Anything run from outside the repo silently exercised that copy.
-- **arm64** — a `quest-src.pth` in site-packages adds the checkout to the path.
-  It previously had no QuEst at all and worked only because the shell happened
-  to sit in the repo.
+*(Historical, for anyone who finds an old base install: base's editable install
+mapped `quest` to `/Users/tpeulen/dev/chisurf/modules/quest/quest` — a separate,
+older checkout — through a meta-path finder that outranks the current directory,
+so anything run from outside the repo silently exercised that copy. It was
+re-pointed here before base was retired.)
 
 `chisurf/modules/quest` is a **git submodule** with its own `.git`, so it was
 left alone rather than replaced by a symlink — it may hold unpushed work. It is

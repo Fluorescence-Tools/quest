@@ -217,7 +217,7 @@ def test_scan_uses_adapter(monkeypatch, tmp_path: Path) -> None:
 
 def test_download_zip_includes_mrc_outputs(monkeypatch, tmp_path: Path) -> None:
     client = TestClient(app)
-    monkeypatch.setattr(backend_main, "REPO_ROOT", tmp_path)
+    monkeypatch.setenv(quest_jobs.QUEST_JOBS_DIR_ENV, str(tmp_path / "jobs"))
     job_id = str(uuid.uuid4())
     job_dir = tmp_path / "jobs" / job_id
     job_dir.mkdir(parents=True)
@@ -239,7 +239,7 @@ def test_download_zip_includes_mrc_outputs(monkeypatch, tmp_path: Path) -> None:
 
 def test_list_jobs_uses_project_sidecar(monkeypatch, tmp_path: Path) -> None:
     client = TestClient(app)
-    monkeypatch.setattr(backend_main, "REPO_ROOT", tmp_path)
+    monkeypatch.setenv(quest_jobs.QUEST_JOBS_DIR_ENV, str(tmp_path / "jobs"))
     job_id = str(uuid.uuid4())
     job_dir = tmp_path / "jobs" / job_id
     job_dir.mkdir(parents=True)
@@ -262,7 +262,7 @@ def test_list_jobs_uses_project_sidecar(monkeypatch, tmp_path: Path) -> None:
 
 def test_list_jobs_does_not_parse_result_without_sidecar(monkeypatch, tmp_path: Path) -> None:
     client = TestClient(app)
-    monkeypatch.setattr(backend_main, "REPO_ROOT", tmp_path)
+    monkeypatch.setenv(quest_jobs.QUEST_JOBS_DIR_ENV, str(tmp_path / "jobs"))
     job_id = str(uuid.uuid4())
     job_dir = tmp_path / "jobs" / job_id
     job_dir.mkdir(parents=True)
@@ -279,7 +279,7 @@ def test_list_jobs_does_not_parse_result_without_sidecar(monkeypatch, tmp_path: 
 def test_list_jobs_is_paginated_newest_first(monkeypatch, tmp_path: Path) -> None:
     """The picker must not grow without bound as runs accumulate."""
     client = TestClient(app)
-    monkeypatch.setattr(backend_main, "REPO_ROOT", tmp_path)
+    monkeypatch.setenv(quest_jobs.QUEST_JOBS_DIR_ENV, str(tmp_path / "jobs"))
 
     job_ids = []
     for index in range(5):
@@ -310,7 +310,7 @@ def test_list_jobs_is_paginated_newest_first(monkeypatch, tmp_path: Path) -> Non
 
 def test_list_jobs_ignores_non_uuid_directories(monkeypatch, tmp_path: Path) -> None:
     client = TestClient(app)
-    monkeypatch.setattr(backend_main, "REPO_ROOT", tmp_path)
+    monkeypatch.setenv(quest_jobs.QUEST_JOBS_DIR_ENV, str(tmp_path / "jobs"))
     (tmp_path / "jobs" / "not-a-job").mkdir(parents=True)
     (tmp_path / "jobs" / "stray.txt").write_text("x", encoding="utf8")
 

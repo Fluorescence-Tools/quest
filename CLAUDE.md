@@ -39,11 +39,12 @@ Fast paths:
   if it matches the tree, so it is updated *in the same change* as the code, not
   in a later cleanup pass. That includes correcting entries that turn out to be
   wrong: a confident but stale concept is worse than a missing one.
-- **Use the `arm64` conda environment.**
-  `/Users/tpeulen/mambaforge/envs/arm64/bin/python` is canonical — Python 3.12,
-  numpy 2.4.6, PyQt5, LabelLib, and a **compiled `IMP.bff`**. The mambaforge
-  base interpreter is still needed for the web layer (fastapi/playwright are not
-  in `arm64`), so both have to stay green; the split and what runs where is in
+- **Use the `arm64` conda environment — it is the only one.**
+  `/Users/tpeulen/mambaforge/envs/arm64/bin/python` runs everything: Python
+  3.12, numpy 2.4.6, PyQt5, LabelLib, a **compiled `IMP.bff`**, and (since
+  2026-07-28) fastapi, uvicorn and playwright. The mambaforge base interpreter
+  is **retired**; the two-environment split and the `-p no:pytest-qt` flag that
+  went with it are gone. See
   [`okf/workflows/environment.md`](okf/workflows/environment.md).
 - **Write to memory as you go.** Every material change updates the OKF concept
   that owns the behaviour **and** appends a dated bullet to `okf/log.md`, in the
@@ -65,16 +66,18 @@ Fast paths:
 - **Test all three surfaces, every time — library, web UI, and Qt GUI.** They
   have diverged before (the GUI shipped different quenching chemistry than the
   CLI for as long as nobody looked), so a green unit suite is not verification.
-  Run `python -m pytest tests/ webui/backend/tests -q -p no:pytest-qt` (the flag
-  is required — pytest-qt aborts collection without a Qt binding); start the
-  backend and frontend so `test_webui_e2e.py` runs instead of skipping; and run
-  `tests/test_gui_widget.py` under
-  `QT_QPA_PLATFORM=offscreen /Users/tpeulen/mambaforge/envs/arm64/bin/python`.
+  One command covers library, GUI and backend:
+  `QT_QPA_PLATFORM=offscreen <arm64>/bin/python -m pytest tests/ webui/backend/tests -q --ignore=tests/test_webui_e2e.py`
+  — **do not pass `-p no:pytest-qt`**, it now removes the `qtbot` fixture. Start
+  the backend and frontend so `test_webui_e2e.py` runs instead of skipping.
   **Render the GUI and the charts and look at the images yourself** — a missing
   control or an acceptor defaulting to a water molecule is invisible to
   assertions. uvicorn does not reload: restart it before re-running the browser
-  suite. Baseline: 179 passed + 2 skipped, and 8 GUI tests.
-  See [`okf/workflows/testing.md`](okf/workflows/testing.md).
+  suite. Baseline 2026-07-28: **404 passed, 1 skipped**, plus 16 for
+  `-m notebooks`. See [`okf/workflows/testing.md`](okf/workflows/testing.md).
+- **A number-moving change is verified against `tests/baselines/`, not against a
+  green suite** — and every fix must be *seen to fail* before it is believed.
+  [`okf/specs/programme-2026-07.md`](okf/specs/programme-2026-07.md), decision 13.
 - **General fluorescence machinery belongs in imp-tricks, under `IMP.bff`.**
   QuEst is the application — project schema, PET workflow, surfaces, scanning.
   Accessible volumes, dye distributions and FRET distance/rate math are general;
