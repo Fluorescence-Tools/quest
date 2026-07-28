@@ -109,11 +109,22 @@ An empty AV raises with a diagnostic naming the residue ("might be buried inside
 the protein"), because a zero-point volume otherwise fails much later and much
 less legibly.
 
-## Grid registration: the two ways to get it silently wrong
+## Grid registration: the four ways to get it silently wrong
 
-Both were live in the IMP path until 2026-07-27, and both were invisible while
-that path was not the default. They are recorded because the failure mode is
-the dangerous kind — a plausible volume in the wrong place, not an error.
+The first two were live in the IMP path until 2026-07-27; the second two on
+**both** paths until 2026-07-28. All four were invisible for the same reason —
+the failure mode is a plausible volume in the wrong place, not an error.
+
+**The rule that resolves all of them: there is one map between Ångström and a
+voxel index, `quest.core.av.grid_center_index`.** Voxel *i* of a grid anchored
+at `x0` sits at `x0 + (i − grid_center_index(ng)) · dg`, and the inverse is
+`floor((p − x0)/dg) + grid_center_index(ng)`. Anything that converts between the
+two and does not use that map is a bug, not a variant.
+
+The measurement that decides it, and the one to repeat rather than argue:
+run every point of `AV.points` through the *kernels'* index formula and check it
+lands on a voxel `AV.density` calls occupied. It must be 100 %. On 2026-07-28,
+before the fix, LabelLib gave **37478/37859 = 98.99 %**.
 
 1. **Axis order.** IMP numbers voxels with *x* fastest
    (`i = x + nx*y + nx*ny*z`), so reshaping the flat tile values C-order into
@@ -127,14 +138,36 @@ the dangerous kind — a plausible volume in the wrong place, not an error.
    middle voxel only when the edge length is odd — it is 86 on 148l E36. The
    origin must be read from the PathMap header
    (`IMPAccessibleVolumeResult.origin`), never reconstructed from the
-   attachment atom. Relatedly, `_points_from_centred_grid` uses the *integer*
-   offset `(ng - 1) // 2` so it agrees with `_center_grid_indices`; a float
-   `(ng - 1) / 2` puts the point cloud half a voxel off the grid the quenching
-   kernels index into, for even `ng` only.
+   attachment atom.
+3. **Two offset conventions** (fixed 2026-07-28, both backends). The kernels and
+   the point cloud used the integer `(ng - 1) // 2`; the two trajectory kernels
+   and `_sample_grid_at_trajectory` used the float corner `(ng - 1) / 2`; and
+   the **LabelLib** branch anchored `x0` on the attachment atom, which is on a
+   node only for odd `ng`. For even `ng` — 86 and 80 at the reference site, so
+   the normal case — the walk therefore read the quenching and stickiness grids
+   half a voxel from where they had been stamped. The trajectory pair was
+   *self*-consistent, which is exactly why nothing caught it.
+4. **Truncation toward zero** (fixed 2026-07-28, both backends, larger than 3).
+   `_center_grid_indices` used `int((p - r0)/dg)`. `int()` rounds toward zero,
+   so a centre on the **negative** side of the anchor was rounded *up* while
+   every other map rounds down — a one-voxel error per axis for half the grid,
+   independent of parity. `DonorDecay._sample_grid_at_trajectory` had the mirror
+   of it: `np.trunc` maps `[-1, 0)` to `0`, so a dye up to one voxel *below* the
+   grid was treated as inside and read voxel 0's quenching rate.
 
-The test that catches both: `AV(av_backend="imp_bff").points` must equal
-`build_imp_accessible_volume(...).points` **exactly**, as a set. Comparing
-counts or centroids alone passes with the grid transposed.
+The tests that catch these: `tests/test_grid_registration.py` (every cloud point
+indexes to an occupied voxel; the two index maps agree probe-for-probe; the
+anchor is on a lattice node; and an assertion that `ng` is *even* here, since
+none of it is detectable on an odd edge), plus
+`AV(av_backend="imp_bff").points` equalling `build_imp_accessible_volume(...)
+.points` **exactly**, as a set — comparing counts or centroids alone passes with
+the grid transposed.
+
+**A caution about "reference implementations".** `tests/test_grid_kernels.py`
+compared the kernels against a hand-written reference that had *copied* the
+kernels' `int()`. It could not detect defect 4 at all: it was a self-comparison
+wearing the costume of an independent check. If you write a reference, derive it
+from the specification, not from the code under test.
 
 ## Threading — the lock lives upstream now
 

@@ -245,6 +245,36 @@ def resolve_av_backend(preference=None):
     return choice
 
 
+def grid_center_index(ng):
+    """The voxel index that the grid anchor ``x0`` sits on.
+
+    **One convention, everywhere.** A cubic grid of edge ``ng`` anchored at
+    ``x0`` places voxel ``i`` at ``x0 + (i - grid_center_index(ng)) * dg``, and
+    that is the *definition* -- not one of two defensible readings.
+
+    It follows from how the grid is built rather than from taste. On the
+    IMP.bff path ``x0 = grid_origin + ((ng - 1) // 2) * dg``, so voxel ``i`` is
+    at ``grid_origin + i * dg`` by construction; the integer offset is the one
+    that inverts that. The float corner ``(ng - 1) / 2`` differs whenever ``ng``
+    is **even** -- which is the normal case, not an edge case: 86 and 92 on the
+    two reference sites -- and integer voxel indexing cannot express it.
+
+    Until 2026-07-28 four call sites disagreed. `_center_grid_indices` (and so
+    every quenching and stickiness grid) and `_points_from_centred_grid` used
+    the integer offset; `_simulate_traj`, `_simulate_traj_grid` and
+    :func:`quest.core.dye_diffusion.DonorDecay._sample_grid_at_trajectory` used
+    the float one. The trajectory pair was self-consistent, which is why nothing
+    caught it -- but the grids it sampled had been *stamped* by the integer
+    kernel, so on an even ``ng`` the walk read the quenching map half a voxel
+    from where the quenchers were placed, on **both** backends.
+
+    Numba cannot call this from an ``njit`` kernel, so the two trajectory
+    kernels spell ``(ng - 1) // 2`` inline. If you add a fifth site, use this
+    function, and if you cannot, quote this docstring.
+    """
+    return (int(ng) - 1) // 2
+
+
 # Numba-accelerated kernels (flattened from fps.py)
 def _points_from_centred_grid(density, ng, dg, centre):
     """Point cloud of a cubic grid described by its *centre* rather than a corner.
@@ -556,9 +586,16 @@ def _center_grid_indices(rs, r0, dg, ng, radius):
     radius_idx = np.empty(n, dtype=np.int64)
     offset = (ng - 1) // 2
     for i in range(n):
-        ix0[i] = int((rs[i, 0] - r0[0]) / dg) + offset
-        iy0[i] = int((rs[i, 1] - r0[1]) / dg) + offset
-        iz0[i] = int((rs[i, 2] - r0[2]) / dg) + offset
+        # `floor`, not `int`. `int()` truncates **toward zero**, so for a centre
+        # on the negative side of `r0` it rounds *up* while every other map here
+        # rounds down -- the walk's own occupancy test is `int(pos)` with
+        # `pos >= 0`, which is floor, and so is the trajectory sampler. The two
+        # disagreed by one voxel per axis for every quencher with a negative
+        # offset, which is half the grid. Found 2026-07-28 by asserting the two
+        # index maps agree, not by a number looking wrong.
+        ix0[i] = int(np.floor((rs[i, 0] - r0[0]) / dg)) + offset
+        iy0[i] = int(np.floor((rs[i, 1] - r0[1]) / dg)) + offset
+        iz0[i] = int(np.floor((rs[i, 2] - r0[2]) / dg)) + offset
         radius_idx[i] = int(radius[i] / dg)
     return ix0, iy0, iz0, radius_idx
 
@@ -798,7 +835,9 @@ def _simulate_traj(d, ds, dg, t_max, t_step, D, slow_fact, random_seed):
             pos[i, 2] = pos[i_accepted, 2]
             n_rejected += 1
             accepted[i] = 0
-    return (pos - (ng - 1) / 2.0) * dg, accepted, n_accepted, n_rejected
+    # Integer offset, matching `_center_grid_indices` -- see
+    # `grid_center_index`. Numba cannot call that helper from here.
+    return (pos - (ng - 1) // 2) * dg, accepted, n_accepted, n_rejected
 
 
 # Sequential on purpose, and ``nogil`` for concurrency: see `_simulate_traj`.
@@ -859,7 +898,9 @@ def _simulate_traj_grid(d, slow_factor, dg, t_max, t_step, D, random_seed):
             pos[i, 2] = pos[i_accepted, 2]
             n_rejected += 1
             accepted[i] = 0
-    return (pos - (ng - 1) / 2.0) * dg, accepted, n_accepted, n_rejected
+    # Integer offset, matching `_center_grid_indices` -- see
+    # `grid_center_index`. Numba cannot call that helper from here.
+    return (pos - (ng - 1) // 2) * dg, accepted, n_accepted, n_rejected
 
 
 def simulate_traj(d, ds, dg, t_max, t_step, D, slow_fact, random_seed=None):
@@ -1220,33 +1261,24 @@ class AV(object):
         )
         grid_origin = np.asarray(av_result.grid_origin, dtype=np.float64)
 
-        # **The two backends anchor the cloud differently, and that is
-        # preserved rather than unified here.** `_center_grid_indices` -- every
-        # stickiness and quenching grid -- offsets by the integer `(ng - 1) // 2`,
-        # which the IMP path matches. The LabelLib path instead places its points
-        # from the true float corner `origin = source - (ng - 1) / 2 * dg`, and
-        # for an even `ng` (92 on 148l at 0.5 A) the two differ by half a voxel.
-        # Unifying them would move LabelLib results, so it is left alone and
-        # recorded as a defect in okf/references/known-issues.md rather than
-        # changed silently inside a deduplication.
-        if backend == "imp_bff":
-            npm = int((ng - 1) // 2)
-            # Anchor on the map's own origin rather than on the attachment atom.
-            # IMP sizes the grid itself and the atom lands on the middle voxel
-            # only when the edge length is odd; on the 148l reference site it is
-            # 86, so assuming otherwise put `x0` -- and therefore every grid the
-            # quenching and stickiness kernels index with it -- one voxel out.
-            x0 = grid_origin + npm * float(simulation_grid_resolution)
-            points = _points_from_centred_grid(
-                density, ng, simulation_grid_resolution, x0
-            )
-        else:
-            x0 = np.asarray(
-                atoms["coord"][attachment_atom_index], dtype=np.float64
-            )
-            points = density2points(
-                ng, ng, ng, simulation_grid_resolution, density, grid_origin
-            )
+        # **Both backends anchor the same way, since 2026-07-28.** `x0` is the
+        # position of voxel `grid_center_index(ng)` -- the map's own origin
+        # advanced by that many voxels -- so voxel `i` sits at
+        # `x0 + (i - grid_center_index(ng)) * dg` on either path, which is the
+        # map `_center_grid_indices` inverts when it stamps a quenching or
+        # stickiness grid.
+        #
+        # The LabelLib branch used the **attachment atom's coordinate** instead.
+        # IMP and LabelLib both size the grid themselves and the atom lands on a
+        # voxel node only when the edge length is odd -- it is 86 and 92 on the
+        # two reference sites, both even -- so on that path every grid the
+        # kernels indexed was registered half a voxel from the density it was
+        # built against. `points` is unchanged by this: it is derived from
+        # `grid_origin` either way, and `_points_from_centred_grid(…, x0)` is
+        # `density2points(…, grid_origin)` by construction.
+        npm = grid_center_index(ng)
+        x0 = grid_origin + npm * float(simulation_grid_resolution)
+        points = _points_from_centred_grid(density, ng, simulation_grid_resolution, x0)
 
         self.ng = ng
         self.points = points

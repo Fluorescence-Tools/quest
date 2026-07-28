@@ -165,10 +165,19 @@ failure — numba refusing a changed `NUMBA_NUM_THREADS`, a kernel that no longe
 type-infers — is invisible until the cache is cold. It cost one confused round
 of "flaky, passes on retry" before the pattern was clear.
 
-Clear it before trusting a green run after touching a jitted module:
+Clear it before trusting a green run after touching a jitted module — **both
+locations**:
 
     find quest -name '__pycache__' -type d \
       -exec sh -c 'rm -f "$1"/*.nbi "$1"/*.nbc' _ {} \;
+    find ~/.chisurf/cache \( -name '*.nbi' -o -name '*.nbc' \) -delete
+
+**The first command alone is not enough under pytest**, and that was documented
+as if it were until 2026-07-28. `tests/conftest.py` imports ChiSurf, which sets
+`NUMBA_CACHE_DIR=~/.chisurf/cache` (and `PYTHONPYCACHEPREFIX` to the same) into
+`os.environ` — so numba writes and reads *there*, not beside the source. There
+were **193** cached kernels in that directory when it was first looked at. A
+"cold cache" run that only cleared `quest/**/__pycache__` was warm.
 
 `tests/conftest.py` pins `NUMBA_NUM_THREADS` and `NUMBA_THREADING_LAYER` for
 this reason; see [okf/log.md](../log.md), 2026-07-27.

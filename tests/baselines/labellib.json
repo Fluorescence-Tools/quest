@@ -15,9 +15,9 @@
         26.2366
       ],
       "x0": [
-        17.58,
-        38.99,
-        21.535
+        17.33,
+        38.74,
+        21.285
       ]
     },
     "E139": {
@@ -35,9 +35,9 @@
         27.9913
       ],
       "x0": [
-        20.862,
-        47.648,
-        30.141
+        20.612,
+        47.398,
+        29.891
       ]
     },
     "E96": {
@@ -55,9 +55,9 @@
         28.6276
       ],
       "x0": [
-        5.736,
-        34.119,
-        27.715
+        5.486,
+        33.869,
+        27.465
       ]
     }
   },
@@ -104,49 +104,49 @@
   },
   "fret": {
     "av_volume": 18616.125,
-    "collisions_fraction": 0.0,
-    "contact_to_free_ratio": 0.143699,
-    "contact_volume": 2339.0,
-    "donor_counts_total": 3999.0,
-    "fret_efficiency": 0.47875,
-    "lifetime_donor": 4.117784,
-    "quantum_yield_donor": 1.0,
-    "quantum_yield_fret": 0.52125
+    "collisions_fraction": 0.05535,
+    "contact_to_free_ratio": 0.156847,
+    "contact_volume": 2524.0,
+    "donor_counts_total": 4000.0,
+    "fret_efficiency": 0.54692,
+    "lifetime_donor": 4.17893,
+    "quantum_yield_donor": 0.94575,
+    "quantum_yield_fret": 0.4285
   },
   "grid_resolution": 0.5,
   "seed": 5,
   "simulations": {
     "E129": {
       "av_volume": 1991.375,
-      "collisions_fraction": 0.01545,
-      "contact_to_free_ratio": 0.578264,
-      "contact_volume": 729.625,
+      "collisions_fraction": 0.01355,
+      "contact_to_free_ratio": 0.641863,
+      "contact_volume": 778.5,
       "donor_counts_total": 4000.0,
       "fret_efficiency": null,
-      "lifetime_donor": 4.069595,
-      "quantum_yield_donor": 0.9655,
+      "lifetime_donor": 4.065495,
+      "quantum_yield_donor": 0.9695,
       "quantum_yield_fret": null
     },
     "E139": {
       "av_volume": 9033.25,
-      "collisions_fraction": 0.3143,
-      "contact_to_free_ratio": 0.161851,
-      "contact_volume": 1258.375,
+      "collisions_fraction": 0.0021,
+      "contact_to_free_ratio": 0.191388,
+      "contact_volume": 1451.125,
       "donor_counts_total": 4000.0,
       "fret_efficiency": null,
-      "lifetime_donor": 3.928294,
-      "quantum_yield_donor": 0.715,
+      "lifetime_donor": 4.129611,
+      "quantum_yield_donor": 0.98975,
       "quantum_yield_fret": null
     },
     "E96": {
       "av_volume": 8990.375,
-      "collisions_fraction": 0.9614,
-      "contact_to_free_ratio": 0.442094,
-      "contact_volume": 2756.125,
+      "collisions_fraction": 0.98645,
+      "contact_to_free_ratio": 0.480384,
+      "contact_volume": 2917.375,
       "donor_counts_total": 3999.0,
       "fret_efficiency": null,
-      "lifetime_donor": 0.752779,
-      "quantum_yield_donor": 0.089,
+      "lifetime_donor": 0.35305,
+      "quantum_yield_donor": 0.07275,
       "quantum_yield_fret": null
     }
   },

@@ -364,9 +364,27 @@ def test_build_donor_uses_amino_acid_interaction_grid() -> None:
     assert av.slow_factor_grid is not None
     assert av.k_quench_grid is not None
     slow_factors = av.slow_factor_grid[av.density_slow > 0]
-    assert slow_factors.min() < 0.2
+    # The two configured residues are 0.5 and 0.2, and stickiness factors
+    # *multiply* across overlapping contacts, so the minimum is at most the
+    # smallest single factor and may be lower where two spheres overlap.
+    #
+    # This asserted `< 0.2` — i.e. it required an overlap — until 2026-07-28,
+    # when unifying the grid-offset convention moved the stamped spheres by up
+    # to one voxel per axis and that particular overlap stopped falling inside
+    # the contact volume. The measured minimum is now exactly 0.2. Requiring an
+    # overlap here was incidental to what the test is named for; that
+    # multiplication happens is pinned directly below instead.
+    assert slow_factors.min() <= 0.2
     assert np.isclose(slow_factors.max(), 1.0)
     assert av.k_quench_grid.max() >= 2.0
+
+    # Multiplication, asserted on the mechanism rather than on a coincidence:
+    # a voxel covered by both residues must carry their product.
+    overlapping = av.slow_factor_grid[av.slow_factor_grid < 0.2]
+    if overlapping.size:
+        assert np.isclose(overlapping.min(), 0.5 * 0.2), (
+            "overlapping stickiness spheres must multiply, not replace"
+        )
 
 
 def test_build_donor_always_uses_whole_protein_surface_centers() -> None:

@@ -58,6 +58,79 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **Phase 3 — one index map, and the "genuine judgement call" turned out not to
+  be one. Two defects, both backends, and the second was the larger.**
+
+  There is now a single Ångström↔voxel map, `quest.core.av.grid_center_index`:
+  voxel *i* of a grid anchored at `x0` sits at `x0 + (i − npm)·dg` with
+  `npm = (ng−1)//2`, and the inverse is `floor((p − x0)/dg) + npm`. Five call
+  sites were brought onto it.
+
+  **It was never a toss-up between the integer offset and the float corner.** On
+  the IMP path `x0 = grid_origin + npm·dg`, so voxel *i* is at
+  `grid_origin + i·dg` *by construction* — the integer offset is the map that
+  inverts that, and integer voxel indexing cannot express the float one. The
+  LabelLib branch anchored `x0` on the **attachment atom**, which sits on a node
+  only for odd `ng`.
+
+  **The second defect was found by writing the test, not by reading the code.**
+  Asserting that the trajectory sampler and the kernels agree probe-for-probe
+  failed even after the offsets were unified: `_center_grid_indices` computed
+  `int((p − r0)/dg)`, and `int()` truncates **toward zero**, so a centre on the
+  negative side of the anchor was rounded *up* while every other map rounds
+  down. That is one voxel per axis for **half the grid**, on both backends,
+  independent of parity — strictly larger than the half-voxel this phase was
+  scoped for. Its mirror was in `_sample_grid_at_trajectory`, where `np.trunc`
+  maps `[-1, 0)` to `0`, so a dye up to one voxel *below* the grid was treated
+  as inside and read voxel 0's quenching rate.
+
+  **The measurement that settles it**, and the one to repeat if this is ever
+  re-litigated: run every point of `AV.points` through the kernels' index
+  formula and ask whether it lands on a voxel `AV.density` calls occupied.
+  Before: **37478/37859 = 98.99 %** (LabelLib), 100 % (IMP). After: **100 % on
+  both**. That is a statement about registration; a quantum yield is not.
+
+  **Numbers moved on both backends**, re-baselined in `tests/baselines/`:
+
+  | site | LabelLib QY | IMP.bff QY |
+  |---|---|---|
+  | E96 | 0.0890 → **0.0728** | 0.4575 → **0.0848** |
+  | E139 | 0.7150 → **0.9898** | 0.8270 → **0.8190** |
+  | E129 | 0.9655 → **0.9695** | 0.2088 → **0.3320** |
+  | FRET E55→E124 | 0.4788 → **0.5469** | 0.4413 → **0.6369** |
+
+  Corroboration, not proof, but worth recording: **the two independently
+  computed backends now agree far better.** At E96 they were 0.089 against
+  0.458 — a factor of 5.1 — and are now 0.073 against 0.085, a factor of 1.2.
+  The point clouds and all distance metrics are **unchanged**; only the
+  registration of the stamped grids moved.
+
+  Three things this broke, all of them correctly, and none fixed by relaxing an
+  assertion:
+
+  - **`tests/test_grid_kernels.py`'s "reference implementation" was a copy of
+    the kernel**, `int()` and all — a self-comparison in the costume of an
+    independent check, structurally unable to detect defect 2. It derives the
+    index from the specification now.
+  - **`test_api.py` asserts that a tyrosine is in reach of the volume**, and
+    which sites satisfy that changed wholesale. Re-scanned residues 2–164 under
+    both backends rather than widening the assertion: `imp_bff` gives 24 sites,
+    `labellib` 10, the intersection is **{97, 160}**, and the previous fixture
+    E36 is in *neither*. Now E97.
+  - **`test_core_api.py` required `slow_factor < 0.2`**, i.e. an overlap between
+    two stickiness spheres, which after re-registration no longer falls inside
+    the contact volume. The minimum is now exactly 0.2. Requiring an overlap was
+    incidental to what that test is named for; that overlapping factors
+    *multiply* is now asserted directly (`0.5 × 0.2`).
+
+  **The documented way to clear the numba cache was wrong**, found while chasing
+  the above. `tests/conftest.py` imports ChiSurf, which sets
+  `NUMBA_CACHE_DIR=~/.chisurf/cache` into `os.environ` — so under pytest numba
+  reads and writes *there*, not beside the source. There were **193** cached
+  kernels in it. Every "cold cache" run that used only the recorded
+  `find quest -name '__pycache__' …` command was warm.
+  [workflows/testing.md](workflows/testing.md) now clears both.
+
 * **Phase 2 — the numbers are pinned, and the two suites that had gone two
   sessions unverified are green.**
 

@@ -181,7 +181,46 @@ collection. Every test invocation in this repo must pass `-p no:pytest-qt`
 (the plugin name; `-p no:qt` does not match). *Fix:* install a Qt binding, or
 make the plugin a conditional dev dependency.
 
-## On the LabelLib path the point cloud sits half a voxel off its own grid
+## ~~On the LabelLib path the point cloud sits half a voxel off its own grid~~ — fixed 2026-07-28, and it was two defects, on both backends
+
+**Fixed**, and the entry below understated it in three ways. There is now one
+index map everywhere — `quest.core.av.grid_center_index` — and
+`tests/test_grid_registration.py` holds it.
+
+1. **It was not confined to LabelLib.** The float corner was also used by
+   `_simulate_traj`, `_simulate_traj_grid` and
+   `_sample_grid_at_trajectory`, so on **both** backends the walk read the
+   quenching and stickiness grids at indices half a voxel from where
+   `_center_grid_indices` had stamped them, whenever `ng` was even — which is
+   the normal case (86 and 80 at the reference site).
+2. **There was a second, larger defect underneath it.** `_center_grid_indices`
+   computed `int((p - r0) / dg)`, and `int()` truncates **toward zero**: for any
+   centre on the negative side of the anchor it rounded *up*, while every other
+   map in the project rounds down. That is a one-voxel error per axis for half
+   the grid, on both backends, independent of parity. It was found by asserting
+   that the two index maps agree — not by a number looking wrong.
+3. **The "genuine judgement call" was not one.** On the IMP path
+   `x0 = grid_origin + ((ng-1)//2)·dg`, so voxel *i* is at `grid_origin + i·dg`
+   *by construction*; the integer offset is the map that inverts that, and
+   integer voxel indexing cannot express the float corner. LabelLib anchored
+   `x0` on the **attachment atom**, which lands on a voxel node only for odd
+   `ng`.
+
+The decisive measurement, which is the one to repeat if this is ever
+re-litigated: run every point of `AV.points` through the *kernels'* index
+formula and ask whether it lands on a voxel `AV.density` calls occupied.
+Before: **37478/37859 = 98.99 %** on LabelLib, 100 % on IMP. After: **100 % on
+both**.
+
+**Numbers moved on both backends**, and are re-baselined in
+`tests/baselines/`. Corroboration rather than proof, but worth recording: the
+two independently-computed backends agree far better than they did — donor
+quantum yield at 148l E96 was 0.089 (LabelLib) against 0.458 (IMP.bff), a
+factor of 5.1; it is now 0.073 against 0.085, a factor of 1.2.
+
+Original entry follows.
+
+### Original entry (superseded)
 
 `AV.points` and `AV.density` describe the same volume, and on the LabelLib
 backend they are **offset from each other by half a voxel on every axis** —

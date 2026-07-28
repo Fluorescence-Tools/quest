@@ -56,13 +56,27 @@ def _make_minimal_project(with_fret: bool) -> Dict[str, Any]:
     project["pdb"] = str(PDB_PATH)
     project["attachment"] = {
         "chain": "E",
-        # Re-picked with the move to IMP radii. This project switches every
-        # quencher off except TYR, so `quenching_grid.max() >= 2.0` really
-        # asserts "a tyrosine is within critical_distance of the accessible
-        # volume". The larger atoms shrink that volume, and residue 10 no
-        # longer has one in reach — of the labelable sites on this chain only
-        # 36 and 82 do.
-        "residue": 36,
+        # This project switches every quencher off except TYR, so
+        # `quenching_grid.max() >= 2.0` really asserts "a tyrosine is within
+        # critical_distance of the accessible volume". Which sites satisfy that
+        # is sensitive to the AV, so it has been re-measured twice rather than
+        # relaxed:
+        #
+        #   2026-07-27, move to IMP radii — larger atoms shrank every volume,
+        #               leaving only 36 and 82 on this chain.
+        #   2026-07-28, one grid-offset convention — the quenching grid had been
+        #               stamped up to one voxel per axis from where the walk read
+        #               it, so *which* residues were in reach changed wholesale.
+        #               Re-scanned residues 2..164 under both backends:
+        #                 imp_bff  : 80 86 97 103 117 127 129 131 132 135 136
+        #                            137 139 141 143 144 145 149 150 151 152
+        #                            154 157 160
+        #                 labellib : 2 74 92 95 96 97 130 134 138 160
+        #               The intersection is {97, 160}; 36 is in neither.
+        #
+        # It must hold under **both** backends, or this file goes red wherever
+        # only one of them is installed.
+        "residue": 97,
         "atom": "CB",
     }
 

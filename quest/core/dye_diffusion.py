@@ -601,8 +601,21 @@ class SimulateDiffusion(object):
             raise ValueError("Run simulation first.")
         values = np.asarray(grid, dtype=np.float32)
         shape = values.shape
-        center_index = (np.asarray(shape, dtype=np.float64) - 1.0) / 2.0
-        indices = np.trunc((self._traj - self.x0) / float(self.dg) + center_index).astype(np.int64)
+        # This maps Angstrom back to a voxel index; `_center_grid_indices` maps
+        # the *quencher* coordinates to voxel indices when the grid is stamped.
+        # The two have to be the same map, or the walk reads the quenching
+        # rates from beside where they were written. It used the float corner
+        # `(n - 1) / 2` until 2026-07-28, which differs from the kernels'
+        # integer offset on every even edge length -- see
+        # `quest.core.av.grid_center_index`.
+        center_index = np.array(
+            [fps.grid_center_index(n) for n in shape], dtype=np.float64
+        )
+        # `floor`, not `trunc`: `trunc` maps [-1, 0) to 0, so a position up to
+        # one voxel *below* the grid was treated as inside it and read voxel 0's
+        # quenching rate. `floor` sends it to -1, which the bounds check below
+        # then rejects.
+        indices = np.floor((self._traj - self.x0) / float(self.dg) + center_index).astype(np.int64)
         inside = np.ones(indices.shape[0], dtype=bool)
         for axis, size in enumerate(shape):
             inside &= (indices[:, axis] >= 0) & (indices[:, axis] < size)

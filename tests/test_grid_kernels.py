@@ -8,6 +8,8 @@ centre, which is what the kernels replaced.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 
@@ -19,9 +21,15 @@ def _reference_masks(ng, dg, radii, centers, origin):
     offset = (ng - 1) // 2
     masks = []
     for center, radius in zip(centers, radii):
-        ix0 = int((center[0] - origin[0]) / dg) + offset
-        iy0 = int((center[1] - origin[1]) / dg) + offset
-        iz0 = int((center[2] - origin[2]) / dg) + offset
+        # `floor`, matching `quest.core.av.grid_center_index`'s contract. This
+        # said `int()` until 2026-07-28 -- a straight copy of the kernel, which
+        # made this a self-comparison rather than a reference: it could not
+        # detect that `int()` truncates toward zero and so rounds *up* for a
+        # centre on the negative side of the origin, disagreeing by one voxel
+        # per axis with every other index map in the project.
+        ix0 = math.floor((center[0] - origin[0]) / dg) + offset
+        iy0 = math.floor((center[1] - origin[1]) / dg) + offset
+        iz0 = math.floor((center[2] - origin[2]) / dg) + offset
         radius_idx = int(radius / dg)
         grid = np.indices((ng, ng, ng))
         d2 = (
