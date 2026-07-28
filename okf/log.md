@@ -58,6 +58,56 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **Phases 6 and 7 — the dedup rows close, and adopting a kernel meant fixing
+  it upstream first. Again.**
+
+  **In imp-tricks** (`3dbefc8`, version **0.2.0**, plus a rattler recipe —
+  `noarch: python`, since there are no compiled sources there):
+
+  - **`av_pair_statistics` stopped returning ⟨R_DA⟩ under the name `R_mp`.**
+    Slot 1 is **NaN** now, and `mean_position_distance` — contributed from
+    QuEst's `dRmp` — takes the clouds and computes it properly. `|⟨a⟩−⟨b⟩|` is
+    not a function of the distribution of `|a−b|`, so no implementation taking
+    only distances can produce it; 51.53 Å was returned against a true 47.65 Å
+    on 148l E15/E90. **The upstream test asserted `r_mp == 50.0` and passed only
+    *because* of the bug** — the fourth time in this project a test has pinned
+    the defect it was meant to catch.
+  - **`split_av_acv` carried both of phase 3's registration defects**: the float
+    corner `(ng-1)/2` *and* `int()` truncation. Adopting it as written would
+    have re-introduced them wholesale. Fixed upstream, and its `r0` is now
+    documented as the grid **anchor** — it said "grid origin (attachment-site
+    coordinates)", which is ambiguous between three different points, and that
+    ambiguity is precisely what let the two conventions drift apart in the first
+    place.
+  - Its masks are **uint8** rather than float64: binary data, and at `ng = 92` a
+    float64 pair costs 12.5 MB per site against 1.6 MB, once per site in a scan.
+
+  **In QuEst:** `subav` is now a thin adapter over `split_av_acv` and the
+  93-line `_subav` kernel is **deleted**; `dRmp` delegates to the function it
+  contributed; and `HAS_IMP_BFF` asks the real question — the compiled
+  `IMP.bff.AV` class *and* an importable `compute_av` — closing `DUP-02`.
+  `compute_av` is *imported* rather than probed with `hasattr`, because
+  `IMP.bff.av` is a namespace subpackage spliced in at runtime and an attribute
+  lookup does not answer that. **All numbers unchanged**: kernel-equivalence
+  tests and both baselines pass untouched, which is the whole point of adopting
+  a kernel that was verified first.
+
+  **One item was never a defect, and the error was mine.** "Fix the `IMP.cgmol`
+  import" entered the plan from a probe written as `import quest.imp_tricks` —
+  the module, without *calling* `enable_imp_tricks()`. `IMP.cgmol.sterics`
+  imports fine. In correcting it,
+  [workflows/environment.md](workflows/environment.md) turned out to be wrong
+  too: it claimed `import quest` bridges the checkout, and named
+  `quest.lib.imp_av`, which `DUP-01` deleted. Measured: `import quest` does
+  **not** splice; `quest.core`, `quest.core.av` and `quest.api` do. The rule
+  recorded there: when a checkout-only import fails, check the bridge was
+  invoked before concluding anything about the other repository.
+
+  `asa`/`spherePoints` → `IMP.cgmol.sterics.asa` is the one row left open. It is
+  cold — once per simulation, for quencher SASA — and adopting it without the
+  same numerical verification the others got would be the mistake this phase
+  exists to avoid.
+
 * **Phase 5 — κ² is now *stated*. `DUP-03` is rejected and its direction
   reversed, and `OBJ-02` is decided.**
 

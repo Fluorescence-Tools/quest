@@ -37,11 +37,30 @@ except Exception:  # pragma: no cover - never fatal
 try:  # pragma: no cover - optional heavy dependency
     import IMP.bff
 
-    #: True when the *compiled* IMP.bff AV decorator is present. This is a
-    #: different question from whether imp-tricks' pure-Python `IMP.bff.av`
-    #: imports: in the base environment the latter does and the former does not,
-    #: and `compute_av`'s `imp_bff` backend needs the C++ class.
-    HAS_IMP_BFF = hasattr(IMP.bff, "AV")
+    #: True when the ``imp_bff`` accessible-volume backend can actually run.
+    #:
+    #: **Two things have to hold, and asking only one of them was `DUP-02`.**
+    #: The backend needs the *compiled* `IMP.bff.AV` C++ class **and**
+    #: imp-tricks' pure-Python `IMP.bff.av.compute_av` that drives it. The check
+    #: was `hasattr(IMP.bff, "AV")` alone, which is the compiled half only --
+    #: so an environment with a compiled IMP.bff but no imp-tricks checkout
+    #: reported the backend as available and then failed on first use, and the
+    #: assessment recorded the flag as "asking the wrong question".
+    #:
+    #: `compute_av` is imported here rather than probed with `hasattr` because
+    #: `IMP.bff.av` is a namespace subpackage spliced in by
+    #: `quest.imp_tricks.enable_imp_tricks`, and its presence on `IMP.bff` is
+    #: not something an attribute lookup answers.
+    def _imp_bff_backend_available() -> bool:
+        if not hasattr(IMP.bff, "AV"):
+            return False
+        try:
+            from IMP.bff.av import compute_av  # noqa: F401
+        except Exception:
+            return False
+        return True
+
+    HAS_IMP_BFF = _imp_bff_backend_available()
 except Exception:  # pragma: no cover - keep the optional dependency lazy
     HAS_IMP_BFF = False
 
@@ -603,18 +622,22 @@ def RDAMean(av1, av2, nSamples: int = 50_000, seed: int = RDA_SAMPLING_SEED):
 def dRmp(av1, av2):
     """Distance between the two clouds' mean positions, in Angstrom.
 
-    **Stays in QuEst deliberately, and the arrow points upstream here.**
-    `av_pair_statistics` returns this as its second value and it is wrong: its
-    own docstring concedes "same as ``r_da_mean`` here", i.e. it returns the mean
-    *pair distance* again. R_mp is |<r_D> - <r_A>|, which cannot be recovered
-    from a sample of pair distances at all — the sampling destroys exactly the
-    information it needs. Measured on 148l E15/E90: 47.65 A here against
-    51.53 A from upstream's field, 8 % apart, and the smaller number is the
-    correct one.
+    **The arrow pointed upstream here, and the migration has now happened.**
+    `av_pair_statistics` used to return this as its second value, and it was
+    wrong: its own docstring conceded "same as ``r_da_mean`` here", i.e. it
+    returned the mean *pair distance* under the name R_mp. R_mp is
+    ``|<r_D> - <r_A>|``, which cannot be recovered from a sample of pair
+    distances at all -- the sampling destroys exactly the information it needs.
+    Measured on 148l E15/E90: 47.65 A against 51.53 A, 8 % apart.
 
-    So index 1 of `av_pair_statistics` must never be read. QuEst reads 0 and 2.
+    QuEst's implementation was contributed to imp-tricks as
+    `IMP.bff.distance_metrics.mean_position_distance` (0.2.0), and slot 1 of
+    `av_pair_statistics` is now **NaN** so that reading it fails loudly rather
+    than silently returning a different quantity. This delegates.
     """
-    return float(np.sqrt(((av1.Rmp - av2.Rmp) ** 2).sum()))
+    from IMP.bff.distance_metrics import mean_position_distance
+
+    return mean_position_distance(av1.points, av2.points)
 
 
 @njit(cache=True)
@@ -641,61 +664,64 @@ def _center_grid_indices(rs, r0, dg, ng, radius):
     return ix0, iy0, iz0, radius_idx
 
 
-# The three grid kernels below only visit the voxels inside each centre's
-# bounding box instead of testing every voxel against every centre. The outer
-# loop stays over x-slabs so the work is parallel and free of write races.
-@njit(cache=True, parallel=True)
-def _subav(density, ng, slow_radius, rs, r0, dg):
-    subav_density = density.copy()
-    n_slow_center = rs.shape[0]
-    ix0s, iy0s, iz0s, radius_idxs = _center_grid_indices(rs, r0, dg, ng, slow_radius)
+#: Resolved on first use by :func:`_split_av_acv_kernel`, never at import.
+_UPSTREAM_SPLIT_AV_ACV = None
 
-    for ix in prange(ng):
-        is_slow = np.zeros((ng, ng), dtype=np.uint8)
-        for isa in range(n_slow_center):
-            r_idx = radius_idxs[isa]
-            dx = ix - ix0s[isa]
-            remaining = r_idx * r_idx - dx * dx
-            if remaining <= 0:
-                continue
-            iy0 = iy0s[isa]
-            iz0 = iz0s[isa]
-            y_lo = max(0, iy0 - r_idx)
-            y_hi = min(ng - 1, iy0 + r_idx)
-            for iy in range(y_lo, y_hi + 1):
-                dy = iy - iy0
-                span2 = remaining - dy * dy
-                if span2 <= 0:
-                    continue
-                span = int(np.sqrt(span2))
-                # The membership test is strict (d^2 < r^2), so drop the
-                # boundary voxel when span2 is a perfect square.
-                if span * span >= span2:
-                    span -= 1
-                if span < 0:
-                    continue
-                z_lo = max(0, iz0 - span)
-                z_hi = min(ng - 1, iz0 + span)
-                for iz in range(z_lo, z_hi + 1):
-                    is_slow[iy, iz] = 1
-        for iy in range(ng):
-            for iz in range(ng):
-                if is_slow[iy, iz] == 0:
-                    subav_density[ix, iy, iz] = 0
-    return subav_density
+
+def _split_av_acv_kernel():
+    """`split_av_acv`, imported on first use.
+
+    Lazy for the same reason as every other upstream kernel here: importing
+    `IMP.bff` reaches `IMP`, and `import quest.core` must not
+    (okf/references/known-issues.md).
+    """
+    global _UPSTREAM_SPLIT_AV_ACV
+    if _UPSTREAM_SPLIT_AV_ACV is None:
+        from IMP.bff.av._kernels import split_av_acv
+
+        _UPSTREAM_SPLIT_AV_ACV = split_av_acv
+    return _UPSTREAM_SPLIT_AV_ACV
 
 
 def subav(density, ng, dg, slow_radius, rs, r0):
-    return _subav(
-        np.asarray(density, dtype=np.uint8),
-        int(ng),
+    """The contact ("slow") part of a density grid, as a binary mask.
+
+    **The split itself is `IMP.bff.av._kernels.split_av_acv`** as of
+    2026-07-28; this is the adapter (`DUP-05`). It was not a drop-in, and the
+    reasons are the general lesson of this migration:
+
+    * upstream placed the slow centres with the **float corner** and `int()`
+      truncation -- the same two registration defects QuEst had just been fixed
+      for -- so adopting it as written would have reintroduced both. Fixed
+      upstream first (imp-tricks 0.2.0), and its `r0` is now documented as the
+      grid *anchor* rather than "grid origin (attachment-site coordinates)",
+      which was ambiguous between three different points;
+    * it returned `float64` masks, which at `ng = 92` is 12.5 MB per site
+      against 1.6 MB, once per site in a scan. Now `uint8`.
+
+    Upstream returns *both* parts plus their counts; QuEst uses the contact
+    mask, which for a binary density is exactly what the deleted `_subav`
+    produced -- verified by `tests/test_grid_kernels.py` and the baselines,
+    which did not move.
+    """
+    density = np.asarray(density, dtype=np.uint8)
+    ng = int(ng)
+    split_av_acv = _split_av_acv_kernel()
+    _, _, contact, _ = split_av_acv(
+        density.reshape(ng, ng, ng).astype(np.float64),
+        float(dg),
         np.asarray(slow_radius, dtype=np.float64),
         np.asarray(rs, dtype=np.float64),
         np.asarray(r0, dtype=np.float64),
-        float(dg),
     )
+    return np.ascontiguousarray(contact.reshape(density.shape), dtype=np.uint8)
 
 
+# The two grid kernels below only visit the voxels inside each centre's
+# bounding box instead of testing every voxel against every centre. The outer
+# loop stays over x-slabs so the work is parallel and free of write races.
+#
+# `_subav` used to be a third; it is deleted in favour of the adapter above.
 @njit(cache=True, parallel=True)
 def _slow_factor_grid(density, ng, slow_radius, rs, r0, dg, slow_fact):
     factors = np.ones(density.shape, dtype=np.float64)

@@ -123,14 +123,27 @@ it is under active development, so the checkout is what has to work; an
 installed copy goes stale immediately. (A `pip install --no-deps`, which is what
 ChiSurf's installer does for releases, was tried here and reverted.)
 
-Instead `quest.lib.imp_av` calls `quest.imp_tricks.enable_imp_tricks()` **on
-import**, so simply using QuEst makes the checkout importable:
+Instead `quest.core.av` calls `quest.imp_tricks.enable_imp_tricks()` **on
+import**, so touching the domain layer makes the checkout importable:
 
 ```python
-import quest                            # bridges ~/dev/imp-tricks/src
+import quest.core                       # bridges ~/dev/imp-tricks/src
 from IMP.bff.av import compute_av       # from the live source tree
-from IMP.cgmol.statpot import _kernels
+from IMP.cgmol.sterics import asa
 ```
+
+**`import quest` alone is not enough**, and this section said it was, naming a
+module (`quest.lib.imp_av`) that `DUP-01` deleted. Verified 2026-07-28:
+`import quest` then `import IMP.cgmol.sterics` raises `ModuleNotFoundError`;
+`quest.core`, `quest.core.av` and `quest.api` all splice. Calling
+`enable_imp_tricks()` yourself always works.
+
+That error cost real time here: a probe written as `import quest.imp_tricks`
+(the module, without *calling* it) reported `IMP.bff.av` and `IMP.cgmol` as
+missing, and "fix the `IMP.cgmol` import" was carried into a work plan as a
+defect upstream. There was no defect. **When a checkout-only import fails, check
+that the bridge was actually invoked before concluding anything about the other
+repository.**
 
 Point it elsewhere with `IMP_TRICKS_SRC`; with no checkout it does nothing.
 
