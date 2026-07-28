@@ -10,8 +10,10 @@ timestamp: '2026-07-28T18:00:00Z'
 # Read this, then [`specs/programme-2026-07.md`](specs/programme-2026-07.md), then [`log.md`](log.md)
 
 **Everything is committed and clean; nothing is pushed.** A thirteen-phase
-programme was agreed by interview on 2026-07-28 and **phases 0–7 are done**
-(eight commits in `quest`, one in `imp-tricks`). The decisions behind it — and
+programme was agreed by interview on 2026-07-28 and **phases 0–9 and 11 are
+done** (thirteen commits in `quest`, one in `imp-tricks`). **Every `LAY-*` row
+is closed**; what remains is the ChiSurf-side plugin, publication, and the
+closeout. The decisions behind it — and
 the three places they *reverse* what this bundle used to assert — are in
 [specs/programme-2026-07.md](specs/programme-2026-07.md). Read that before
 proposing work in these areas; several "obvious" next steps there have already
@@ -24,7 +26,7 @@ everything ([workflows/environment.md](workflows/environment.md)).
 
 | | tests |
 |---|---|
-| library + Qt GUI + web backend, one command | **461 passed, 1 skipped** |
+| library + Qt GUI + web backend, one command | **524 passed, 1 skipped** |
 | notebooks + examples (`-m notebooks`) | **16 passed, 2 skipped** |
 | browser e2e (Playwright, both servers up) | **26 passed** |
 | ChiSurf `quenching_estimator` | **1 passed** |
@@ -48,48 +50,41 @@ residue identity were both wrong, on both backends.
 | 4 | `83bac32` | **Residue identity from IMP** — `(chain, res_id, insertion_code)`. Closes `DUP-06` |
 | 5 | `d9ba940` | κ² stated (`fret.kappa2`, default 2/3, no numeric change); `DUP-03` rejected; `OBJ-02` decided |
 | 6+7 | `dae3763`, imp-tricks `3dbefc8` | Upstream `r_mp` and `split_av_acv` fixed; `subav` and `dRmp` adopted; `DUP-02` closed |
+| 8 | `4539b22` | **`quest.api` is a facade**; serialization moved to the transport; contract, `error_code` taxonomy, `quest.contract.describe`. Closes `LAY-04` |
+| 9 | `82b75d4`, `8218c22` | **One mechanism for long-running work**, cooperatively cancelable; `jobs` (running) split from `runs` (artefacts). Closes `LAY-07` |
+| 11 | `0dd0ac5` | i18n gets an end condition: frontend keys must resolve, and the 90-string chrome backlog is a ratchet |
 
-# Left: phases 8–13
+# Left: phases 10, 12, 13
 
-In dependency order. Nothing here is started.
+1. **Phase 10 — the ChiSurf plugin, rewritten from scratch** on the
+   `chisurf/plugins/modelling/fps_json_editor/` template, reusing `cs`
+   machinery. Today `chisurf/plugins/quenching_estimator/` is a single
+   `__init__.py` with **no manifest**, so it loads through the host's legacy AST
+   discovery; it imports `quest.gui` at **module scope**, so ChiSurf startup
+   pulls QuEst → IMP whether or not anyone opens it; and it wraps the form in a
+   `QMainWindow` used as a central widget, which is a window pretending to be
+   embedded.
 
-1. **`LAY-04` — the facade.** `quest.api` becomes verb-oriented over a client
-   (`InProcessClient` by default), and **`result_payload` moves out of the
-   handlers to the transport**, so an in-process call returns native arrays.
-   That rule is not tidiness: `OBJ-02`'s host optimiser calls `simulate`
-   thousands of times.
-2. **The contract.** `quest/api/contract.py` on ChiSurf's pattern —
-   `PLUGIN_ID`, `CONTRACT_VERSION`, `service_success`/`service_error` **with
-   `error_code`**, `contract_descriptor()`, a `quest.contract.describe` method,
-   and a stable `error_code` taxonomy. Guardrail: a per-method round-trip test
-   asserting the payload validates against the manifest schema. Reference:
-   `chisurf/plugins/modelling/fps_json_editor/api/contract.py`.
-3. **`LAY-07` — cancellation.** One manager mirroring ChiSurf's
-   `chisurf/server/jobs.py` contract (same statuses, `progress`, cooperative
-   `should_cancel`), implemented in QuEst so it still runs standalone. **Rename
-   the artefact side to `runs`** and free `jobs` for the async sense, matching
-   the host. Document the limitation: `_simulate_traj` computes a whole
-   trajectory in one `njit` call, so cancel means "at the next checkpoint" and
-   a single-site simulate may have none.
-4. **The ChiSurf plugin, rewritten from scratch** on the `fps_json_editor`
-   template, reusing `cs` machinery. `quest/gui/` stays in QuEst; the plugin
-   embeds it as a dockable widget rather than a `QMainWindow`, imports lazily
-   (it currently pulls QuEst → IMP at ChiSurf startup) and registers QuEst's
-   RPC methods into the host dispatcher. Closes the ChiSurf half of `LAY-05`.
-5. **i18n `P1`** — a coverage test across en/de/fr *and* the catalog, then the
-   remaining web-UI chrome. Note the asymmetry: `en.json` carries only `ui` and
-   `categories` because English lives in the catalog, while de/fr carry a full
-   `parameters` block, and nothing currently checks they still match the
-   catalog's keys.
-6. **Publish imp-tricks 0.2.0** to anaconda.org (`tpeulen`, noarch) **and**
-   PyPI; then pin `imp-tricks >=0.2.0` in `pixi.toml` and the recipe. **This
-   needs credentials and is the one phase that cannot be done unattended.** The
-   recipe is written (`~/dev/imp-tricks/rattler-recipe/recipe.yaml`).
+   It needs: `manifest.json`, `api/contract.py` re-exporting QuEst's,
+   `rpc/services.py` registering QuEst's twelve methods into the host
+   dispatcher (`quest.backend.services.register_services` takes anything with
+   `register(name, handler)`), `cli/`, a `gui/` that embeds `quest/gui/`'s
+   AutoForm as a **dockable widget**, and a lazy entry point. `core/` stays
+   empty — QuEst is the core. **`quest/gui/` stays in QuEst.** Closes the
+   ChiSurf half of `LAY-05`.
+
+2. **Phase 12 — publish imp-tricks 0.2.0** to anaconda.org (`tpeulen`, noarch)
+   **and** PyPI; then pin `imp-tricks >=0.2.0` in `pixi.toml` and the recipe.
+   **This needs credentials and is the one phase that cannot be done
+   unattended.** The recipe is written
+   (`~/dev/imp-tricks/rattler-recipe/recipe.yaml`) and the version is bumped.
    Publication is what turns CI green — the `*` constraint makes all four jobs
    red today, deliberately.
-7. **OKF closeout** — totals in [specs/assessment.md](specs/assessment.md),
-   prune [references/known-issues.md](references/known-issues.md), rewrite this
-   file.
+
+3. **Phase 13 — OKF closeout**: prune the superseded entries in
+   [references/known-issues.md](references/known-issues.md) (several now carry a
+   "fixed" preamble in front of an obsolete original), and rewrite this file
+   once 10 and 12 land.
 
 # Still open, needing a decision
 
