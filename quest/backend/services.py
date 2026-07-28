@@ -17,9 +17,16 @@ from pathlib import Path
 from typing import Any, Mapping, Optional
 
 from .. import jobs, settings
+from .contract import register_payload_converter, service_error, to_payload
 from .dispatcher import InProcessClient, ServiceDispatcher, fail, ok
 
-__all__ = ["register_services", "local_client", "METHODS", "result_payload"]
+__all__ = [
+    "register_services",
+    "local_client",
+    "METHODS",
+    "result_payload",
+    "simulation_payload",
+]
 
 #: Method names in registration order, with a one-line summary each. This is
 #: the table a manifest declares and a host advertises.
@@ -36,15 +43,23 @@ METHODS: dict[str, str] = {
     "quest.structure.metadata": "Return the chains, residues and atoms of a structure file.",
     "quest.jobs.list": "Return job summaries, newest first.",
     "quest.jobs.get": "Return a finished run's result.",
+    "quest.contract.describe": "Return the contract: methods, schemas, error codes and where serialization happens.",
 }
 
 
-def result_payload(result: Any) -> dict[str, Any]:
+def simulation_payload(result: Any) -> dict[str, Any]:
     """Convert a :class:`~quest.core.DecaySimulationResult` to plain data.
 
     Arrays become lists and absent channels stay ``None``. This is the boundary
     shape: whatever crosses to a browser, a host application or a file goes
     through here, so there is one definition of what a simulation result *is*.
+
+    **Called by a transport, not by a handler.** It ran inside
+    `simulate_handler` until 2026-07-28, so an in-process caller paid a
+    numpy->list conversion of every decay channel whether it wanted one or not
+    -- including the fitting loop `OBJ-02` chose as QuEst's primary consumer,
+    which calls `simulate` thousands of times. See
+    `quest.backend.contract`.
     """
 
     def _list(value: Any) -> Any:
@@ -75,6 +90,12 @@ def result_payload(result: Any) -> dict[str, Any]:
     }
 
 
+register_payload_converter("DecaySimulationResult", simulation_payload)
+
+#: Retained under its old name for callers that import it directly.
+result_payload = simulation_payload
+
+
 def template_handler(with_fret: bool = True) -> dict[str, Any]:
     from ..project import template_project
 
@@ -90,7 +111,7 @@ def validate_handler(
     try:
         validate_project(project, pdb_path=pdb_path)
     except ProjectValidationError as exc:
-        return fail(str(exc))
+        return service_error(str(exc), "invalid_project", type(exc).__name__)
     return ok({"valid": True, "project": dict(project)})
 
 
@@ -110,7 +131,7 @@ def simulate_handler(
     try:
         validate_project(project, pdb_path=pdb_path)
     except ProjectValidationError as exc:
-        return fail(str(exc))
+        return service_error(str(exc), "invalid_project", type(exc).__name__)
 
     start, stop = tac_range
     try:
@@ -123,8 +144,13 @@ def simulate_handler(
             save_outputs=bool(save_outputs),
         )
     except Exception as exc:
-        return fail(f"Simulation failed: {exc}")
-    return ok(result_payload(result))
+        from .contract import error_code_for
+
+        return service_error(
+            f"Simulation failed: {exc}", error_code_for(exc), type(exc).__name__
+        )
+    # The **native** result. A transport calls `contract.to_payload`.
+    return ok(result)
 
 
 def scan_handler(
@@ -242,6 +268,17 @@ def jobs_get_handler(job_id: str, project_dir: Optional[str] = None) -> dict[str
         return fail(str(exc))
 
 
+def contract_describe_handler() -> dict[str, Any]:
+    """What QuEst offers, in a form a host can read without importing QuEst.
+
+    Built from `quest/manifest.json`, so it cannot drift from the declaration a
+    host already reads.
+    """
+    from .contract import contract_descriptor
+
+    return ok(contract_descriptor())
+
+
 def register_services(dispatcher: Any) -> None:
     """Register QuEst's methods with *dispatcher*.
 
@@ -274,6 +311,7 @@ def register_services(dispatcher: Any) -> None:
     )
     dispatcher.register("quest.jobs.list", lambda p: jobs_list_handler(**(p or {})))
     dispatcher.register("quest.jobs.get", lambda p: jobs_get_handler(**(p or {})))
+    dispatcher.register("quest.contract.describe", lambda p: contract_describe_handler())
 
 
 def local_client() -> InProcessClient:

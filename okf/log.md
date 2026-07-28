@@ -58,6 +58,46 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **Phase 8 — `quest.api` is a facade, and serialization left the handlers.
+  `LAY-04` closes.**
+
+  The verbs (`template`, `validate`, `simulate`, `scan`, `parameter_catalog`,
+  `dyes`, `structure_metadata`, `describe`) go through a **client**;
+  `api.use_client()` swaps in a remote one, which is the local/remote
+  resolution the row asked for and had never had. The web backend calls
+  `api.simulate` rather than reaching into `quest.core`. The domain re-exports
+  stay — a notebook wanting `build_donor_from_project` should have it — but the
+  verbs are the supported way in.
+
+  **`result_payload` moved out of `simulate_handler`.** An in-process call now
+  returns a `DecaySimulationResult` with numpy intact, and only a transport
+  calls `to_payload`. This is not tidiness: `OBJ-02` chose a host optimiser as
+  QuEst's primary consumer, and it calls `simulate` thousands of times — a
+  numpy→list conversion of every decay channel per iteration is a tax paid
+  forever by exactly the caller the objective exists to serve.
+
+  **The cost is real and is guarded rather than promised.** Payload shape now
+  depends on the transport, which is the "same capability, different path"
+  shape that produced `LAY-01`'s triplicated `simulate_site`.
+  `tests/test_contract.py` round-trips every method's native result through
+  `to_payload` and checks it against the schema `quest/manifest.json` declares.
+  **Seen to fail**: dropping a single `.tolist()` turns 4 tests red.
+
+  **Errors carry a code now.** `service_error` attaches one of seven
+  `ERROR_CODES` plus the exception *type*, which `dispatch` no longer flattens
+  into a message string — a host that can only string-match breaks the first
+  time a message is improved. The web backend maps them onto HTTP status, so a
+  buried labelling site is a **422** rather than a 500, and `RemoteError` reads
+  the same fields ChiSurf's own does. An unknown code is refused at
+  construction, since a typo would otherwise produce an envelope no host
+  recognises and fail silently as "some error".
+
+  `quest/backend/contract.py` follows ChiSurf's per-plugin pattern —
+  `PLUGIN_ID`, `CONTRACT_VERSION`, `contract_descriptor()`,
+  `quest.contract.describe`. The descriptor is **built from the manifest**
+  rather than written beside it: a second hand-maintained copy of the method
+  list is the defect shape this project keeps finding.
+
 * **Phases 6 and 7 — the dedup rows close, and adopting a kernel meant fixing
   it upstream first. Again.**
 

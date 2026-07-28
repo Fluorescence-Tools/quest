@@ -41,7 +41,14 @@ class TestRegistry:
 
     def test_unknown_method_fails_without_raising(self) -> None:
         response = local_client().call("quest.does_not_exist")
-        assert response == {"ok": False, "error": "Unknown method: quest.does_not_exist"}
+        assert response == {
+            "ok": False,
+            "error": "Unknown method: quest.does_not_exist",
+            # A host branches on the code, never on the message. Added
+            # 2026-07-28 with the contract; the envelope previously carried no
+            # code at all, so improving a message was a breaking change.
+            "error_code": "unknown_method",
+        }
 
     def test_a_raising_handler_becomes_a_failure_envelope(self) -> None:
         dispatcher = ServiceDispatcher()

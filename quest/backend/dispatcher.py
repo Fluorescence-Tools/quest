@@ -30,7 +30,24 @@ Handler = Callable[[Dict[str, Any]], Dict[str, Any]]
 
 
 class RemoteError(RuntimeError):
-    """Raised by a client when a call fails."""
+    """Raised by a client when a call fails.
+
+    Carries the envelope's ``error_code`` and ``exception_type`` so a caller can
+    branch on the condition rather than on the wording of a message. The field
+    names match ChiSurf's own ``RemoteError``.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        error_code: str | None = None,
+        exception_type: str | None = None,
+        details: dict | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+        self.exception_type = exception_type
+        self.details = details
 
 
 def ok(result: Any) -> dict[str, Any]:
@@ -39,10 +56,17 @@ def ok(result: Any) -> dict[str, Any]:
     return {"ok": True, "result": result}
 
 
-def fail(error: str) -> dict[str, Any]:
-    """Wrap *error* in a failure envelope."""
+def fail(error: str, error_code: str = "operation_failed") -> dict[str, Any]:
+    """Wrap *error* in a failure envelope.
 
-    return {"ok": False, "error": error}
+    Thin wrapper over :func:`quest.backend.contract.service_error`, kept because
+    handlers read better with a short name. Use the contract directly when you
+    want to attach an exception type or details.
+    """
+
+    from .contract import service_error
+
+    return service_error(error, error_code)
 
 
 class ServiceDispatcher:
@@ -82,13 +106,22 @@ class ServiceDispatcher:
     ) -> dict[str, Any]:
         """Call *method* with *params* and return its envelope."""
 
+        from .contract import error_code_for, service_error
+
         handler = self._handlers.get(method)
         if handler is None:
-            return fail(f"Unknown method: {method}")
+            return service_error(f"Unknown method: {method}", "unknown_method")
         try:
             return handler(params or {})
         except Exception as exc:  # handlers should not raise; be safe anyway
-            return fail(f"{type(exc).__name__}: {exc}")
+            # The exception *type* is preserved rather than flattened into the
+            # message. A host that can only string-match breaks the first time
+            # a message is improved.
+            return service_error(
+                f"{type(exc).__name__}: {exc}",
+                error_code_for(exc),
+                type(exc).__name__,
+            )
 
 
 class InProcessClient:
@@ -121,5 +154,10 @@ class InProcessClient:
 
         response = self.call(method, params)
         if not response.get("ok"):
-            raise RemoteError(response.get("error", "unknown error"))
+            raise RemoteError(
+                response.get("error", "unknown error"),
+                response.get("error_code"),
+                response.get("exception_type"),
+                response.get("details"),
+            )
         return response.get("result")

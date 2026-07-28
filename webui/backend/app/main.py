@@ -63,10 +63,25 @@ from quest.core import top_quenchers
 from quest.scan import simulate_site
 from quest import i18n as quest_i18n
 from quest import settings as quest_settings
-from quest.backend import result_payload
+from quest.backend import RemoteError, to_payload
+
 from quest.backend.services import locales_handler, structure_metadata_handler
 from quest import jobs as quest_jobs
 from quest.structure_fetch import resolve_structure_path
+
+#: `error_code` -> HTTP status. A malformed project is the caller's fault; a
+#: buried labelling site is a 422 (well-formed, unprocessable) rather than a
+#: 500, which is what a browser needs to tell the user something useful. The
+#: envelope carries the code precisely so this table can exist -- before
+#: 2026-07-28 the only thing to branch on was the text of a message.
+ERROR_STATUS: dict[str, int] = {
+    "invalid_project": 400,
+    "structure_unreadable": 400,
+    "unsupported_option": 400,
+    "unlabelable_site": 422,
+    "backend_unavailable": 503,
+    "unknown_method": 404,
+}
 
 
 def _data_dir() -> Path:
@@ -245,12 +260,9 @@ async def simulate(
     if resolved_pdb is not None:
         project["pdb"] = str(resolved_pdb)
     try:
-        api.validate_project(project)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    try:
-        result = api.simulate_project(
+        # Through the facade, not past it: one registry, one set of error
+        # codes, whichever surface is calling (LAY-04).
+        result = api.simulate(
             project,
             pdb_path=resolved_pdb,
             nbins=nbins,
@@ -261,12 +273,14 @@ async def simulate(
             # depend on where uvicorn was started.
             save_outputs=True,
         )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Simulation failed: {exc}") from exc
+    except RemoteError as exc:
+        status = ERROR_STATUS.get(exc.error_code or "", 500)
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
 
-    # One definition of what a simulation result looks like on the wire, shared
-    # with the RPC surface (quest.simulate).
-    return result_payload(result)
+    # **This** is the transport boundary: the facade returned native numpy, and
+    # only here does it become JSON. Doing it in the handler taxed every
+    # in-process caller, including the fitting loop OBJ-02 is aimed at.
+    return to_payload(result)
 
 
 @app.post("/api/scan")

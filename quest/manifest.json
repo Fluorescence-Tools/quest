@@ -456,6 +456,19 @@
       },
       "long_running": false,
       "cancelable": false
+    },
+    {
+      "name": "quest.contract.describe",
+      "summary": "Return the contract: methods, schemas, error codes and where serialization happens.",
+      "params_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "result_schema": {
+        "type": "object"
+      },
+      "long_running": false,
+      "cancelable": false
     }
   ],
   "events": [],
