@@ -12,11 +12,16 @@ No Qt and no browser: locale files are data.
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
 from quest import i18n
 from quest.settings import parameter_catalog
+
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 CATALOG_PATHS = set(parameter_catalog()["parameters"])
 TRANSLATED = sorted(code for code in i18n.available_locales() if code != i18n.DEFAULT_LOCALE)
@@ -301,4 +306,98 @@ class TestTheSystemLanguage:
         source = (Path(i18n.__file__)).read_text(encoding="utf8")
         assert "getdefaultlocale" not in source.replace(
             "locale.getdefaultlocale()`, which is deprecated", ""
+        )
+
+
+class TestTheFrontendKeysResolve:
+    """Every `t(...)` in the web UI must exist in every locale's `ui` block.
+
+    The locale files were checked against *each other* but never against the
+    code that consumes them, so a renamed key would have shown up as English
+    text in a German UI and nothing would have failed.
+    """
+
+    FRONTEND = REPO_ROOT / "webui" / "frontend" / "src"
+    #: `t("some.key")`, not `foo.t(` and not a template literal.
+    CALL = re.compile(r"(?<![\w.])t\(\s*[\"']([A-Za-z][\w]*(?:\.[\w]+)*)[\"']")
+
+    @classmethod
+    def _keys(cls) -> set[str]:
+        keys: set[str] = set()
+        for path in cls.FRONTEND.rglob("*"):
+            if path.suffix in {".ts", ".tsx"}:
+                keys |= set(cls.CALL.findall(path.read_text(encoding="utf8")))
+        return keys
+
+    @staticmethod
+    def _flatten(block: dict, prefix: str = "") -> set[str]:
+        found: set[str] = set()
+        for key, value in block.items():
+            path = f"{prefix}{key}"
+            found |= (
+                TestTheFrontendKeysResolve._flatten(value, path + ".")
+                if isinstance(value, dict)
+                else {path}
+            )
+        return found
+
+    def test_the_extraction_finds_something(self) -> None:
+        """A regex that matches nothing would make the next test vacuous."""
+        assert len(self._keys()) >= 5, "no t() calls found — has the frontend moved?"
+
+    @pytest.mark.parametrize("code", ["en", "de", "fr"])
+    def test_every_key_the_ui_asks_for_exists(self, code: str) -> None:
+        strings = self._flatten(i18n.locale_data(code)["ui"])
+        missing = sorted(self._keys() - strings)
+        assert not missing, f"{code}.json is missing UI keys the frontend uses: {missing}"
+
+
+class TestTheTranslationBacklogOnlyShrinks:
+    """A ratchet over the web UI chrome that is still hard-coded English.
+
+    `t()` is wired and the catalog reaches all three languages, but a large part
+    of the browser chrome — panel titles, table headers, empty states, buttons —
+    is still literal English in the TSX. Translating it is mechanical; letting
+    *more* of it accumulate while that happens is not.
+
+    So this counts, and refuses to let the count grow. It is deliberately a
+    ratchet rather than an assertion of zero: a test that has to fail for weeks
+    gets disabled, and a disabled test guards nothing.
+
+    **Lower the number when you translate something.** It is the work item.
+    """
+
+    #: Measured 2026-07-28. Only ever edit this downwards.
+    BACKLOG = 90
+
+    JSX_TEXT = re.compile(r">\s*([A-Z][A-Za-z][A-Za-z /&'-]{2,40})\s*<")
+    LABEL_PROP = re.compile(
+        r"(?:label|title|placeholder|aria-label)=\{?[\"']([A-Z][^\"']{2,40})[\"']"
+    )
+
+    @classmethod
+    def _hardcoded(cls) -> set[tuple[str, str]]:
+        found: set[tuple[str, str]] = set()
+        root = REPO_ROOT / "webui" / "frontend" / "src"
+        for path in sorted(root.rglob("*")):
+            if path.suffix not in {".ts", ".tsx"}:
+                continue
+            text = path.read_text(encoding="utf8")
+            for match in cls.JSX_TEXT.findall(text) + cls.LABEL_PROP.findall(text):
+                found.add((path.name, match.strip()))
+        return found
+
+    def test_it_has_not_grown(self) -> None:
+        count = len(self._hardcoded())
+        assert count <= self.BACKLOG, (
+            f"{count - self.BACKLOG} new hard-coded English string(s) in the web "
+            f"UI. Wrap them in t() and add the key to all three locales."
+        )
+
+    def test_the_recorded_number_is_current(self) -> None:
+        """If it shrank, say so — an unlowered ratchet stops ratcheting."""
+        count = len(self._hardcoded())
+        assert count == self.BACKLOG, (
+            f"the backlog is now {count}, not {self.BACKLOG}. Lower "
+            f"TestTheTranslationBacklogOnlyShrinks.BACKLOG to {count}."
         )

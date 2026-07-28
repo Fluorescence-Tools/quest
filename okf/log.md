@@ -58,6 +58,30 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **Phase 11 — i18n gets an end condition instead of a grind.**
+
+  Two guards, both of which had been missing for different reasons.
+
+  **The locale files were checked against each other but never against the code
+  that reads them.** `TestTheFrontendKeysResolve` extracts every `t("…")` from
+  the web UI and asserts it resolves in all three locales. A renamed key would
+  previously have surfaced as English text inside a German UI, with nothing
+  failing. It also asserts the extraction *finds* something, because a regex
+  that matches nothing would make the whole check vacuous.
+
+  **The remaining hard-coded chrome is a ratchet, not an aspiration.** 90
+  literal English strings are still in the TSX — panel titles, table headers,
+  empty states, buttons. `TestTheTranslationBacklogOnlyShrinks` counts them and
+  refuses to let the count grow, and a second test fails if the recorded number
+  is *stale*, so lowering it is part of translating rather than optional.
+
+  Deliberately a ratchet rather than an assertion of zero: a test that has to
+  fail for weeks gets disabled, and a disabled test guards nothing. The number
+  is the work item.
+
+  **Seen to fail**: adding one `t("totally.missing.key")` and one untranslated
+  panel turns 5 tests red.
+
 * **Phase 9 — one mechanism for long-running work, and "job" stopped meaning
   two things. `LAY-07` closes, and with it the whole `LAY-*` table.**
 
