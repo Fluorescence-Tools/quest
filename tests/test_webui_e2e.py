@@ -393,17 +393,23 @@ class TestRunPicker:
         # One placeholder plus at most the server-side page size.
         assert options.count() <= 51, f"run picker listed {options.count()} entries"
 
-    def test_job_list_response_is_a_summary(self, page: Page) -> None:
+    def test_run_list_response_is_a_summary(self, page: Page) -> None:
+        """The key is `runs` since 2026-07-28.
+
+        "job" now means a *running operation*, matching the host; these are
+        finished run artefacts. The frontend accepts either shape during the
+        transition, so only this test pins the new one.
+        """
         _load(page, "/labeling")
         payload = page.evaluate(
             "async () => (await fetch('/api/jobs')).json()",
         )
         assert isinstance(payload, dict)
-        assert "jobs" in payload and "total" in payload
-        assert len(payload["jobs"]) <= payload["limit"]
-        if payload["jobs"]:
+        assert "runs" in payload and "total" in payload
+        assert len(payload["runs"]) <= payload["limit"]
+        if payload["runs"]:
             # Summaries only: no embedded project blobs.
-            assert set(payload["jobs"][0]) == {"job_id", "labeling_site", "date"}
+            assert set(payload["runs"][0]) == {"job_id", "labeling_site", "date"}
 
 
 class TestLanguageSwitching:
