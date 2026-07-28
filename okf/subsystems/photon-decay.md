@@ -41,6 +41,23 @@ the trajectory rather than always its beginning.
 Curve mode falls back to the plain histogram if the model has no usable
 diffusion object — a deliberate degradation, not an error path.
 
+## Only emitted photons are histogrammed
+
+`_photon_rate_walk` returns `dt = 0.0` with its emitted flag **clear** for a
+photon lost to quenching or to transfer, so `dts` and `phs` are the same length
+whatever the quantum yield. `get_histogram` and `get_histogram_fret` therefore
+count `dts[phs == 1]` only. Histogramming the whole trace — which both did until
+2026-07-28 — piles every non-emitted photon into the first bin: a spike of
+photons that were never emitted, and a curve whose total is the *excitation*
+count rather than `QY × n_photons`. On the D–A channel that is the larger half
+of the trace (`1 − QY_DA`), so the transfer efficiency was invisible in the
+amplitude of a decay that always summed to `n_photons`.
+
+The curve therefore carries amplitude information: `donor_counts.sum() ≈
+QY × n_photons`, short only by the photons whose lifetime falls outside
+`tac_range`. This is the same rule `simulation.py` already applied to the mean
+lifetime (`dts[phs == 1]`).
+
 # FRET channel
 
 When `fret.enabled`, `DonorDecay` computes the acceptor AV and then a **rate per

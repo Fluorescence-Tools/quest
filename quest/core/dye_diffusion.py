@@ -1234,8 +1234,30 @@ class DonorDecay(object):
         self._photon_trace = dts, phs
 
     def get_histogram(self, nbins=4096, range=(0, 50)):
+        """Decay histogram of the donor photons that were actually emitted.
+
+        Only photons flagged as fluorescent enter the histogram. A photon lost
+        to quenching comes back from ``_photon_rate_walk`` as ``dt = 0.0``, so
+        histogramming the whole trace piles every non-emitted photon into the
+        first bin -- a spike of photons that were never emitted, and a curve
+        whose total is the excitation count rather than ``QY x N``.
+
+        Parameters
+        ----------
+        nbins : int
+            Number of histogram bins.
+        range : tuple of float
+            ``(t_min, t_max)`` of the time axis, in nanoseconds.
+
+        Returns
+        -------
+        x : numpy.ndarray
+            Bin edges, ``nbins + 1`` long.
+        y : numpy.ndarray
+            Counts per bin.
+        """
         dts, nph = self.photon_trace
-        y, x = np.histogram(dts, range=range, bins=nbins)
+        y, x = np.histogram(dts[nph == 1], range=range, bins=nbins)
         return x, y
 
     def save_histogram(self, filename='hist.txt', verbose=False, nbins=4096, range=(0, 50)):
@@ -1499,12 +1521,34 @@ class DonorDecay(object):
         return max(0.0, 1.0 - qy_da / qy_d)
 
     def get_histogram_fret(self, nbins=4096, range=(0, 50)):
+        """Decay histogram of the D--A photons that were actually emitted.
+
+        Same rule as :meth:`get_histogram`: quenched *and* transferred photons
+        come back with ``dt = 0.0``, so only the fluorescent ones are counted.
+        Here it matters more -- the non-emitted fraction is ``1 - QY_DA``, so
+        an unfiltered curve buries the transfer efficiency under a first-bin
+        spike and totals the excitation count whatever the transfer.
+
+        Parameters
+        ----------
+        nbins : int
+            Number of histogram bins.
+        range : tuple of float
+            ``(t_min, t_max)`` of the time axis, in nanoseconds.
+
+        Returns
+        -------
+        x : numpy.ndarray or None
+            Bin edges, or ``None`` when no D--A trace could be simulated.
+        y : numpy.ndarray or None
+            Counts per bin, or ``None``.
+        """
         if self._photon_trace_fret is None:
             self.calc_photons_fret()
         if self._photon_trace_fret is None:
             return None, None
         dts, nph = self._photon_trace_fret
-        y, x = np.histogram(dts, range=range, bins=nbins)
+        y, x = np.histogram(dts[nph == 1], range=range, bins=nbins)
         return x, y
 
     def update_all(self, verbose=False, progress=None):

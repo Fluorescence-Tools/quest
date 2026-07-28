@@ -2,6 +2,31 @@
 
 ## 2026-07-28
 
+* **Every decay curve was 72 % photons that were never emitted, and the
+  baselines said so in one number.** `get_histogram` and `get_histogram_fret`
+  histogrammed the whole photon trace, but `_photon_rate_walk` returns
+  `dt = 0.0` for a photon lost to quenching or transfer — so the non-emitted
+  fraction landed in bin 0. Both now count `dts[phs == 1]`, the rule
+  `simulation.py:1156` already used for the mean lifetime. Consequence: a decay
+  curve now totals `QY × n_photons` instead of `n_photons`, i.e. it carries
+  amplitude information for the first time; the plot no longer opens with a
+  ~300× first-bin spike on the log axis, and the D–A curve's amplitude reflects
+  the transfer. Reported as ChiSurf review finding **RF-689** (S1).
+
+  **Baselines regenerated — every moved number, and only these** (decision 13):
+  `donor_counts_total` alone moved, in eight places, and each new value is
+  `quantum_yield_donor × 4000` to within the 0–1 photon whose lifetime falls
+  outside the 0–50 ns `tac_range` —
+  `imp_bff`: E96 4000→339, E129 3999→1327, E139 3999→3275, fret 4000→3955;
+  `labellib`: E96 3999→290, E129 4000→3878, E139 4000→3959, fret 4000→3783.
+  No quantum yield, lifetime, efficiency, volume or geometry number moved,
+  which is the check that the fix touches the histogram and nothing else.
+  Pinned by `tests/test_decay_histogram.py` (7 tests: the total is the emitted
+  count, bin 0 holds no quenched photon, a genuine zero-lifetime photon is
+  still counted, and a lower yield gives a smaller curve). Suite:
+  531 passed, 1 skipped. Concept:
+  [subsystems/photon-decay.md](subsystems/photon-decay.md).
+
 * **A programme of work was agreed by interview, and it changed three of its own
   premises before a line was written.** Scope: every open item in
   [handover.md](handover.md) plus `LAY-04`, `LAY-07` and repository hygiene,
