@@ -4,12 +4,24 @@ import threading
 import numpy as np
 
 
-keys = ['i', 'chain', 'res_id', 'res_name',
+#: ``residue_index`` is the residue's **identity**, and `res_id` is not.
+#:
+#: A PDB residue number restarts per chain and may carry an insertion code, so
+#: `res_id` alone names different residues in a multi-chain structure -- on
+#: `tests/data/mc4r_dimer.cif` every one of 534 ids appears in both chains.
+#: Everything that groups atoms into residues used to key on `res_id`, which
+#: merged them: chain B's residue 40 and chain A's residue 40 became one entry,
+#: and the side chains of both folded into a single CB pseudo-atom.
+#:
+#: `residue_index` is assigned here, from IMP's hierarchy, one per distinct
+#: ``(chain, res_id, insertion_code)`` in file order. Group on it; report
+#: `chain`/`res_id`/`insertion_code` to a human.
+keys = ['i', 'chain', 'res_id', 'insertion_code', 'residue_index', 'res_name',
         'atom_id', 'atom_name', 'element',
         'coord',
         'charge', 'radius', 'bfactor', 'mass']
 
-formats = ['i4', '|U1', 'i4', '|U5',
+formats = ['i4', '|U1', 'i4', '|U1', 'i4', '|U5',
            'i4', '|U5', '|U1',
            '3f8',
            'f8', 'f8', 'f8', 'f8']
@@ -186,6 +198,11 @@ def _read_with_imp(path):
     atoms = np.zeros(len(leaves), dtype={"names": keys, "formats": formats})
     element_table = IMP.atom.get_element_table()
 
+    # Distinct residues, in file order. IMP already knows chain, number and
+    # insertion code; QuEst threw that away and re-derived residues from
+    # `res_id` alone, which is what merged chains.
+    residue_indices: dict[tuple, int] = {}
+
     for index, leaf in enumerate(leaves):
         particle = leaf.get_particle()
         atom = IMP.atom.Atom(particle)
@@ -194,6 +211,13 @@ def _read_with_imp(path):
         element = element_table.get_name(atom.get_element())
         radius = IMP.core.XYZR(particle).get_radius()
         mass = IMP.atom.Mass(particle).get_mass()
+
+        insertion_code = str(residue.get_insertion_code()).strip()
+        residue_key = (str(chain.get_id()), int(residue.get_index()), insertion_code)
+        atoms["residue_index"][index] = residue_indices.setdefault(
+            residue_key, len(residue_indices)
+        )
+        atoms["insertion_code"][index] = insertion_code
 
         atoms["i"][index] = index
         atoms["chain"][index] = chain.get_id()

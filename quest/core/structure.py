@@ -57,8 +57,21 @@ res2id = {residue: index for index, residue in enumerate(residue_atoms_internal)
 
 
 def move_center_of_mass(structure, all_atoms):
-    for i, res in enumerate(structure.residue_ids):
-        at_nbr = np.where(all_atoms['res_id'] == res)[0]
+    """Fold each residue's side chain into its CB pseudo-atom.
+
+    Grouped on ``residue_index`` -- the reader's ``(chain, res_id,
+    insertion_code)`` identity -- not on ``res_id``. Matching on ``res_id``
+    alone gathered *every* chain's residue 40 into one centre of mass, so in any
+    multi-chain structure one chain's side chains were folded into another's CB.
+
+    The enumeration also has to agree with the row order of ``structure.l_cb``,
+    which `make_residue_lookup_table` fills from ``residue_dict``. Both now
+    iterate ``residue_indices``; they used to be built from two independently
+    constructed orderings that agreed only because each happened to iterate a
+    ``set()`` of small integers.
+    """
+    for i, res in enumerate(structure.residue_indices):
+        at_nbr = np.where(all_atoms['residue_index'] == res)[0]
         cb_nbr = structure.l_cb[i]
         if cb_nbr > 0:
             cb = structure.atoms[cb_nbr]
@@ -299,9 +312,19 @@ class Structure(object):
 
     @property
     def residue_dict(self):
+        """Atoms grouped by residue, keyed by ``residue_index``.
+
+        **Not by ``res_id``.** It was until 2026-07-28, and residue numbers
+        restart per chain: on `tests/data/mc4r_dimer.cif` all 534 ids occur in
+        both chains, so every entry held the union of two residues' atoms and
+        whichever chain came second overwrote the first, atom name by atom name.
+        Everything derived from this -- the CA/CB/C/N/H lookup tables, the
+        sequence, the dihedrals, which CB a labelling site attaches to --
+        inherited that.
+        """
         residue_dict = OrderedDict()
-        for res in list(set(self.atoms['res_id'])):
-            at_nbr = np.where(self.atoms['res_id'] == res)
+        for res in self.residue_indices:
+            at_nbr = np.where(self.atoms['residue_index'] == res)
             residue_dict[res] = OrderedDict()
             for atom in self.atoms[at_nbr]:
                 residue_dict[res][atom['atom_name']] = atom
@@ -313,16 +336,31 @@ class Structure(object):
 
     @property  # OK
     def n_residues(self):
-        return len(self.residue_ids)
+        return len(self.residue_indices)
 
     @property  # OK
     def atom_types(self):
         return set(self.atoms['atom_name'])
 
     @property  # OK
+    def residue_indices(self):
+        """Every distinct residue in this structure, in file order.
+
+        The identity is ``(chain, res_id, insertion_code)``, resolved to an
+        integer by the reader. Iterate this to walk residues; `residue_ids`
+        below answers a different question and must not be used for grouping.
+        """
+        return sorted({int(index) for index in self.atoms['residue_index']})
+
+    @property  # OK
     def residue_ids(self):
-        residue_ids = list(set(self.atoms['res_id']))
-        return residue_ids
+        """The distinct residue *numbers*, for display.
+
+        Ambiguous by construction in a multi-chain structure -- two chains share
+        almost all of them. Grouping on this is the defect fixed on 2026-07-28;
+        use `residue_indices`.
+        """
+        return sorted({int(res_id) for res_id in self.atoms['res_id']})
 
     @property  # OK
     def b_factors(self):

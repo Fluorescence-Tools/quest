@@ -46,7 +46,9 @@ and it will change. One reader, one writer, one place to fix.
     load_structure(source, *, coarse=False, radii=..., selector=...) -> Atoms
 
 `Atoms` is the structured array QuEst already simulates on — `coord`, `radius`,
-`atom_name`, `res_name`, `res_id`, `chain`, `mass`. Downstream consumers take
+`atom_name`, `res_name`, `res_id`, `insertion_code`, `residue_index`, `chain`,
+`mass`. **Group on `residue_index`**, which is the identity; `res_id` is for
+display and is ambiguous in any multi-chain structure. Downstream consumers take
 that array and nothing else:
 
 | consumer | takes today | must take |
@@ -66,6 +68,16 @@ Two separable things that got conflated:
 
 - **Parsing** — use IMP. It handles mmCIF, altlocs, insertion codes and hetero
   records, and it is maintained. QuEst's own parser should go.
+
+  **And take the residue *identity* from it too, not just the coordinates**
+  (2026-07-28). The reader had IMP's `Chain`, `Residue.get_index()` and
+  `Residue.get_insertion_code()` in hand and wrote only a bare `res_id`, so
+  everything downstream re-derived residues from a number that restarts per
+  chain. It now assigns a `residue_index` per distinct
+  `(chain, res_id, insertion_code)` and carries the insertion code as a column.
+  The general rule: **if the parser already knows something, do not make the
+  domain re-infer it** — every structure-input defect in this project is that
+  shape.
 - **Radii** — inherit IMP's. **Decided 2026-07-27 and implemented**: the reader
   takes `IMP.core.XYZR(p).get_radius()` off the particle IMP decorated, and
   `quest/core/elements.py` is gone. (An earlier draft of this spec argued the

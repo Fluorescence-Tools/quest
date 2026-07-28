@@ -58,6 +58,43 @@
     code**, and `OBJ-01` item 6 closes as *chosen and documented* (isotropic
     2/3, explicit), not as *modelled*.
 
+* **Phase 4 — a residue is `(chain, number, insertion code)`. `DUP-06` is
+  closed, and its "low severity, has not bitten yet" was wrong.**
+
+  Identity now comes from **IMP's hierarchy, at the reader**:
+  `quest/core/pdb.py` assigns a `residue_index` per distinct
+  `(chain, res_id, insertion_code)` in file order, and keeps the
+  `insertion_code` it had been discarding. `residue_dict`, `residue_indices`,
+  `n_residues`, the CA/CB/C/N/H lookup tables and `move_center_of_mass` all
+  group on it. `residue_ids` survives for *display*, with a docstring saying so.
+
+  **The recorded fix would not have fixed it.** known-issues proposed matching
+  `(chain, res_id)` inside `move_center_of_mass`; that function was a symptom.
+  `residue_dict` was itself keyed on `res_id`, so the CA/CB/C/N/H tables,
+  `sequence`, the dihedrals and which CB a labelling site attaches to all
+  inherited the collapse. `l_residue` was additionally filled in `residue_dict`
+  order while `move_center_of_mass` indexed it by position in `residue_ids` —
+  two independently constructed orderings, agreeing only because both iterated
+  a `set()` of small integers.
+
+  **The domain still passes plain numpy arrays.** No IMP object crosses into it,
+  which is what keeps the optional-dependency rule and the "do not import IMP at
+  module scope" constraint intact. That was the whole reason `B1` was chosen
+  over wrapping a live hierarchy.
+
+  **Exactly one number moved**, which is the entire baseline diff for this
+  change: the CB centroid of `mc4r_dimer.cif`,
+  `[-1.400, 2.220, 1.264] → [0.733, -0.419, -0.851]`. `148l.pdb` is
+  byte-identical — it has three chains but **no colliding residue number**,
+  which is precisely what makes it the control. **Seen to fail**: reverting the
+  three groupings to `res_id` turns 3 of the 7 new tests red.
+
+  Corrected while doing it: an earlier draft of the baseline docstring predicted
+  `n_residue_ids_with_more_than_one_cb` would fall from 534 to 0. It does not,
+  and should not — that counts how ambiguous `res_id` is in the *structure*,
+  which no code change alters. Confusing "the number is ambiguous" with "the
+  code merges them" is the same slip that made this look like a one-line fix.
+
 * **Phase 3 — one index map, and the "genuine judgement call" turned out not to
   be one. Two defects, both backends, and the second was the larger.**
 

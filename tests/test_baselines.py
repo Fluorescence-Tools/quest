@@ -138,12 +138,18 @@ class TestTheSimulationHasNotMoved:
 def test_coarse_graining_has_not_moved(backend: str, structure_name: str) -> None:
     """Residue identity, recorded before it is fixed.
 
-    `n_residue_ids_with_more_than_one_cb` is **534** on the dimer today: every
-    residue id appears in both chains, and `residue_dict` is keyed on the id
-    alone. That number is expected to go to 0 when residue identity becomes
-    `(chain, res_id)`, and the CB centroid is expected to move with it — on the
-    dimer only. If it moves on `148l.pdb`, which is effectively single-chain
-    for this purpose, the change is wrong.
+    `n_residue_ids_with_more_than_one_cb` is **534** on the dimer and **0** on
+    148L, and that is a property of the *structures*, not of QuEst: residue
+    numbers restart per chain, so a dimer has two CB atoms per number. It
+    therefore stays 534 across the residue-identity fix — an earlier draft of
+    this docstring predicted it would fall to 0, which confused "the number is
+    ambiguous" with "the code merges them".
+
+    What the fix moves is the **CB centroid**, because `move_center_of_mass` was
+    folding both chains' side chains into a single centre of mass. Measured
+    2026-07-28: the dimer went `[-1.400, 2.220, 1.264]` → `[0.733, -0.419,
+    -0.851]`, while 148L — which has three chains but *no* colliding residue
+    number — is byte-identical. If 148L moves, the change is wrong.
     """
     expected = _baseline(backend)["coarse_graining"][structure_name]
     path = gen.STRUCTURE if structure_name == "148l.pdb" else gen.MULTICHAIN

@@ -250,7 +250,43 @@ true for the grid, the integer one is what the kernels index with — so it want
 its own change, its own re-baseline, and probably its own decision. *Fix:* pick
 one offset and use it in both places.
 
-## Coarse-graining matches residues by `res_id` alone, ignoring the chain
+## ~~Coarse-graining matches residues by `res_id` alone, ignoring the chain~~ — fixed 2026-07-28, and it was not one function
+
+**Fixed**, and the proposed fix below (*"match on `(chain, res_id)`"* in
+`move_center_of_mass`) would have left the defect standing. That function was a
+symptom. **`Structure.residue_dict` was itself keyed on `res_id`**, as was
+`residue_ids`, so *every* consumer inherited the collapse — the CA/CB/C/N/H
+lookup tables built from it, `sequence`, the dihedrals, and which CB a labelling
+site attaches to. `l_residue` was also filled in `residue_dict` order while
+`move_center_of_mass` indexed it by position in `residue_ids`: two
+independently constructed orderings that agreed only because both iterated a
+`set()` of small integers.
+
+Residue identity now comes from **IMP's hierarchy, at the reader**:
+`quest/core/pdb.py` assigns a `residue_index` per distinct
+`(chain, res_id, insertion_code)` in file order, and adds an `insertion_code`
+column it had been discarding. Everything groups on `residue_index`;
+`residue_ids` survives for *display* with a docstring saying so.
+
+The domain still passes plain numpy arrays — no IMP object crosses into it,
+which is what keeps the optional-dependency rule and the lazy-import constraint
+intact.
+
+**What moved, and only this:** the CB centroid of `tests/data/mc4r_dimer.cif`,
+`[-1.400, 2.220, 1.264] → [0.733, -0.419, -0.851]`. `148l.pdb` is
+byte-identical — it has three chains but no colliding residue *number*, which
+is what makes it the control. The whole baseline diff for this change is those
+three numbers.
+
+Note that `n_residue_ids_with_more_than_one_cb` stays **534** on the dimer. That
+counts how ambiguous `res_id` is in the *structure*, which the fix does not
+change; the CB coordinates are what the fix corrects.
+
+This closes `DUP-06` in [specs/assessment.md](/specs/assessment.md).
+
+Original entry follows.
+
+### Original entry (superseded)
 
 `move_center_of_mass` in `quest/core/structure.py` selects a residue's atoms
 with `all_atoms['res_id'] == res`, with no chain term. Residue numbering restarts
