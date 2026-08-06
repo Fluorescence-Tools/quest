@@ -2,6 +2,14 @@
 
 ## 2026-08-06
 
+* **Commit cadence is a rule now: one verified piece, one commit.** Stated by
+  the owner and adopted in both repositories. It compounds with the rule this
+  bundle already had -- concept and `log.md` bullet in the same change as the
+  code -- because if that is true, *a commit* is the unit at which the bundle
+  stays true. Batching breaks it: the code lands and the concept follows later,
+  or does not. In [workflows/change-tracking.md](workflows/change-tracking.md)
+  and `CLAUDE.md`.
+
 * **The bundle moved to OKF v0.2, and the migration caught it describing a tree
   that no longer exists.** All 31 concepts now carry `status`, `stale_after` and
   `generated` in place of `timestamp`, plus a `sources` entry derived from each

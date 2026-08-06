@@ -75,3 +75,25 @@ from durable artifacts alone:
 - **`okf/log.md`** — the running narrative; the first place to look.
 - **The concepts** — the current state of the world, not its history.
 - **Git history** — small, self-describing, verified-green commits.
+
+## The commit cadence
+
+One verified piece, one commit — made *when the piece is finished*, not batched
+into a closing commit at the end of a session. Recorded as a rule on 2026-08-06;
+FPSIMP states it identically
+([`../../../fpsimp/okf/workflows/change-tracking.md`](../../../fpsimp/okf/workflows/change-tracking.md)).
+
+| Batching to the end | Committing in between |
+|---|---|
+| One revert undoes everything | Each piece reverts alone |
+| The tree hides work in progress | The history shows it |
+| Messages describe *what*, from memory | Messages record *why*, while it is fresh |
+| A concept update can be forgotten | It rides in the same commit |
+
+It compounds with the rule above it: if the concept and the `log.md` bullet go
+in the same commit as the code, then a commit is the unit at which this bundle
+stays true. Batching breaks that — the code lands and the concept follows
+later, or does not.
+
+When a piece cannot be committed because it shares a file with other in-flight
+work, say so at that point rather than in a closing summary.

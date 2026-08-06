@@ -123,6 +123,15 @@ Fast paths:
   changing what the science computes, to breaking ChiSurf without recording it,
   or to skipping OKF. Full rule:
   [`okf/references/release-state.md`](okf/references/release-state.md).
+- **Commit in between, not at the end.** As soon as a coherent piece is made
+  *and verified* — suite green, `okf_validate.py` clean — commit it, then start
+  the next. Do not batch a session's work into a final commit: an uncommitted
+  stretch cannot be reverted selectively, is invisible to anyone else reading
+  the tree, and yields messages that describe *what* was done because the *why*
+  has already faded. The concept update and the `okf/log.md` bullet ride in that
+  same commit. If a piece cannot be committed because it shares a file with
+  other in-flight work, say so when you reach it, not in a closing summary.
+  Same rule in FPSIMP ([`okf/references/okf-format.md`](okf/references/okf-format.md)).
 - **Git.** Commit locally; do not push. No commit trailers of any kind — no
   `Co-Authored-By`, no tool attribution. The working tree carries other
   in-flight work: never `git add -A` / `git commit -a`, and never run
