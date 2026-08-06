@@ -4,7 +4,9 @@ title: Change tracking
 description: The loop for every material change — update OKF, keep it traceable, commit. This is how the memory layer stays true.
 resource: okf/log.md
 tags: [process, okf, provenance, git, memory]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
 ---
 
 # OKF is the memory; the loop is what keeps it true

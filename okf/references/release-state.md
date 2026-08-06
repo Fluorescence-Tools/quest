@@ -4,7 +4,15 @@ title: Release state
 description: QuEst is unreleased — breaking changes are free, and backwards compatibility is not a constraint.
 resource: pyproject.toml
 tags: [process, versioning, compatibility]
-timestamp: '2026-07-27T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-27T00:00:00Z }
+stale_after: 2026-10-27
+sources:
+  - id: pyproject-toml
+    resource: ../../pyproject.toml
+    title: pyproject.toml
+    author: human:tpeulen
+    last_modified: 2026-07-27
 ---
 
 # QuEst is not released

@@ -4,7 +4,15 @@ title: Qt GUI
 description: The desktop form — generated from the parameter catalog, rendered by ChiSurf's AutoForm, bound to a project dict.
 resource: quest/gui/
 tags: [qt, gui, autoform, view-spec]
-timestamp: '2026-07-27T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-27T00:00:00Z }
+stale_after: 2027-01-27
+sources:
+  - id: quest-gui
+    resource: ../../quest/gui
+    title: quest/gui/
+    author: human:tpeulen
+    last_modified: 2026-07-28
 ---
 
 # What it is

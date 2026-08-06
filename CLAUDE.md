@@ -9,15 +9,33 @@ nearby amino acids, plus optional FRET.
 
 ## Read the OKF bundle first — it is this project's memory
 
-`okf/` is an **Open Knowledge Format** bundle: plain-markdown concepts with YAML
-frontmatter, grouped as `architecture/`, `subsystems/`, `workflows/` and
-`references/` under a root `okf/index.md`, plus an append-only `okf/log.md`.
-It is the durable, agent-readable knowledge layer that sits beside the code, and
-it is where what has been learned about this repository lives.
+`okf/` is an **Open Knowledge Format v0.2** bundle: plain-markdown concepts with
+YAML frontmatter, grouped as `architecture/`, `subsystems/`, `specs/`,
+`workflows/` and `references/` under a root `okf/index.md`, plus an append-only
+`okf/log.md`. It is the durable, agent-readable knowledge layer that sits beside
+the code, and it is where what has been learned about this repository lives.
 
 **Start at [`okf/index.md`](okf/index.md)**, and read the concept that owns the
 area you are about to touch, before reading the source. On a conflict between a
 code comment and an OKF concept, OKF wins — it is newer.
+
+Since 2026-08-06 every concept carries `status`, `generated`, `stale_after` and
+`sources`. Three rules follow, and they are not optional:
+
+- **`stale_after` is a promise to re-read.** When it has passed, the concept is
+  not wrong — it is unreviewed. Re-read it against the code, then re-date or fix.
+- **`verified` is earned.** Add it only when a human or a named process actually
+  checked the concept; the trust tier is derived from it mechanically.
+- **Validate before finishing:**
+  `python3 okf/references/tools/okf_validate.py okf --version 0.2
+  --check-paths "quest/,webui/,tests/,doc/"` — the second flag catches the
+  bundle drifting behind a refactor, which is exactly what happened to
+  `quest/lib/` ([`okf/references/known-issues.md`](okf/references/known-issues.md)).
+
+Format and shared conventions: [`okf/references/okf-format.md`](okf/references/okf-format.md).
+The rules are shared with the sibling project **FPSIMP** (`../fpsimp`), which
+runs the same taxonomy and the same validator — the two are heading for one
+server, so keep them shaped alike.
 
 Fast paths:
 

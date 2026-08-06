@@ -4,7 +4,15 @@ title: RPC service layer
 description: quest/rpc/ — the named methods every surface shares, the result envelope, and how a host registers them.
 resource: quest/rpc/services.py
 tags: [rpc, service-layer, plugin, boundary]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
+sources:
+  - id: quest-rpc-services-py
+    resource: ../../quest/rpc/services.py
+    title: quest/rpc/services.py
+    author: human:tpeulen
+    last_modified: 2026-07-28
 ---
 
 # One operation, one name

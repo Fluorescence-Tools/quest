@@ -4,7 +4,9 @@ title: Assessment
 description: The gap backlog — where the current tree diverges from the target architecture, itemised with ids and status.
 resource: okf/specs/plugin-integration.md
 tags: [backlog, assessment, layering, technical-debt]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2026-10-26
 ---
 
 Gaps between the tree and

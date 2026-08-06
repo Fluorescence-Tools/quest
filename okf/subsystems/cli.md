@@ -4,7 +4,15 @@ title: CLI
 description: quest simulate/scan/template/validate/gui, dotted-path overrides and grid sweeps.
 resource: quest/cli.py
 tags: [cli, click, batch]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
+sources:
+  - id: quest-cli-py
+    resource: ../../quest/cli.py
+    title: quest/cli.py
+    author: human:tpeulen
+    last_modified: 2026-07-28
 ---
 
 # Commands

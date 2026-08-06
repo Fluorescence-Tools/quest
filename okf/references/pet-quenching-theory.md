@@ -4,7 +4,16 @@ title: PET quenching theory
 description: The physics QuEst implements, the approximations it makes, and what its numbers can and cannot be trusted to mean.
 resource: https://doi.org/10.1021/acs.jpcb.7b03441
 tags: [pet, photophysics, fret, theory, approximations]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
+sources:
+  - id: peulen-2017
+    resource: https://doi.org/10.1021/acs.jpcb.7b03441
+    title: Peulen, Opanasyuk & Seidel, Combining Graphical and Analytical Methods with Molecular Simulations, J. Phys. Chem. B 121, 8211-8241 (2017)
+  - id: dimura-2016
+    resource: https://doi.org/10.1016/j.sbi.2016.11.012
+    title: Dimura et al., Quantitative FRET studies and integrative modeling, Curr. Opin. Struct. Biol. 40, 163-185 (2016)
 ---
 
 # The model
@@ -73,8 +82,3 @@ clouds and converted to a rate through `R0`. `RDAMeanE` (the Förster-weighted
 average) is the quantity that corresponds to a FRET-efficiency measurement;
 `RDAMean` and `dRmp` (mean-position distance) are different averages and are not
 interchangeable with it.
-
-# Citations
-
-[1] Peulen, Opanasyuk & Seidel, "Combining Graphical and Analytical Methods with Molecular Simulations…", *J. Phys. Chem. B* **121**, 8211–8241 (2017), [doi:10.1021/acs.jpcb.7b03441](https://doi.org/10.1021/acs.jpcb.7b03441) — the QuEst method paper.
-[2] Dimura et al., "Quantitative FRET studies and integrative modeling…", *Curr. Opin. Struct. Biol.* **40**, 163–185 (2016), [doi:10.1016/j.sbi.2016.11.012](https://doi.org/10.1016/j.sbi.2016.11.012) — accessible contact volumes.

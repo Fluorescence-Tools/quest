@@ -4,7 +4,15 @@ title: Environment
 description: Which interpreter runs QuEst, which dependencies are optional, and the pixi Node toolchain for the web UI.
 resource: pyproject.toml
 tags: [environment, conda, pixi, dependencies]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
+sources:
+  - id: pyproject-toml
+    resource: ../../pyproject.toml
+    title: pyproject.toml
+    author: human:tpeulen
+    last_modified: 2026-07-27
 ---
 
 # pixi drives the whole project

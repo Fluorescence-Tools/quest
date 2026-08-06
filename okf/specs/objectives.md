@@ -4,7 +4,9 @@ title: Objectives
 description: Where QuEst is going as a scientific tool — restoring FRET as a first-class observable, and fitting dye parameters to measured decays.
 resource: okf/specs/plugin-integration.md
 tags: [objectives, roadmap, fret, optimization, fitting]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
 ---
 
 The scientific direction, as distinct from

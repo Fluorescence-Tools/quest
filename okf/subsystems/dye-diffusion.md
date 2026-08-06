@@ -2,9 +2,17 @@
 type: Subsystem
 title: Dye diffusion
 description: SimulateDiffusion and DonorDecay — the Brownian walk inside the AV and the model object that owns a run.
-resource: quest/lib/tools/dye_diffusion/dye_diffusion.py
+resource: quest/core/dye_diffusion.py
 tags: [brownian-dynamics, trajectory, donor-decay, numba]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
+sources:
+  - id: quest-core-dye-diffusion-py
+    resource: ../../quest/core/dye_diffusion.py
+    title: quest/core/dye_diffusion.py
+    author: human:tpeulen
+    last_modified: 2026-07-28
 ---
 
 # `DonorDecay` — the model object

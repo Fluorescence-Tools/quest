@@ -4,7 +4,15 @@ title: User documentation
 description: Where the human-facing manual lives and which parts are generated.
 resource: doc/index.md
 tags: [documentation, generated]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
+sources:
+  - id: doc-index-md
+    resource: ../../doc/index.md
+    title: doc/index.md
+    author: human:tpeulen
+    last_modified: 2026-07-27
 ---
 
 `okf/` is the knowledge layer for agents. `doc/` and `README.md` are the manual

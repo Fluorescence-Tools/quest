@@ -4,7 +4,15 @@ title: Testing
 description: How to run all four surfaces from one interpreter, what is covered, what skips, and how a number-moving change is verified.
 resource: tests/
 tags: [testing, pytest, playwright]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
+sources:
+  - id: tests
+    resource: ../../tests
+    title: tests/
+    author: human:tpeulen
+    last_modified: 2026-07-28
 ---
 
 # Every change is tested on all three surfaces

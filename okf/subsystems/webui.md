@@ -4,7 +4,15 @@ title: Web UI
 description: The FastAPI backend, the Next.js frontend, and the Electron shell.
 resource: webui/backend/app/main.py
 tags: [fastapi, nextjs, electron, webui]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
+sources:
+  - id: webui-backend-app-main-py
+    resource: ../../webui/backend/app/main.py
+    title: webui/backend/app/main.py
+    author: human:tpeulen
+    last_modified: 2026-07-28
 ---
 
 # Three pieces

@@ -4,7 +4,15 @@ title: One seam for structure input
 description: Every structure enters QuEst through a single loader that yields an atom array; nothing downstream ever sees a filename or a format.
 resource: quest/core/structure/reader.py
 tags: [io, structure, pdb, cif, radii, architecture]
-timestamp: '2026-07-27T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-27T00:00:00Z }
+stale_after: 2027-01-27
+sources:
+  - id: quest-core-structure-reader-py
+    resource: ../../quest/core/structure/reader.py
+    title: quest/core/structure/reader.py
+    author: human:tpeulen
+    last_modified: 2026-07-28
 ---
 
 # The rule
