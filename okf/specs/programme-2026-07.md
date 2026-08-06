@@ -4,7 +4,9 @@ title: The 2026-07 programme
 description: Every decision taken in the interview that scoped the current programme of work — what was chosen, what was rejected, and what each choice reverses.
 resource: okf/handover.md
 tags: [programme, decisions, roadmap, scope]
-timestamp: '2026-07-28T12:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-28T12:00:00Z }
+stale_after: 2026-10-28
 ---
 
 The work agreed on 2026-07-28, decided question by question before any code was
@@ -37,7 +39,7 @@ is not convinced `chisurf/core` is the right destination, so it stays open).
 | 5 | **The optional-dependency rule survives the environment it was enforced by.** Qt, LabelLib and IMP stay behind `try`/`except`; absence is *simulated* in tests instead of provided by an interpreter that genuinely lacks them | Making them hard requirements and deleting the LabelLib backend — which contradicts fixing that backend's registration in the same programme |
 | 6 | **`DUP-03` is rejected, and κ² is documented rather than modelled.** Upstream's `calculate_fret_exact` is a Markov ensemble model over rotamer libraries; QuEst's trajectory kernel is the general one and should go *upstream* instead. κ² = 2/3 becomes an explicit project field | Adopting upstream (a different model, infeasible at cloud scale); or giving the dye an orientation now (real physics, a programme of its own) |
 | 7 | **`quest.api` becomes a verb facade over a client**, and **serialization moves to the transport boundary** so an in-process call returns native objects | Keeping `result_payload` in the handlers, which taxes every local call — including a fitting loop, which decision 1 just made the primary consumer |
-| 8 | **The contract mirrors ChiSurf's**: `quest/api/contract.py` with `PLUGIN_ID`, `CONTRACT_VERSION`, `service_success`/`service_error` carrying `error_code`, a `contract_descriptor()` and a `quest.contract.describe` method — guarded by a per-method round-trip test asserting the payload validates against the manifest schema | Trusting review to keep local and remote behaviour identical |
+| 8 | **The contract mirrors ChiSurf's**: `quest/api/contract.py` (implemented at `quest/rpc/contract.py`) with `PLUGIN_ID`, `CONTRACT_VERSION`, `service_success`/`service_error` carrying `error_code`, a `contract_descriptor()` and a `quest.contract.describe` method — guarded by a per-method round-trip test asserting the payload validates against the manifest schema | Trusting review to keep local and remote behaviour identical |
 | 9 | **Long-running work gets one manager, mirroring ChiSurf's `JobManager` contract** — same statuses, `progress`, cooperative `should_cancel` — implemented in QuEst so it still runs standalone | Importing ChiSurf's manager (a plugin depending on its host); or a bare cancellation token, which leaves `LAY-07`'s three mechanisms standing |
 | 10 | **"job" is freed for the async sense; run artefacts are renamed `runs`** | Keeping `quest.jobs.*` for artefacts and calling async work `quest.tasks.*` — no churn now, a permanent vocabulary mismatch with the host |
 | 11 | **The ChiSurf plugin is rewritten from scratch** on the `modelling/fps_json_editor` template — manifest, `api/contract.py`, `rpc/services.py` registering QuEst's methods into the host dispatcher, lazy import, and a dockable widget instead of a `QMainWindow`. It reuses ChiSurf's own machinery rather than duplicating it. **`quest/gui/` stays in QuEst**; the plugin embeds it | Manifest-only (leaves the host unable to drive QuEst as a model); or moving `quest/gui/` into ChiSurf (QuEst loses its standalone GUI) |

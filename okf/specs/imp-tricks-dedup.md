@@ -4,7 +4,9 @@ title: Deduplication against imp-tricks
 description: General fluorescence and structural machinery belongs in imp-tricks under IMP.bff; QuEst is the application on top of it.
 resource: https://github.com/fluorescence-tools/imp-tricks
 tags: [target, dedup, imp, imp-bff, layering, accessible-volume]
-timestamp: '2026-07-27T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-27T00:00:00Z }
+stale_after: 2027-01-27
 ---
 
 > Target. Companion to [plugin-integration.md](plugin-integration.md): that one
@@ -59,7 +61,7 @@ libraries it shadows. Audited 2026-07-27:
 | `lib/structure/Structure.py` | ~640 | **Keep the reader, drop the analysis.** RMSD, superposition, clustering, internal coordinates and `Universe` were unreachable and are gone — that is IMP/ChiSurf work. What remains is the atom array QuEst simulates on. |
 | `lib/io/PDB.py` | ~400 | **Duplicate** of IMP's readers *and* ChiSurf's `core.fio.structure.coordinates` (`DUP-06`) — a third copy. Blocked on a dependency decision, not on code: IMP is missing from the base environment (where the web layer runs), and ChiSurf is missing from `arm64` and would pull tttrlib/mdtraj/pandas into every simulation. Recommended home: **IMP.atom**. |
 | `lib/common.py` | 271 | Chemical reference data (atomic weights, VDW radii, charges) for the parser. Moves out with `DUP-06`. |
-| ~~`lib/math/`~~ | — | **Gone.** The twelve lines of FFT autocorrelation are inlined in `quest/core.py`; ChiSurf's `core.math.signal.autocorr` is the same thing, but a headless run must not import a host application for a primitive. |
+| ~~`lib/math/`~~ | — | **Gone.** The twelve lines of FFT autocorrelation are inlined in `quest/core/simulation.py`; ChiSurf's `core.math.signal.autocorr` is the same thing, but a headless run must not import a host application for a primitive. |
 | `lib/imp_av.py` | ~200 | The broken IMP integration (`DUP-01`/`DUP-02`). Delete when `compute_av` works. |
 | `lib/fps_json.py` | 112 | fps.json labeling files. QuEst-specific enough to keep. |
 | ~~`lib/plots/`, `lib/widgets.py`, `lib/ui/`, `lib/genealogy.py`~~ | ~2400 | **Moved to `quest/gui/`** — they were Qt, used only by the form. |

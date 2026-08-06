@@ -4,7 +4,10 @@ title: Known issues
 description: Defects and environment problems that are real and understood - the open ones, and the closed ones whose *failure mode* is worth keeping.
 resource: okf/log.md
 tags: [known-issues, environment, technical-debt]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2026-10-26
+okf_check_paths: false   # this file lists paths that are gone, on purpose
 ---
 
 Each entry states what is wrong, how it shows up, and what the fix would be.
@@ -268,6 +271,78 @@ replaced by the GitHub Actions one.
 
 # Still open
 
-Nothing in this file. The two remaining defects live in
+## This bundle points at files that no longer exist — found 2026-08-06
+
+**The concepts describe the pre-refactor tree.** `quest/lib/` is gone entirely,
+`quest/core.py` became the package `quest/core/`, `quest/jobs.py` became
+`quest/runs.py`, `quest/quest_gui.py` became `quest/gui/app.py`, `imp_av.py`
+disappeared into `IMP.bff.av.compute_av`, and `quest/api/contract.py` is now
+`quest/rpc/contract.py`. The frontmatter parses, every link resolves, the prose
+reads well — nothing *looks* broken, which is why it drifted silently.
+
+**How it was found**, and how to re-check:
+
+```bash
+python3 okf/references/tools/okf_validate.py okf --version 0.2 \
+        --check-paths "quest/,webui/,tests/,doc/"
+```
+
+Every path a concept names is tested for existence. `log.md` is exempt —
+history is supposed to mention paths that are gone.
+
+**Fixed on 2026-08-06 — paths, not descriptions.** Every substitution below was
+made only after locating the symbol with `grep`; nothing was guessed:
+
+| Was | Is | Verified by |
+|---|---|---|
+| `quest/core.py` (`write_mrc`, `autocorr`, the trajectory walk) | `quest/core/simulation.py` | `def write_mrc`, `calculate_aa_quenching` |
+| `quest/lib/tools/dye_diffusion/dye_diffusion.py` | `quest/core/dye_diffusion.py` | `core/__init__` module table |
+| `quest/lib/tools/dye_diffusion/photon.py` | `quest/core/photon.py` | module docstring |
+| `quest/lib/fps/__init__.py`, `quest/lib/imp_av.py`, `quest/core/imp_av.py` | `quest/core/av.py` | `fret_rate_trace`, `compute_av` |
+| `quest/lib/structure/Structure.py` | `quest/core/structure/model.py` | `class Structure` |
+| `quest/lib/io/PDB.py` | `quest/core/structure/reader.py` | `core/__init` table |
+| `quest/lib/fps_json.py` | `quest/core/fps_json.py` | file exists |
+| `quest/jobs.py` (`list_jobs`, `job_summary`, `read_job`, `archive_job`, `is_job_id`) | `quest/runs.py` (`list_runs`, `run_summary`, `read_run`, `archive_run`, `purge_runs`, `is_run_id`) | `grep '^def ' quest/runs.py` |
+| `quest/quest_gui.py:start_gui` | `quest/gui:start_gui` | `pyproject.toml [project.gui-scripts]` |
+| `quest/api/contract.py` | `quest/rpc/contract.py` | file exists; the spec row now records both |
+
+`overview.md`'s source-layout table was rebuilt from the tree in the same pass.
+
+**Marked stale, deliberately** — four concepts whose subject *is* where things
+live, so a path fix does not make their mechanism trustworthy again. Each now
+carries `stale_after: 2026-08-06` and a banner, so the format reports them as
+unreviewed rather than relying on anyone reading this file:
+
+| Concept | Why its description is suspect |
+|---|---|
+| `subsystems/core-api.md` | its subject was `quest/core.py`, now a six-module package |
+| `subsystems/structure-io.md` | moved into `quest/core/structure/` and split into model/reader/metadata/fetch |
+| `architecture/surfaces.md` | `quest/rpc/`, `quest/hosts/` and `quest/tasks.py` post-date it |
+| `architecture/simulation-pipeline.md` | it says where each stage lives, and every stage moved |
+
+The physics concepts — `photon-decay`, `quenching-model`, `dye-diffusion`,
+`accessible-volume` — were **not** marked stale: the refactor relocated them
+(`core/__init__`: "Relocated from the old in-tree `quest/lib` toolkit") without
+changing the behaviour they describe, and marking everything would make the
+signal worthless.
+
+**The remaining 20 `--check-paths` warnings are the baseline, and all are
+correct prose:** sentences that name a path *because it is gone*
+("`quest/lib` was removed outright on 2026-07-27", "`quest/utils.py` deleted",
+"`elements.py` **deleted** (271 lines)"), a completed task ("Delete the `.ui`
+files"), the `doc/parameters*.md` glob, and imp-tricks' own `tests/bff`. A run that reports
+more than 20 has found something new.
+
+**Exempt by frontmatter:** this file and `architecture/package-layout.md` carry
+`okf_check_paths: false` — one is an audit of what rotted, the other cites names
+that were deliberately never created. Flagging either trains readers to ignore
+the warnings.
+
+The lesson is one this bundle already states and did not survive: a concept is
+updated **in the same change as the code**, or it quietly becomes fiction.
+
+## Decisions, not defects
+
+The two remaining defects live in
 [specs/assessment.md](/specs/assessment.md) as `DUP-05`'s `asa` remainder and
 `DUP-07`'s `payload.py` destination, and both are decisions rather than bugs.

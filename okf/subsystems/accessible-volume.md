@@ -4,7 +4,15 @@ title: Accessible volume
 description: AV enumeration, the IMP.bff/LabelLib backend split, and the derived slow-factor and quenching-rate grids.
 resource: quest/core/av.py
 tags: [accessible-volume, av, grid, numba, labellib, imp]
-timestamp: '2026-07-27T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-27T00:00:00Z }
+stale_after: 2027-01-27
+sources:
+  - id: quest-core-av-py
+    resource: ../../quest/core/av.py
+    title: quest/core/av.py
+    author: human:tpeulen
+    last_modified: 2026-07-28
 ---
 
 # What the AV is
@@ -22,7 +30,7 @@ the `QUEST_AV_BACKEND` environment variable, else `"auto"`:
 
 | Value | Behaviour |
 |---|---|
-| `"imp_bff"` | `quest/core/imp_av.py::build_imp_accessible_volume` — **the default** |
+| `"imp_bff"` | `quest/core/av.py::build_imp_accessible_volume` — **the default** |
 | `"labellib"` | `calculate1R` (AV1) / `calculate3R` (AV3), thin wrappers over `ll.dyeDensityAV*` |
 | `"auto"` (default) | IMP.bff if a *compiled* one is present, else LabelLib, else `RuntimeError` |
 
@@ -83,7 +91,7 @@ to say which one produced it.
 
 **QuEst no longer implements either backend.** `AV.__init__` makes one call to
 `IMP.bff.av.compute_av`, passing `backend=` explicitly so the choice is never
-implicit, and both in-tree implementations are deleted: `quest/core/imp_av.py`
+implicit, and both in-tree implementations are deleted: `quest/core/av.py`
 (329 lines) and `calculate1R` (69). QuEst keeps the site selection, the cubic-grid
 and binarisation adapter, and `AV`'s grids — the application, not the algorithm.
 

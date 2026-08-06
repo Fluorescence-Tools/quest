@@ -1,12 +1,25 @@
 ---
 type: Subsystem
 title: Core service layer
-description: quest/core.py and the quest.api re-export — project loading, simulate_project, DecaySimulationResult, residue-resolved analysis.
-resource: quest/core.py
+description: quest/core/ and the quest.api facade — project loading, simulate_project, DecaySimulationResult, residue-resolved analysis.
+resource: quest/core/
 tags: [api, service-layer, headless]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2026-08-06
+sources:
+  - id: quest-core
+    resource: ../../quest/core/
+    title: quest/core/
+    author: human:tpeulen
+    last_modified: 2026-07-28
 ---
 
+> **Marked stale on 2026-08-06.** The file paths in this concept were
+> corrected against the tree, but its *descriptions* were not re-read --
+> its subject was `quest/core.py`, now a six-module package. Treat the mechanism it describes as unverified until someone
+> reads it against the code. See
+> [references/known-issues.md](../references/known-issues.md).
 # The public surface
 
 ```python
@@ -27,7 +40,7 @@ Neighbouring domain modules, reachable directly:
 | `quest/scan.py` | One labeling site: `site_project`, `simulate_site` (never raises), `scan_positions` |
 | `quest/settings/` | The shipped data: `parameter_catalog()`, `dye_repository()`, `save_dye()`, `quenching_defaults()`, resolved package-relative |
 | `quest/core/structure/metadata.py` | `structure_metadata(path)` — chains, residues and atom names a dye could attach to (PDB and mmCIF) |
-| `quest/jobs.py` | Past runs: `list_jobs`, `job_summary`, `read_job`, `archive_job`, and `is_job_id` (a run is a UUID directory) |
+| `quest/runs.py` | Past runs: `list_runs`, `run_summary`, `read_run`, `archive_run`, `purge_runs`, `runs_directory` and `is_run_id` (a run is a UUID directory). Renamed from `quest/jobs.py` when "job" was reserved for *running* work ([tasks.md](tasks.md)) |
 | `quest/hosts/imp_tricks.py` | `enable_imp_tricks()` — splice an imp-tricks checkout into the live interpreter |
 | `quest/rpc/` | The RPC surface: `ServiceDispatcher`, `InProcessClient`, `register_services`, `result_payload` |
 
@@ -77,7 +90,7 @@ A dataclass, not a dict:
 
 # FPS-JSON scanning
 
-`quest/lib/fps_json.py` reads an `fps.json` labeling file
+`quest/core/fps_json.py` reads an `fps.json` labeling file
 (`load_fps_json`), normalises its entries to positions
 (`normalize_to_fps_positions`) and runs one simulation per site
 (`run_fps_scan`). This is what `quest scan` and the web `/api/scan` drive;

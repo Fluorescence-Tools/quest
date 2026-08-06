@@ -2,9 +2,17 @@
 type: Architecture
 title: Job artefacts
 description: What a run writes to jobs/<uuid>/, and why bulk work turns it off.
-resource: quest/core.py
+resource: quest/core/
 tags: [outputs, mrc, csv, jobs, performance]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
+sources:
+  - id: quest-core
+    resource: ../../quest/core/
+    title: quest/core/
+    author: human:tpeulen
+    last_modified: 2026-07-28
 ---
 
 # A run is a directory
@@ -28,7 +36,7 @@ development (it is git-ignored; the web backend keeps its own under
 | `out.xyz`, `out_slow.xyz` | AV / slow-AV point clouds |
 | `trajectory.npy` | The raw walk |
 
-The `.mrc` writer is hand-rolled in `quest/core.py` (`write_mrc`) — a 1024-byte
+The `.mrc` writer is hand-rolled in `quest/core/simulation.py` (`write_mrc`) — a 1024-byte
 MODE 2 header plus float32 data, with the origin in words 50–52 so the grid
 lands on the structure in a molecular viewer.
 

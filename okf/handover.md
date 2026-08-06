@@ -4,16 +4,45 @@ title: Session handover
 description: Where the tree stands, what the 2026-07 programme has closed, what is left, and the traps that cost time — written to be the first thing a fresh session reads after the index.
 resource: okf/log.md
 tags: [handover, state, open-questions]
-timestamp: '2026-07-28T18:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-28T18:00:00Z }
+stale_after: 2026-10-28
 ---
 
 # Read this, then [`specs/programme-2026-07.md`](specs/programme-2026-07.md), then [`log.md`](log.md)
 
-**Everything is committed and clean; nothing is pushed.** A thirteen-phase
+**2026-08-06 — the bundle is now OKF v0.2, and every path in it was re-checked
+against the tree.** The migration added the frontmatter families, `sources`,
+`okf_version: "0.2"`, a vendored validator, and two new concepts
+([subsystems/tasks.md](subsystems/tasks.md),
+[references/okf-format.md](references/okf-format.md)).
+
+It also **reopened `known-issues.md`**, which had been empty since 2026-07-28:
+the bundle was still describing the pre-refactor tree — `quest/lib/`,
+`quest/core.py`, `quest/jobs.py`. Every path has since been corrected against a
+`grep` for the symbol, and `overview.md`'s source-layout table was rebuilt. What
+was *not* re-read is the prose, so **four concepts are marked stale on purpose**
+— `subsystems/core-api.md`, `subsystems/structure-io.md`,
+`architecture/surfaces.md`, `architecture/simulation-pipeline.md` — because each
+describes *where things live* and every one of those places moved. Treat their
+mechanism as unverified until someone reads them against the code.
+
+Re-check any time, from this repo alone:
+
+```bash
+python3 okf/references/tools/okf_validate.py okf --version 0.2 \
+        --check-paths "quest/,webui/,tests/,doc/"
+```
+
+**20 path warnings is the expected baseline** (plus 4 `STALE`) — all of them prose that names a path
+because it is gone. More than 20 means something new rotted. The sentence below
+about `known-issues.md` having no open entry was true on 2026-07-28 and is not
+now.
+
+**Everything else is committed and clean; nothing is pushed.** A thirteen-phase
 programme was agreed by interview on 2026-07-28 and **twelve of its thirteen
 phases are done** (seventeen commits in `quest`, two in `imp-tricks`, one in
-`chisurf`). **Every `LAY-*` row is closed, on both sides, and
-`known-issues.md` has no open entry left.**
+`chisurf`). **Every `LAY-*` row is closed, on both sides.**
 
 **Phase 12 is closed as "not doing it": imp-tricks stays local.** The owner
 ruled publication out on 2026-07-28, reversing the interview decision. Nothing

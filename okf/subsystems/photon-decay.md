@@ -2,16 +2,24 @@
 type: Subsystem
 title: Photons & decay
 description: The numba photon-trace kernels and the two decay modes (photon, curve).
-resource: quest/lib/tools/dye_diffusion/photon.py
+resource: quest/core/photon.py
 tags: [monte-carlo, photons, decay, tcspc, numba]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
+sources:
+  - id: quest-core-photon-py
+    resource: ../../quest/core/photon.py
+    title: quest/core/photon.py
+    author: human:tpeulen
+    last_modified: 2026-07-27
 ---
 
 # From trajectory to decay curve
 
 The excited dye de-excites at rate `1/tau0 + k_quench(t)`, where `k_quench` is
 read frame by frame off the trajectory. Everything in
-`quest/lib/tools/dye_diffusion/photon.py` is a numba kernel over that array.
+`quest/core/photon.py` is a numba kernel over that array.
 
 | Function | Use |
 |---|---|
@@ -88,6 +96,6 @@ Both clouds hold dye *centres* and can overlap, where `(R0/r)^6` would diverge;
 the distance is floored at the sum of the two dye radii, since the spheres
 cannot interpenetrate.
 
-The kernel (`quest/lib/fps/fret_rate_trace`) is general fluorescence machinery
+The kernel (`quest/core/av.py fret_rate_trace`) is general fluorescence machinery
 and is slated to move into imp-tricks —
 [specs/imp-tricks-dedup.md](/specs/imp-tricks-dedup.md), `DUP-03`.

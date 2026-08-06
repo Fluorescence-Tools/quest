@@ -2,16 +2,29 @@
 type: Architecture
 title: Simulation pipeline
 description: The three stages of a QuEst run — accessible volume, Brownian diffusion, photon generation — and where each lives.
-resource: quest/core.py
+resource: quest/core/
 tags: [simulation, accessible-volume, brownian-dynamics, monte-carlo]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2026-08-06
+sources:
+  - id: quest-core
+    resource: ../../quest/core/
+    title: quest/core/
+    author: human:tpeulen
+    last_modified: 2026-07-28
 ---
 
+> **Marked stale on 2026-08-06.** The file paths in this concept were
+> corrected against the tree, but its *descriptions* were not re-read --
+> it says where each stage lives, and every stage moved. Treat the mechanism it describes as unverified until someone
+> reads it against the code. See
+> [references/known-issues.md](../references/known-issues.md).
 # The three stages
 
 Every QuEst run — from the CLI, the API, the web UI or the GUI — is the same
 three-stage pipeline, orchestrated by
-[`simulate_project`](/subsystems/core-api.md) in `quest/core.py`.
+[`simulate_project`](/subsystems/core-api.md) in `quest/core/simulation.py`.
 
 ## 1. Accessible volume (where the dye can be)
 
@@ -28,7 +41,7 @@ Two further grids are derived from it, both in `AV.calc_slow_av`:
   residue whose contact sphere covers that voxel.
 
 Code: [subsystems/accessible-volume.md](/subsystems/accessible-volume.md)
-(`quest/lib/fps/__init__.py`, `quest/lib/imp_av.py`).
+(`quest/core/av.py`, `quest/core/av.py`).
 
 ## 2. Brownian diffusion (where the dye goes)
 

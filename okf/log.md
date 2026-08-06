@@ -1,5 +1,69 @@
 # Update Log
 
+## 2026-08-06
+
+* **The bundle moved to OKF v0.2, and the migration caught it describing a tree
+  that no longer exists.** All 31 concepts now carry `status`, `stale_after` and
+  `generated` in place of `timestamp`, plus a `sources` entry derived from each
+  concept's `resource` with that file's last-modified date; the two `# Citations`
+  lists in [overview.md](overview.md) and
+  [references/pet-quenching-theory.md](references/pet-quenching-theory.md) moved
+  into frontmatter `sources`; `okf_version` is `"0.2"`. `generated.by` is
+  **`process:okf-v0.1-import`** on every migrated concept — not a person and not
+  a model: v0.1 recorded no actor, and inventing one would corrupt the exact
+  signal the field exists to carry. Rules, and what v0.2 buys:
+  [references/okf-format.md](references/okf-format.md).
+
+  **The `sources` step is what exposed the drift.** Deriving a source entry
+  requires the file to exist — and for seven concepts it did not. `quest/lib/` is
+  gone entirely, `quest/core.py` is now the package `quest/core/`,
+  `quest/jobs.py` is `quest/runs.py`, `quest/quest_gui.py` is
+  `quest/gui/app.py`, `imp_av.py` went into `IMP.bff.av.compute_av`, and
+  `quest/api/contract.py` is `quest/rpc/contract.py`. Nothing *looked* broken:
+  the frontmatter parsed, every link resolved, the prose read well.
+
+  **Every path was then corrected against a `grep` for the symbol, not against a
+  guess** — `write_mrc` and `autocorr` to `core/simulation.py`, `fret_rate_trace`
+  and `compute_av` to `core/av.py`, `class Structure` to
+  `core/structure/model.py`, `quest/jobs.py`'s five verbs to `quest/runs.py`'s
+  renamed ones, `start_gui` to `quest/gui` per `pyproject.toml`. `overview.md`'s
+  source-layout table was rebuilt from the tree and now ends with the sentence
+  the refactor amounts to: **`core/` is what the science is; `cli`, `gui`,
+  `rpc`, `hosts` and `webui` are who is asking.**
+
+  **Four concepts are marked stale on purpose** — `core-api`, `structure-io`,
+  `surfaces`, `simulation-pipeline` — each carrying `stale_after: 2026-08-06`
+  and a banner. Their subject *is* where things live, so correcting a path does
+  not make their mechanism trustworthy; the format now reports them as
+  unreviewed instead of trusting someone to read a note. The physics concepts
+  were deliberately **not** marked: the refactor relocated them without changing
+  what they describe, and marking everything makes the signal worthless. Full
+  accounting, with the verification behind each substitution:
+  [references/known-issues.md](references/known-issues.md).
+
+  The check is mechanical, **vendored into this bundle** so it needs no sibling
+  checkout, and shared with FPSIMP:
+  `python3 okf/references/tools/okf_validate.py okf --version 0.2
+  --check-paths "quest/,webui/,tests/,doc/"`. It exempts `log.md` by name and
+  honours a new `okf_check_paths: false` key for the two concepts that name dead
+  paths on purpose. **20 path warnings is the baseline** (plus the 4 `STALE`) — all of it correct prose
+  about things that are gone; more than 20 means something new rotted.
+  Conformance: **0 errors**.
+
+* **`quest/tasks.py` got the concept that `package-layout.md` had been linking
+  to all along.** That link was the bundle's only broken one; the module behind
+  it is the unified job mechanism from `LAY-07` — status vocabulary and
+  `to_dict()` shaped to match ChiSurf without importing it, cooperative
+  cancellation with `CANCELLING` deliberately distinct from `CANCELLED` because
+  a jitted `_simulate_traj` cannot poll a flag, and `canceller`/`reporter`
+  callables so `quest/core/` never learns what a job is. Written from the
+  source: [subsystems/tasks.md](subsystems/tasks.md). Recorded there too:
+  adoption is unfinished — `quest/rpc/services.py` is the only caller and the
+  web backend still runs its own `ThreadPoolExecutor`, so cancellation stops at
+  the RPC surface. That vocabulary is also the strongest candidate for the job
+  model a combined QuEst+FPSIMP server will need, since FPSIMP's states carry no
+  notion of cancellation at all.
+
 ## 2026-07-28
 
 * **Every decay curve was 72 % photons that were never emitted, and the

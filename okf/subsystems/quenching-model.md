@@ -2,9 +2,17 @@
 type: Subsystem
 title: Quenching model
 description: Residue-type-specific PET quenching — contact radii, quenching centres, additive rates, multiplicative stickiness, and per-type attribution.
-resource: quest/lib/tools/dye_diffusion/dye_diffusion.py
+resource: quest/core/dye_diffusion.py
 tags: [pet, quenching, amino-acids, physics]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
+sources:
+  - id: quest-core-dye-diffusion-py
+    resource: ../../quest/core/dye_diffusion.py
+    title: quest/core/dye_diffusion.py
+    author: human:tpeulen
+    last_modified: 2026-07-28
 ---
 
 # Four numbers per residue type
@@ -60,7 +68,7 @@ rates, `_slow_factor_grid` for stickiness), not recomputed per frame.
 
 # Attribution: who did the quenching
 
-`quest/core.py` walks the finished trajectory once and reports per residue type
+`quest/core/simulation.py` walks the finished trajectory once and reports per residue type
 (`aa_residence`, in `result.json` and `aa_residence.csv`):
 
 - residence — `frames_near`, `fraction_near`, `total_time_ns`, event count,
@@ -83,7 +91,7 @@ attributed fractions sum to at most one.
 # Where the kernels are
 
 `_residue_type_contact_stats` and `_attribute_frames_to_residue_type` in
-`quest/core.py` are numba kernels parallelised **over residue types**, so each
+`quest/core/simulation.py` are numba kernels parallelised **over residue types**, so each
 thread owns its accumulators and can still walk the trajectory sequentially —
 which is what makes run-length (event) statistics possible in a parallel pass.
 

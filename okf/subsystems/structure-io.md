@@ -2,14 +2,27 @@
 type: Subsystem
 title: Structure I/O
 description: PDB/CIF/PQR parsing, the Structure object, coarse-graining, and PDB-ID fetching.
-resource: quest/lib/io/PDB.py
+resource: quest/core/structure/
 tags: [pdb, cif, structure, io, rcsb]
-timestamp: '2026-07-26T00:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2026-08-06
+sources:
+  - id: quest-core-structure
+    resource: ../../quest/core/structure/
+    title: quest/core/structure/
+    author: human:tpeulen
+    last_modified: 2026-07-28
 ---
 
+> **Marked stale on 2026-08-06.** The file paths in this concept were
+> corrected against the tree, but its *descriptions* were not re-read --
+> its subject moved into `quest/core/structure/` and split into model/reader/metadata/fetch. Treat the mechanism it describes as unverified until someone
+> reads it against the code. See
+> [references/known-issues.md](../references/known-issues.md).
 # Parsing
 
-`quest/lib/io/PDB.py` parses PDB, PQR and mmCIF into a single NumPy structured
+`quest/core/structure/reader.py` parses PDB, PQR and mmCIF into a single NumPy structured
 array (fields include `chain`, `res_id`, `res_name`, `atom_name`, `xyz`,
 `radius`, `charge`). Entry points: `read(filename)`, `parse_string_pdb`,
 `parse_string_pqr`, `parse_string_cif`, plus `write` and `sequence`.
@@ -23,7 +36,7 @@ leaks through some paths).
 
 # `Structure`
 
-`quest/lib/structure/Structure.py` wraps the atom array with the geometry the
+`quest/core/structure/model.py` wraps the atom array with the geometry the
 simulation and analysis need: `rmsd`, `super_impose`, `average`,
 `find_best`/`find_representative`, `cluster` (hierarchical), `onRMSF`,
 internal-coordinate conversion (`calc_internal_coordinates`,

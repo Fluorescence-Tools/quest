@@ -4,7 +4,16 @@ title: Package layout
 description: Where each kind of code lives in `quest/`, the rule that decides it, and the two naming habits that produced the mess this replaced.
 resource: quest/
 tags: [layout, architecture, packaging, naming]
-timestamp: '2026-07-28T20:00:00Z'
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-28T20:00:00Z }
+stale_after: 2027-01-28
+sources:
+  - id: quest
+    resource: ../../quest
+    title: quest/
+    author: human:tpeulen
+    last_modified: 2026-07-28
+okf_check_paths: false   # cites names that were deliberately never created
 ---
 
 # The rule
