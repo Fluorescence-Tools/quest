@@ -308,17 +308,16 @@ made only after locating the symbol with `grep`; nothing was guessed:
 
 `overview.md`'s source-layout table was rebuilt from the tree in the same pass.
 
-**Marked stale, deliberately** — four concepts whose subject *is* where things
-live, so a path fix does not make their mechanism trustworthy again. Each now
-carries `stale_after: 2026-08-06` and a banner, so the format reports them as
-unreviewed rather than relying on anyone reading this file:
+**Marked stale, then re-read -- all four cleared on 2026-08-06.** Each was
+checked name by name against the tree, and one of them was not merely
+path-stale but wrong:
 
-| Concept | Why its description is suspect |
+| Concept | Verdict |
 |---|---|
-| `subsystems/core-api.md` | its subject was `quest/core.py`, now a six-module package |
-| `subsystems/structure-io.md` | moved into `quest/core/structure/` and split into model/reader/metadata/fetch |
-| `architecture/surfaces.md` | `quest/rpc/`, `quest/hosts/` and `quest/tasks.py` post-date it |
-| `architecture/simulation-pipeline.md` | it says where each stage lives, and every stage moved |
+| `subsystems/core-api.md` | **Rewritten.** It described `quest/api.py` as a re-export shim. Since `LAY-04` it is a verb facade over an RPC client -- `simulate`, `scan`, `template`, `validate`, `describe` going through `quest.rpc`, results staying native with serialization at the transport. The domain re-exports still work, and are documented as such. |
+| `architecture/surfaces.md` | **Rewritten.** Three claims were false: the backend no longer borrows the CLI's `_validate_project` (rules live in `quest/project.py`), `TransientDecayGenerator` is a `QWidget` around a `ProjectFormModel` rather than inheriting `DonorDecay`, and `core/av.py` and `core/dye_diffusion.py` no longer import `qtpy` at all. Qt now lives in exactly three files, all under `quest/gui/` -- a structural guarantee, stronger than the try/except one it replaced. |
+| `subsystems/structure-io.md` | **Rewritten, and it was the worst.** `Structure` had **none** of the nine geometry methods it documented (`rmsd`, `super_impose`, `cluster`, `onRMSF` ...), and `reader.py` was missing four of seven entry points. IMP is the parser now; `Structure` is a thin accessor over the atom array; the alignment and clustering machinery is gone by design. The concept now names the removals rather than dropping them silently. |
+| `architecture/simulation-pipeline.md` | **Verified, barely changed.** Every kernel it names is where it says: `calc_slow_av` and the `_simulate_traj` kernels in `core/av.py`, `_photon_rate_walk` in `core/photon.py`, `get_histogram` in `core/dye_diffusion.py`. The three-stage structure survived the move; only file names changed. |
 
 The physics concepts — `photon-decay`, `quenching-model`, `dye-diffusion`,
 `accessible-volume` — were **not** marked stale: the refactor relocated them
@@ -326,12 +325,12 @@ The physics concepts — `photon-decay`, `quenching-model`, `dye-diffusion`,
 changing the behaviour they describe, and marking everything would make the
 signal worthless.
 
-**The remaining 20 `--check-paths` warnings are the baseline, and all are
+**The remaining 21 `--check-paths` warnings are the baseline, and all are
 correct prose:** sentences that name a path *because it is gone*
 ("`quest/lib` was removed outright on 2026-07-27", "`quest/utils.py` deleted",
 "`elements.py` **deleted** (271 lines)"), a completed task ("Delete the `.ui`
 files"), the `doc/parameters*.md` glob, and imp-tricks' own `tests/bff`. A run that reports
-more than 20 has found something new.
+more than 21 has found something new.
 
 **Exempt by frontmatter:** this file and `architecture/package-layout.md` carry
 `okf_check_paths: false` — one is an audit of what rotted, the other cites names

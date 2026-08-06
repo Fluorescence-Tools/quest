@@ -34,7 +34,9 @@ python3 okf/references/tools/okf_validate.py okf --version 0.2 \
         --check-paths "quest/,webui/,tests/,doc/"
 ```
 
-**20 path warnings is the expected baseline** (plus 4 `STALE`) — all of them prose that names a path
+**The baseline is 0 warnings without `--check-paths`** (no concept is stale)
+**and 21 with it** -- every one a sentence that names a path *because it is
+gone*. More than 21 means something new rotted — all of them prose that names a path
 because it is gone. More than 20 means something new rotted. The sentence below
 about `known-issues.md` having no open entry was true on 2026-07-28 and is not
 now.

@@ -46,9 +46,37 @@
   `python3 okf/references/tools/okf_validate.py okf --version 0.2
   --check-paths "quest/,webui/,tests/,doc/"`. It exempts `log.md` by name and
   honours a new `okf_check_paths: false` key for the two concepts that name dead
-  paths on purpose. **20 path warnings is the baseline** (plus the 4 `STALE`) — all of it correct prose
+  paths on purpose. **21 path warnings is the baseline**, and no `STALE` — all of it correct prose
   about things that are gone; more than 20 means something new rotted.
   Conformance: **0 errors**.
+
+* **The four stale concepts were re-read and cleared, and one was wrong rather
+  than merely dated.** `subsystems/structure-io.md` documented a `Structure`
+  with nine geometry methods -- `rmsd`, `super_impose`, `cluster`, `onRMSF`,
+  internal-coordinate conversion -- and **not one of them exists**; `reader.py`
+  was missing four of its seven documented entry points. IMP is the parser now,
+  `Structure` is a thin accessor over the atom array, and the alignment and
+  clustering machinery is gone by design (it is exactly what
+  `imp-tricks-dedup.md` argues against keeping a second copy of). The concept
+  now names the removals instead of dropping them silently, and records the
+  measured obstacle policy: ligands count, waters do not, because adding them
+  costs 17 % of every accessible volume.
+
+  `subsystems/core-api.md` described `quest/api.py` as a re-export shim; since
+  `LAY-04` it is a verb facade over an RPC client, and that is the whole point
+  of it -- one registry, one validation path, one set of error codes behind
+  every surface. `architecture/surfaces.md` had three false claims, all of which
+  had improved in reality: the backend no longer borrows the CLI's
+  `_validate_project`, the Qt widget no longer inherits `DonorDecay`, and Qt is
+  no longer imported in `core/` behind a `try`/`except` -- it lives in exactly
+  three files under `quest/gui/`, which is a structural guarantee rather than a
+  defensive one. `architecture/simulation-pipeline.md` was verified and needed
+  almost nothing: every kernel it names is where it says.
+
+  **The bundle is 0 errors and 0 warnings**; with `--check-paths` it reports 21,
+all of them prose naming paths that are deliberately gone -- the new
+`structure-io.md` and `core-api.md` add to that count precisely because they now
+say what was removed instead of pretending it still exists.
 
 * **`quest/tasks.py` got the concept that `package-layout.md` had been linking
   to all along.** That link was the bundle's only broken one; the module behind

@@ -6,7 +6,7 @@ resource: quest/api.py
 tags: [api, cli, webui, gui, layering]
 status: stable
 generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
-stale_after: 2026-08-06
+stale_after: 2027-02-06
 sources:
   - id: quest-api-py
     resource: ../../quest/api.py
@@ -15,27 +15,28 @@ sources:
     last_modified: 2026-07-28
 ---
 
-> **Marked stale on 2026-08-06.** The file paths in this concept were
-> corrected against the tree, but its *descriptions* were not re-read --
-> `quest/rpc/`, `quest/hosts/` and `quest/tasks.py` post-date it. Treat the mechanism it describes as unverified until someone
-> reads it against the code. See
-> [references/known-issues.md](../references/known-issues.md).
 # One service layer, four front ends
 
 ```
-        CLI            web backend         Qt GUI           notebooks
-   (quest/cli.py)   (webui/backend)   (quest_gui.py)      (quest.api)
-        \                 |                 |                  /
-         \________________|_________________|_________________/
+        CLI            web backend        Qt GUI          notebooks
+   (quest/cli.py)   (webui/backend)   (quest/gui/)      (quest.api)
+        \                 |                |                 /
+         \________________|________________|________________/
                                   |
-                       quest.api  ->  quest.core
+                     quest.api  (the verbs)
+                                  |
+                    quest.rpc  (client + registry)
+                                  |
+                            quest/core/
                                   |
         DonorDecay / SimulateDiffusion / AV / photon kernels
 ```
 
-`quest/api.py` is a verb facade over the RPC client (plus re-exports from `quest/core/` and
-`fps_json`) and is the **stable import surface**: downstream code and the web
-backend import `quest.api`, not the internals. `quest/core/` is where the
+`quest/api.py` is a **verb facade over an RPC client**, not a re-export shim:
+`simulate`, `scan`, `template`, `validate`, `describe` and the data verbs all go
+through `quest.rpc`, so every surface exercises one registry, one validation
+path and one set of error codes ([subsystems/core-api.md](/subsystems/core-api.md)).
+It still re-exports the domain names for notebooks. `quest/core/` is where the
 logic lives.
 
 > This page describes the tree as it is. The **target** is the
@@ -51,11 +52,17 @@ A surface parses input, calls the service layer, and formats output. Simulation
 logic does not live in a surface. Two consequences that have already been paid
 for:
 
-- The web backend (`webui/backend/app/main.py`) calls `quest.api` and even
-  reuses the CLI's own `_validate_project` and `_template_project`, so the
-  browser and the terminal cannot disagree about what a valid project is.
-- The Qt GUI class `TransientDecayGenerator` *inherits* `DonorDecay` rather than
-  wrapping a copy of it, so the widget and the headless run share one model.
+- **The validation rules live in `quest/project.py`**, and every surface
+  enforces those. The backend imports `quest.api`, `quest.rpc` and
+  `quest.runs`; the CLI's `_validate_project` is a thin wrapper that only
+  translates `ProjectValidationError` into a `ClickException`. (Until
+  2026-07-28 the backend borrowed the CLI's own `_validate_project` and
+  `_template_project` -- the same guarantee, reached the wrong way round.)
+- **The Qt widget owns no simulation state.**
+  `TransientDecayGenerator` is a `QWidget` around a `ProjectFormModel` whose
+  `model.project` is a plain project dict at all times, so the form edits the
+  same document the CLI and the API consume. It used to *inherit* `DonorDecay`,
+  which shared one model at the price of a widget that was also a simulation.
 
 New behaviour therefore lands in `quest/core/` first, and the surfaces expose
 it. A feature that exists only in the web UI is a design error.
@@ -67,12 +74,19 @@ it. A feature that exists only in the web UI is a design error.
 | Python API | `from quest.api import …` | Documented in [subsystems/core-api.md](/subsystems/core-api.md); safe in headless environments |
 | CLI | `quest simulate/scan/template/validate/gui` | [subsystems/cli.md](/subsystems/cli.md) |
 | Web UI | FastAPI + Next.js (+ Electron shell) | [subsystems/webui.md](/subsystems/webui.md) |
-| Qt GUI | `cs.quest`, `quest gui` | Legacy; needs Qt bindings that are **not** in the current env — [subsystems/gui.md](/subsystems/gui.md) |
+| Qt GUI | `cs.quest`, `quest gui` (`quest.gui:start_gui`) | Needs Qt bindings, which are **not** in the checked environment — [subsystems/gui.md](/subsystems/gui.md) |
 
-# Qt is optional, and the code keeps it that way
+# Qt is optional, and the layout is what keeps it that way
 
-`quest/core/av.py` and `dye_diffusion.py` import `qtpy` inside a
-`try`/`except` and fall back to dummy widget bases when no Qt bindings exist.
-That is what lets the CLI, the API and the web backend run in an environment
-without PyQt — which is exactly the current one. Do not turn those imports into
-hard dependencies.
+Qt is imported in exactly three files, all of them under `quest/gui/`:
+`app.py`, `dye_widget.py` and `form_model.py`. Nothing in `quest/core/`,
+`quest/rpc/` or the CLI touches it.
+
+That is a stronger guarantee than the one this concept used to describe --
+`try`/`except qtpy` with dummy widget bases inside `core/av.py` and
+`core/dye_diffusion.py`, which no longer import Qt at all. The rule is now
+structural: **Qt lives in `quest/gui/` and nowhere else.** The environment this
+was checked in has no PyQt5, and the CLI, the API and the web backend all run in
+it.
+
+Verified against the tree on 2026-08-06.

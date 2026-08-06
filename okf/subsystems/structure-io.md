@@ -6,7 +6,7 @@ resource: quest/core/structure/
 tags: [pdb, cif, structure, io, rcsb]
 status: stable
 generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
-stale_after: 2026-08-06
+stale_after: 2027-02-06
 sources:
   - id: quest-core-structure
     resource: ../../quest/core/structure/
@@ -15,35 +15,63 @@ sources:
     last_modified: 2026-07-28
 ---
 
-> **Marked stale on 2026-08-06.** The file paths in this concept were
-> corrected against the tree, but its *descriptions* were not re-read --
-> its subject moved into `quest/core/structure/` and split into model/reader/metadata/fetch. Treat the mechanism it describes as unverified until someone
-> reads it against the code. See
-> [references/known-issues.md](../references/known-issues.md).
-# Parsing
+# Four concerns, one package
 
-`quest/core/structure/reader.py` parses PDB, PQR and mmCIF into a single NumPy structured
-array (fields include `chain`, `res_id`, `res_name`, `atom_name`, `xyz`,
-`radius`, `charge`). Entry points: `read(filename)`, `parse_string_pdb`,
-`parse_string_pqr`, `parse_string_cif`, plus `write` and `sequence`.
-`assign_element_to_atom_name` recovers elements from ambiguous atom names, which
-is what the van der Waals radii lookup depends on.
+`quest/core/structure/` states its own layout, and the order is the direction of
+travel: a caller says *what* it wants labelled, never *how to read it*.
 
-Because the array is structured and byte-string valued, residue names coming out
-of it need normalising before comparison — hence `_normalize_residue_name` in
-both `core.py` and `dye_diffusion.py` (it also unwraps the `b'ALA'` repr that
-leaks through some paths).
+| Module | Owns |
+|---|---|
+| `fetch.py` | Where a structure comes from: a path, a PDB ID, bytes |
+| `reader.py` | Turning that into QuEst's atom array -- **IMP does the parsing** |
+| `model.py` | The `Structure` object and coarse-graining |
+| `metadata.py` | What is in it: chains, residues, atoms, for a site picker |
+
+# Parsing: IMP is the parser
+
+`read(filename)` returns a NumPy structured array with the fields in
+`reader.keys`. **QuEst no longer carries its own PDB or mmCIF parser** --
+`IMP.atom.read_pdb` / `read_mmcif` do it, and `read` raises `ImportError`
+without IMP, which the accessible-volume stage needs anyway. The public surface
+is small: `read`, `keys`, `formats`, plus `write` and `sequence`.
+
+The old hand-rolled entry points (`parse_string_pdb`, `parse_string_pqr`,
+`parse_string_cif`, `assign_element_to_atom_name`) are **gone**; so is the
+elements table they fed.
+
+**What counts as an obstacle changed with them, and it was measured rather than
+assumed.** No selector is passed, so IMP's default applies: everything except
+waters and hydrogens. Ligands, cofactors and modified residues are steric
+obstacles because they physically are -- a dye cannot diffuse through a bound
+sugar. QuEst used to strip every HETATM, which on 148L discarded 41 atoms
+(1322 against 1363). Waters are deliberately *not* obstacles: adding them costs
+**17 % of every accessible volume** on the 148l chain-E sites, and
+crystallographic solvent is mobile on the timescale a tethered dye explores.
+Full measurement: [specs/structure-io.md](/specs/structure-io.md).
+
+Residue names coming out of the structured array are byte-string valued and need
+normalising before comparison -- hence `_normalize_residue_name` in both
+`quest/core/simulation.py` and `quest/core/dye_diffusion.py` (it also unwraps
+the `b'ALA'` repr that leaks through some paths).
 
 # `Structure`
 
-`quest/core/structure/model.py` wraps the atom array with the geometry the
-simulation and analysis need: `rmsd`, `super_impose`, `average`,
-`find_best`/`find_representative`, `cluster` (hierarchical), `onRMSF`,
-internal-coordinate conversion (`calc_internal_coordinates`,
-`_internal_to_cartesian`), `move_center_of_mass`, and residue lookup tables.
+`model.py`'s `Structure` is now a **thin accessor over the atom array**, not the
+geometry toolkit this concept used to describe. It exposes `xyz`, `vdw`,
+`b_factors`, `atom_types`, `residue_names`, `residue_ids`, `residue_indices`,
+`residue_dict`, `n_atoms`, `n_residues`, `radius_gyration`, and `to_coarse`;
+module-level helpers add `move_center_of_mass`, `make_residue_lookup_table` and
+`get_residue_sequence`.
 
-`Structure(path, make_coarse=True)` builds the coarse-grained representation
-used by the project's `coarse_grained` flag
+**The alignment and clustering methods are gone** -- `rmsd`, `super_impose`,
+`average`, `find_best`, `find_representative`, `cluster`, `onRMSF`,
+`calc_internal_coordinates`, `_internal_to_cartesian`. QuEst does not align or
+cluster structures; that machinery belonged to the general-purpose library this
+package replaced, and keeping a second copy of it is exactly what
+[specs/imp-tricks-dedup.md](/specs/imp-tricks-dedup.md) argues against.
+
+`Structure(path, make_coarse=True)` still builds the coarse-grained
+representation behind the project's `coarse_grained` flag
 ([dye-diffusion.md](dye-diffusion.md)); `tests/test_coarse_grained.py` covers it.
 
 # Structure sources: path or PDB ID
@@ -74,8 +102,14 @@ imported it, and the rest of it was Python-2.6 `unittest` monkey-patching plus a
 `sitecustomize` coverage hook that wrote `.coverage.*` files into the working
 directory.
 
-The rule it leaves behind: every internal import is spelled `quest.lib…`. A bare
-`import lib…` is not a legacy spelling to tolerate, it is a bug — `lib.structure.
-Structure` and `quest.lib.structure.Structure` were two different classes, so an
-`isinstance` check across the boundary failed and a `Structure` got wrapped
-twice.
+The rule it leaves behind outlived the package it was written about: every
+internal import is spelled `quest.…`, absolutely. A bare `import lib…` was not a
+legacy spelling to tolerate but a bug -- `lib.structure.Structure` and
+`quest.lib.structure.Structure` were two different classes, so an `isinstance`
+check across the boundary failed and a `Structure` got wrapped twice. `quest/lib`
+itself is gone; the rule is why the replacement is a package under
+`quest/core/`.
+
+Re-read against the tree on 2026-08-06. Every name above was checked to exist,
+and the ones that no longer do are named as removed rather than quietly
+dropped.

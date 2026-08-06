@@ -6,7 +6,7 @@ resource: quest/core/
 tags: [simulation, accessible-volume, brownian-dynamics, monte-carlo]
 status: stable
 generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
-stale_after: 2026-08-06
+stale_after: 2027-02-06
 sources:
   - id: quest-core
     resource: ../../quest/core/
@@ -15,11 +15,6 @@ sources:
     last_modified: 2026-07-28
 ---
 
-> **Marked stale on 2026-08-06.** The file paths in this concept were
-> corrected against the tree, but its *descriptions* were not re-read --
-> it says where each stage lives, and every stage moved. Treat the mechanism it describes as unverified until someone
-> reads it against the code. See
-> [references/known-issues.md](../references/known-issues.md).
 # The three stages
 
 Every QuEst run — from the CLI, the API, the web UI or the GUI — is the same
@@ -41,7 +36,8 @@ Two further grids are derived from it, both in `AV.calc_slow_av`:
   residue whose contact sphere covers that voxel.
 
 Code: [subsystems/accessible-volume.md](/subsystems/accessible-volume.md)
-(`quest/core/av.py`, `quest/core/av.py`).
+(`quest/core/av.py`, which now owns both the grid kernels and the IMP.bff
+backend that used to live in `lib/imp_av.py`).
 
 ## 2. Brownian diffusion (where the dye goes)
 
@@ -64,6 +60,12 @@ photons are drawn until `n_photons` are collected (photon mode) or the decay
 histogram is integrated directly over many curves (curve mode).
 
 Code: [subsystems/photon-decay.md](/subsystems/photon-decay.md).
+
+Verified against the tree on 2026-08-06: `calc_slow_av` and the
+`_simulate_traj` / `_simulate_traj_grid` kernels are in `quest/core/av.py`,
+`_photon_rate_walk` in `quest/core/photon.py`, and `get_histogram` in
+`quest/core/dye_diffusion.py`. The three-stage structure is unchanged by the
+`quest/lib` -> `quest/core` move; only the file names were.
 
 # What comes out
 
