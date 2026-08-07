@@ -2,6 +2,21 @@
 
 ## 2026-08-07
 
+* **New concept: the declarative form scheme, with QuEst as the blueprint.**
+  `okf/specs/autoform-scheme.md` documents ChiSurf's AutoForm view-spec JSON
+  contract (the section vocabulary: panel/value/choice/toggle/table/dynamic
+  group/custom/plot/dock_area/wizard…, binding by `target`/`attr` string paths,
+  i18n as a single `tr()` parse seam, and `SettingsView` deriving a form from a
+  plain dict) and how QuEst generates one spec per language from a single
+  catalog — the invariant the next app ported from Python to web should copy.
+  Motivation: an upcoming Python→web port wants a similar scheme to halve
+  porting effort; QuEst is the working example. Drafted while reading
+  `chisurf/core/dataspec` and `chisurf/gui/autoform/auto_form.py`; sources are
+  cross-repo paths, so the concept intentionally documents the sibling contract
+  rather than quest code. Concept: [specs/autoform-scheme.md](specs/autoform-scheme.md).
+
+## 2026-08-07
+
 * **Web UI gains a guided user tour, built to be shared with FPSIMP.**
   `webui/frontend/src/components/tour/Tour.tsx` is a quest-agnostic overlay —
   no quest imports, no i18n, pure `steps`/`labels` props — so FPSIMP can reuse
