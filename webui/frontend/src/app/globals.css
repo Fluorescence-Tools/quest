@@ -1,22 +1,22 @@
 :root {
   color-scheme: light;
-  --bg: #eef1f4;
+  --bg: #f5f6fa;
   --surface: #ffffff;
-  --surface-2: #f5f7f9;
-  --surface-3: #eaeef1;
-  --line: #dde3e8;
-  --line-strong: #b4c0c8;
-  --ink: #101820;
-  --ink-2: #35434d;
-  --muted: #64757f;
-  --accent: #00706b;
-  --accent-soft: #d8ece9;
-  --accent-2: #c9502c;
-  --ok: #12704c;
-  --error: #b02440;
-  --busy: #8a6200;
-  --green: #2f7d4f;
-  --red: #b02440;
+  --surface-2: #f1f3f8;
+  --surface-3: #e9ecf4;
+  --line: #e3e6ef;
+  --line-strong: #c6ccdb;
+  --ink: #0f172a;
+  --ink-2: #334155;
+  --muted: #64748b;
+  --accent: #4f46e5;
+  --accent-soft: #eef2ff;
+  --accent-2: #f59e0b;
+  --ok: #0f9d58;
+  --error: #d9304a;
+  --busy: #b45309;
+  --green: #0f9d58;
+  --red: #d9304a;
 
   --radius-sm: 6px;
   --radius: 10px;
@@ -34,23 +34,23 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --bg: #0e1417;
-    --surface: #161d22;
-    --surface-2: #1b242a;
-    --surface-3: #212c33;
-    --line: #2b3841;
-    --line-strong: #3f515c;
-    --ink: #e7edf1;
-    --ink-2: #c2ced6;
-    --muted: #90a2ad;
-    --accent: #4fbcb2;
-    --accent-soft: #16332f;
-    --accent-2: #e8825f;
-    --ok: #4fbe8c;
-    --error: #f0788e;
-    --busy: #e0b552;
-    --green: #4fbe8c;
-    --red: #f0788e;
+    --bg: #0b0f19;
+    --surface: #131a2b;
+    --surface-2: #1a2236;
+    --surface-3: #212b42;
+    --line: #2a3450;
+    --line-strong: #3f4a6e;
+    --ink: #eef1f8;
+    --ink-2: #c7cfe2;
+    --muted: #8b96b8;
+    --accent: #818cf8;
+    --accent-soft: #232b4a;
+    --accent-2: #fbbf24;
+    --ok: #34d399;
+    --error: #fb7185;
+    --busy: #fbbf24;
+    --green: #34d399;
+    --red: #fb7185;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 12px 32px -14px rgba(0, 0, 0, 0.7);
     --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.5), 0 16px 40px -18px rgba(0, 0, 0, 0.75);
@@ -61,46 +61,46 @@
 /* The theme toggle stamps data-theme on the root; it must win either way. */
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #eef1f4;
+  --bg: #f5f6fa;
   --surface: #ffffff;
-  --surface-2: #f5f7f9;
-  --surface-3: #eaeef1;
-  --line: #dde3e8;
-  --line-strong: #b4c0c8;
-  --ink: #101820;
-  --ink-2: #35434d;
-  --muted: #64757f;
-  --accent: #00706b;
-  --accent-soft: #d8ece9;
-  --accent-2: #c9502c;
-  --ok: #12704c;
-  --error: #b02440;
-  --busy: #8a6200;
-  --green: #2f7d4f;
-  --red: #b02440;
+  --surface-2: #f1f3f8;
+  --surface-3: #e9ecf4;
+  --line: #e3e6ef;
+  --line-strong: #c6ccdb;
+  --ink: #0f172a;
+  --ink-2: #334155;
+  --muted: #64748b;
+  --accent: #4f46e5;
+  --accent-soft: #eef2ff;
+  --accent-2: #f59e0b;
+  --ok: #0f9d58;
+  --error: #d9304a;
+  --busy: #b45309;
+  --green: #0f9d58;
+  --red: #d9304a;
   --shadow-lift: 0 2px 4px rgba(16, 24, 32, 0.06), 0 16px 40px -20px rgba(16, 24, 32, 0.22);
   --accent-ink: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0e1417;
-  --surface: #161d22;
-  --surface-2: #1b242a;
-  --surface-3: #212c33;
-  --line: #2b3841;
-  --line-strong: #3f515c;
-  --ink: #e7edf1;
-  --ink-2: #c2ced6;
-  --muted: #90a2ad;
-  --accent: #4fbcb2;
-  --accent-soft: #16332f;
-  --accent-2: #e8825f;
-  --ok: #4fbe8c;
-  --error: #f0788e;
-  --busy: #e0b552;
-  --green: #4fbe8c;
-  --red: #f0788e;
+  --bg: #0b0f19;
+  --surface: #131a2b;
+  --surface-2: #1a2236;
+  --surface-3: #212b42;
+  --line: #2a3450;
+  --line-strong: #3f4a6e;
+  --ink: #eef1f8;
+  --ink-2: #c7cfe2;
+  --muted: #8b96b8;
+  --accent: #818cf8;
+  --accent-soft: #232b4a;
+  --accent-2: #fbbf24;
+  --ok: #34d399;
+  --error: #fb7185;
+  --busy: #fbbf24;
+  --green: #34d399;
+  --red: #fb7185;
   --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.5), 0 16px 40px -18px rgba(0, 0, 0, 0.75);
   --accent-ink: color-mix(in srgb, var(--accent) 18%, transparent);
 }
@@ -231,7 +231,7 @@ textarea {
 .cite-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
-  background: #f0f7f7;
+  background: var(--accent-soft);
 }
 
 .brand-container {
@@ -1379,7 +1379,7 @@ input:checked + .slider:before {
 .clear-btn:hover:not(:disabled) {
   border-color: var(--accent-2);
   color: var(--accent-2);
-  background: #fdf5f2;
+  background: color-mix(in srgb, var(--accent-2) 10%, var(--surface));
 }
 
 

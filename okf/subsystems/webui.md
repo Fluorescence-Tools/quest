@@ -83,8 +83,10 @@ the DOM:
 - **Tokens** (`:root` + the three theme blocks): layered shadows
   (`--shadow`, `--shadow-lift`), a shared focus ring `--focus` applied
   `:focus-visible` on buttons/inputs/selects/links, a system font stack
-  `--font-ui`, and an accent-tinted hover wash `--accent-ink`. Palette and
-  accent are unchanged — it is still the teal + rust identity.
+  `--font-ui`, and an accent-tinted hover wash `--accent-ink`. **Accent moved
+  from flat teal (`#00706b`) to a modern indigo (`#4f46e5` light /
+  `#818cf8` dark) with amber `--accent-2`; neutrals went from warm gray to cool
+  slate (`#f5f6fa` bg, `--ink #0f172a`).**
 - **Density** (measured at 1440×900): app-shell padding 12→8 px, topbar
   brand 38→30 px and title 22→18 px, control sidebar 320→296 px, panel
   sections 7/9→5/8 px, uppercase section headings 12→10.5 px with

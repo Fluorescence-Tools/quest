@@ -2,6 +2,20 @@
 
 ## 2026-08-07
 
+* **Web UI accent/neutrals modernised — indigo + cool slate.** The first refresh
+  was too subtle to read as a change; this one changes the palette outright in
+  the four theme-token blocks plus the two hard-coded hover tints. Accent
+  `#00706b` teal → `#4f46e5` indigo (dark `#818cf8`), `--accent-2` rust
+  `#c9502c` → amber `#f59e0b` (dark `#fbbf24`), neutrals warm gray → cool slate
+  (`--bg #f5f6fa`, `--ink #0f172a`, slate-50/900 family; dark `#0b0f19`),
+  status cols re-tuned to modern green/red/amber. Hard-coded `#f0f7f7` /
+  `#fdf5f2` hovers replaced with `--accent-soft` / `color-mix`. Verified live on
+  the dev server (computed body bg `rgb(245,246,250)`, accent `#4f46e5`) and
+  suite green after the edit: **32 passed** (browser e2e). CSS-only again; no
+  class/id/text touched. Concept: [subsystems/webui.md](subsystems/webui.md).
+
+## 2026-08-07
+
 * **Visual refresh of the web UI — denser and a little more modern, CSS-only.**
   The stylesheet is the only place the look lives, so the change is confined to
   `webui/frontend/src/app/globals.css`; every class name, id and visible string
