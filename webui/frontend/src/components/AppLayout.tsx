@@ -189,18 +189,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [clientReady, setClientReady] = React.useState(false);
   const [theme, setTheme] = React.useState<"light" | "dark">("dark");
   const [tourOpen, setTourOpen] = React.useState(false);
-  const [useAutoform, setUseAutoform] = React.useState(false);
+  const [useAutoform, setUseAutoform] = React.useState(true);
   const [autoformSpec, setAutoformSpec] = React.useState<AutoFormSpec | null>(null);
   const router = useRouter();
 
   React.useEffect(() => {
-    if (useAutoform) {
-      fetch(`/api/autoform-spec?locale=${locale}`)
-        .then((res) => res.json())
-        .then((data) => setAutoformSpec(data))
-        .catch((err) => console.error("Failed to load AutoForm spec", err));
-    }
-  }, [useAutoform, locale]);
+    fetch(`/api/autoform-spec?locale=${locale}`)
+      .then((res) => res.json())
+      .then((data) => setAutoformSpec(data))
+      .catch((err) => console.error("Failed to load AutoForm spec", err));
+  }, [locale]);
+
 
   React.useEffect(() => {
     setClientReady(true);

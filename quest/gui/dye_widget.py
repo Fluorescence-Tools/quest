@@ -74,15 +74,12 @@ class TransientDecayGenerator(QtWidgets.QWidget):
 
             self.form = AutoForm(self.model)
             layout.addWidget(self.form)
-        except Exception as error:  # pragma: no cover - needs a host-less Qt env
-            # QuEst's Qt surface is rendered by the host's AutoForm; there is no
-            # second, in-tree renderer to fall back to, and saying so beats an
-            # empty window.
-            hint = ui("autoform.missing", self.model.locale)
-            label = QtWidgets.QLabel(f"{hint}\n\n({error})")
-            label.setWordWrap(True)
-            label.setAlignment(QtWidgets.Qt.AlignmentFlag.AlignCenter)
-            layout.addWidget(label)
+        except Exception:
+            from .autoform_panel import InTreePyQtAutoForm
+
+            self.form = InTreePyQtAutoForm(self.model)
+            layout.addWidget(self.form)
+
 
     def _t(self, key: str) -> str:
         return ui(key, self.model.locale)

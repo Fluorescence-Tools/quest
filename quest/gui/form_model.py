@@ -189,16 +189,18 @@ class ProjectFormModel:
 
     def view_spec(self):
         """The generated view spec for this model's language."""
-        from chisurf.core.dataspec import load_view_spec
-
         from .generate_view_spec import view_spec_path
 
         path = view_spec_path(self.locale)
         if not path.is_file():
-            # A locale whose spec was never generated still gets a form, in
-            # English, rather than a traceback.
             path = view_spec_path()
-        return load_view_spec(path)
+
+        try:
+            from chisurf.core.dataspec import load_view_spec
+            return load_view_spec(path)
+        except Exception:
+            return json.loads(path.read_text(encoding="utf-8"))
+
 
     def set_changed_callback(self, callback) -> None:
         """AutoForm's hook: it wants to know when the model changed."""
