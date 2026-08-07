@@ -1,7 +1,7 @@
-"""Interactive pyqtgraph plot widgets for QuEst desktop GUI.
+"""Standard Qt plot widgets for QuEst desktop GUI.
 
 Renders decay histograms, dye trajectories, autocorrelation curves, and accessible volume
-profiles using fast C++ pyqtgraph rendering with theme integration.
+profiles using standard desktop plot aesthetics with pyqtgraph.
 """
 
 from __future__ import annotations
@@ -12,9 +12,9 @@ from qtpy import QtCore, QtWidgets
 try:
     import pyqtgraph as pg
 
-    # Configure pyqtgraph global options for dark mode aesthetics
-    pg.setConfigOption("background", "#0f172a")
-    pg.setConfigOption("foreground", "#f8fafc")
+    # Configure pyqtgraph for standard clean desktop background
+    pg.setConfigOption("background", "w")
+    pg.setConfigOption("foreground", "k")
     pg.setConfigOption("antialias", True)
     HAS_PYQTGRAPH = True
 except Exception:  # pragma: no cover
@@ -22,7 +22,7 @@ except Exception:  # pragma: no cover
 
 
 class QuEstPlotCanvas(QtWidgets.QWidget):
-    """Container wrapping a pyqtgraph PlotWidget or fallback canvas."""
+    """Standard Qt container wrapping a pyqtgraph PlotWidget or fallback label."""
 
     def __init__(
         self,
@@ -35,7 +35,7 @@ class QuEstPlotCanvas(QtWidgets.QWidget):
     ):
         super().__init__(parent)
         self.layout = QtWidgets.QVBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setContentsMargins(2, 2, 2, 2)
 
         self.title_text = title
         self.x_label = x_label
@@ -45,9 +45,9 @@ class QuEstPlotCanvas(QtWidgets.QWidget):
 
         if HAS_PYQTGRAPH:
             self.plot_widget = pg.PlotWidget(self)
-            self.plot_widget.setTitle(title, color="#e2e8f0", size="11pt")
-            self.plot_widget.setLabel("bottom", x_label, color="#94a3b8")
-            self.plot_widget.setLabel("left", y_label, color="#94a3b8")
+            self.plot_widget.setTitle(title, color="k", size="10pt")
+            self.plot_widget.setLabel("bottom", x_label, color="k")
+            self.plot_widget.setLabel("left", y_label, color="k")
             self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
             self.plot_widget.setLogMode(x=self.log_x, y=self.log_y)
             self.legend = self.plot_widget.addLegend(offset=(-10, 10))
@@ -58,8 +58,8 @@ class QuEstPlotCanvas(QtWidgets.QWidget):
             lbl.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             self.layout.addWidget(lbl)
 
-        # Predefined color palette for plot series
-        self.colors = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"]
+        # Standard clean desktop plot colors
+        self.colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
 
     def set_data(self, series_list: list[dict[str, Any]]):
         """Update plot curves from a list of series dicts ({x, y, name})."""

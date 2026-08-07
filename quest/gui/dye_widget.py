@@ -59,12 +59,11 @@ class TransientDecayGenerator(QtWidgets.QWidget):
 
         # Action Header
         header_box = QtWidgets.QHBoxLayout()
-        self.btn_run = QtWidgets.QPushButton("▶ Run Simulation", left_container)
-        self.btn_run.setObjectName("PrimaryButton")
+        self.btn_run = QtWidgets.QPushButton("Run Simulation", left_container)
         self.btn_run.clicked.connect(self.update_all)
         header_box.addWidget(self.btn_run)
 
-        btn_pdb = QtWidgets.QPushButton("📁 Load PDB", left_container)
+        btn_pdb = QtWidgets.QPushButton("Load PDB...", left_container)
         btn_pdb.clicked.connect(self.onLoadPDB)
         header_box.addWidget(btn_pdb)
 
@@ -112,11 +111,12 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         traj_split.addWidget(self.acf_plot)
         plots_layout.addLayout(traj_split)
 
-        self.tabs.addTab(plots_widget, "📈 Plots & Dynamics")
+        self.tabs.addTab(plots_widget, "Plots & Dynamics")
 
         # Tab 2: Quenching Table
         self.quencher_widget = QuencherTableWidget(self.model, self)
-        self.tabs.addTab(self.quencher_widget, "🧪 Quenching Chemistry")
+        self.tabs.addTab(self.quencher_widget, "Quenching Chemistry")
+
 
         # Tab 3: Project JSON State & Output Log
         json_widget = QtWidgets.QWidget(self)
@@ -125,7 +125,7 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         self.json_edit.setReadOnly(True)
         self.json_edit.setStyleSheet("font-family: monospace; font-size: 11px;")
         json_layout.addWidget(self.json_edit)
-        self.tabs.addTab(json_widget, "📝 Project JSON")
+        self.tabs.addTab(json_widget, "Project JSON")
 
         self.splitter.addWidget(self.tabs)
 

@@ -87,8 +87,5 @@ def test_quest_window(qtbot):
 
     assert win.dg is not None
     assert win.menuBar() is not None
+    assert win.statusBar() is not None
 
-    # Test theme toggle
-    initial_theme = win.dark_mode
-    win._toggle_theme()
-    assert win.dark_mode != initial_theme

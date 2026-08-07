@@ -1,7 +1,7 @@
 """Control panels rendered by host AutoForm or in-tree PyQt AutoForm.
 
 Serves as the single renderer bridge for PyQt applications, using the exact
-same AutoForm view-spec JSON schema (`quest.view.json`) as the Web UI.
+same AutoForm view-spec JSON schema (`quest.view.json`) as the Web UI, with standard native Qt controls.
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any
 
 from qtpy import QtCore, QtWidgets
-
 
 __all__ = [
     "MANIFEST_PATH",
@@ -58,6 +57,7 @@ def build_method_panel(name: str, parent=None, **kwargs):
     """Render the parameter form for one declared method."""
     if autoform_supported():
         from chisurf.gui.autoform.auto_form import AutoForm
+
         kwargs.setdefault("title", name)
         return AutoForm.from_rpc_method(method_declaration(name), parent=parent, **kwargs)
 
@@ -68,47 +68,39 @@ def build_method_panel(name: str, parent=None, **kwargs):
     return panel
 
 
-class InTreeCollapsiblePanel(QtWidgets.QFrame):
-    """Collapsible panel container for standalone PyQt AutoForm rendering."""
+class InTreeCollapsiblePanel(QtWidgets.QGroupBox):
+    """Standard Qt GroupBox panel with collapsible content."""
 
     def __init__(self, title: str, parent=None, collapsed: bool = False):
-        super().__init__(parent)
-        self.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        self.setFrameShadow(QtWidgets.QFrame.Raised)
-
-        self.layout = QtWidgets.QVBoxLayout(self)
-        self.layout.setContentsMargins(4, 4, 4, 4)
-        self.layout.setSpacing(4)
-
-        self.toggle_button = QtWidgets.QPushButton(f"{'▶' if collapsed else '▼'}  {title}", self)
-        self.toggle_button.setStyleSheet(
-            "QPushButton { text-align: left; font-weight: bold; padding: 4px; border: 1px solid #444; border-radius: 3px; }"
-        )
-        self.toggle_button.clicked.connect(self._toggle)
-        self.layout.addWidget(self.toggle_button)
+        super().__init__(title, parent)
+        self.setCheckable(True)
+        self.setChecked(not collapsed)
 
         self.content_widget = QtWidgets.QWidget(self)
         self.content_layout = QtWidgets.QVBoxLayout(self.content_widget)
         self.content_layout.setContentsMargins(4, 4, 4, 4)
-        self.layout.addWidget(self.content_widget)
 
-        self.is_collapsed = collapsed
-        self.content_widget.setVisible(not collapsed)
-        self.title_text = title
+        box_layout = QtWidgets.QVBoxLayout(self)
+        box_layout.setContentsMargins(6, 14, 6, 6)
+        box_layout.addWidget(self.content_widget)
+
+        self.toggled.connect(self._on_toggled)
+        self._on_toggled(not collapsed)
+
+    @property
+    def is_collapsed(self) -> bool:
+        return not self.isChecked()
+
+    def _on_toggled(self, checked: bool):
+        if hasattr(self, "content_widget"):
+            self.content_widget.setVisible(checked)
 
     def _toggle(self):
-        self.is_collapsed = not self.is_collapsed
-        self.content_widget.setVisible(not self.is_collapsed)
-        arrow = "▶" if self.is_collapsed else "▼"
-        self.toggle_button.setText(f"{arrow}  {self.title_text}")
+        self.setChecked(not self.isChecked())
 
 
 class InTreePyQtAutoForm(QtWidgets.QWidget):
-    """In-tree PyQt AutoForm renderer for standalone execution without ChiSurf dependencies.
-
-    Parses `quest.view.json` view-spec JSON structure with collapsible panels, typed
-    inputs and state synchronization.
-    """
+    """In-tree PyQt AutoForm renderer using standard desktop Qt controls."""
 
     def __init__(self, model, parent=None):
         super().__init__(parent)
@@ -145,8 +137,6 @@ class InTreePyQtAutoForm(QtWidgets.QWidget):
 
             if not sec_type:
                 continue
-
-
 
             if sec_type in {"panel", "dock_area"}:
                 title = getattr(sec, "title", None) or (sec.get("title") if isinstance(sec, dict) else "Panel") or "Panel"
@@ -295,4 +285,3 @@ class InTreePyQtAutoForm(QtWidgets.QWidget):
             if callable(fn):
                 series = fn()
                 plot_canvas.set_data(series)
-
