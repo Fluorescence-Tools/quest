@@ -189,6 +189,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [clientReady, setClientReady] = React.useState(false);
   const [theme, setTheme] = React.useState<"light" | "dark">("dark");
   const [tourOpen, setTourOpen] = React.useState(false);
+
+  const startDemoTour = async () => {
+    try {
+      const res = await fetch("/api/demo-project");
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.project) {
+          setProject(data.project);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not fetch demo project:", e);
+    }
+    setTourOpen(true);
+  };
+
   const [useAutoform, setUseAutoform] = React.useState(true);
   const [autoformSpec, setAutoformSpec] = React.useState<AutoFormSpec | null>(null);
   const router = useRouter();
@@ -293,7 +309,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
           <button
             className="theme-toggle"
-            onClick={() => setTourOpen(true)}
+            onClick={startDemoTour}
             aria-label={t("web.tour", "Tour")}
             title={t("web.tour", "Tour")}
             data-testid="tour-btn"

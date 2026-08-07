@@ -76,6 +76,9 @@ class QuEstWindow(QtWidgets.QMainWindow):
 
         toolbar.addSeparator()
 
+        action_demo = toolbar.addAction("Demo Mode")
+        action_demo.triggered.connect(self._run_demo)
+
         action_web = toolbar.addAction("Open Web UI")
         action_web.triggered.connect(self._open_web_ui)
 
@@ -84,6 +87,8 @@ class QuEstWindow(QtWidgets.QMainWindow):
 
         # File Menu
         file_menu = mb.addMenu(self._t("menu.file"))
+        file_menu.addAction("Demo Mode (148L PDB)...").triggered.connect(self._run_demo)
+        file_menu.addSeparator()
         file_menu.addAction(self._t("menu.load_structure") + "...").triggered.connect(
             self.dg.onLoadPDB
         )
@@ -102,12 +107,19 @@ class QuEstWindow(QtWidgets.QMainWindow):
         action_run = sim_menu.addAction("Run Simulation")
         action_run.setShortcut("Ctrl+R")
         action_run.triggered.connect(self.dg.update_all)
+        sim_menu.addAction("Run 148L Demo Simulation").triggered.connect(self._run_demo)
 
         # Help Menu
         help_menu = mb.addMenu(self._t("menu.help"))
+        help_menu.addAction("Guided Tour / Demo Mode").triggered.connect(self._run_demo)
         help_menu.addAction("Open Web Interface").triggered.connect(self._open_web_ui)
         help_menu.addSeparator()
         help_menu.addAction(self._t("menu.about")).triggered.connect(self._show_about)
+
+    def _run_demo(self) -> None:
+        from .guided_tour import start_guided_tour
+        start_guided_tour(self.dg, model=self.dg.model)
+
 
     def _create_statusbar(self) -> None:
         sb = self.statusBar()

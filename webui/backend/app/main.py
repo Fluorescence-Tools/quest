@@ -186,6 +186,21 @@ def get_autoform_spec(locale: str | None = None) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Failed to generate AutoForm spec: {exc}") from exc
 
 
+@app.get("/api/tour")
+def get_tour() -> dict[str, Any]:
+    """Return the shared guided tour and demo mode definitions."""
+    from quest.tour import get_tour_data
+    return get_tour_data()
+
+
+@app.get("/api/demo-project")
+def get_demo_project() -> dict[str, Any]:
+    """Return a pre-configured demo project dict using 148l.pdb."""
+    from quest.tour import create_demo_project
+    return {"project": create_demo_project()}
+
+
+
 
 
 @app.get("/api/i18n")

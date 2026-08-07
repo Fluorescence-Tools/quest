@@ -69,7 +69,12 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         btn_pdb.clicked.connect(self.onLoadPDB)
         header_box.addWidget(btn_pdb)
 
+        btn_demo = QtWidgets.QPushButton("Demo Mode", left_container)
+        btn_demo.clicked.connect(self.onDemoMode)
+        header_box.addWidget(btn_demo)
+
         left_layout.addLayout(header_box)
+
 
         try:
             from chisurf.gui.autoform.auto_form import AutoForm
@@ -222,8 +227,14 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         self.refresh()
         return result
 
+    def onDemoMode(self):
+        """Start guided tour with 148L demo mode."""
+        from .guided_tour import start_guided_tour
+        return start_guided_tour(self, model=self.model)
+
     def update_all(self):
         """Simulate, then show the result."""
         result = self.model.run_simulation()
         self.refresh()
         return result
+
