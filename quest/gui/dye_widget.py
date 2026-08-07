@@ -1,62 +1,41 @@
 """QuEst's desktop form.
 
-There is almost nothing here, and that is the point. The form's *layout* is
-`quest.view.json`, generated from the parameter catalog; its *state* is a
-:class:`~quest.gui.form_model.ProjectFormModel`, which is a QuEst project dict;
-its *physics* is `quest.api`, the same service layer the CLI and the web backend
-call. This module only does what none of those can: put an AutoForm in a widget,
-and connect the three menu actions a host application expects.
-
-What it replaced
-----------------
-A 1,899-line widget that loaded `dye_diffusion2.ui`, kept the state in ~40 Qt
-controls, and converted them to a project dict and back by hand. Both directions
-were hand-written, which is precisely where the GUI drifted away from the CLI
-before — it once shipped an entirely different quenching chemistry. Here there
-is no conversion step to drift: the controls are bound to the project itself.
-
-`TransientDecayGenerator` keeps the name and the three `on*` slots because
-ChiSurf's `quenching_estimator` plugin and QuEst's own menu bar call them.
+Connects AutoForm controls, pyqtgraph visualizations, interactive quenching tables,
+and simulation actions into a unified desktop workspace.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-from qtpy import QtWidgets
+from qtpy import QtCore, QtWidgets
 
 from ..i18n import ui
 from .form_model import ProjectFormModel
+from .plots import QuEstPlotCanvas
+from .quencher_widget import QuencherTableWidget
 
 __all__ = ["TransientDecayGenerator"]
 
-# Reach the host the same way everything else in QuEst does, so a plain
-# `python -m quest.gui` finds ChiSurf without the caller setting PYTHONPATH.
 try:
     from ..hosts import enable_chisurf
 
     enable_chisurf()
-except Exception:  # pragma: no cover - never fatal; QuEst runs standalone
+except Exception:  # pragma: no cover
     pass
 
 
 class TransientDecayGenerator(QtWidgets.QWidget):
-    """The QuEst form: an AutoForm over a project.
+    """The QuEst desktop workspace: AutoForm parameter controls + pyqtgraph visualizations.
 
     Parameters
     ----------
     parent : QWidget, optional
     project : dict, optional
-        Initial project. Defaults to :func:`quest.project.template_project`.
+        Initial project dict. Defaults to template_project().
     locale : str, optional
-        Language of the form. Defaults to :func:`quest.i18n.resolve_locale`.
-
-    Attributes
-    ----------
-    model : ProjectFormModel
-        The state. `model.project` is a QuEst project dict at all times.
-    form : QWidget or None
-        The rendered AutoForm; None when ChiSurf is unavailable.
+        Language of the form. Defaults to resolve_locale().
     """
 
     def __init__(
@@ -66,23 +45,97 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         self.model = ProjectFormModel(project, locale=locale)
         self.form = None
 
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        main_layout = QtWidgets.QVBoxLayout(self)
+        main_layout.setContentsMargins(4, 4, 4, 4)
+
+        # Splitter: Left = AutoForm Controls, Right = Visualization Center
+        self.splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal, self)
+        main_layout.addWidget(self.splitter)
+
+        # Left AutoForm Panel
+        left_container = QtWidgets.QWidget(self)
+        left_layout = QtWidgets.QVBoxLayout(left_container)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Action Header
+        header_box = QtWidgets.QHBoxLayout()
+        self.btn_run = QtWidgets.QPushButton("▶ Run Simulation", left_container)
+        self.btn_run.setObjectName("PrimaryButton")
+        self.btn_run.clicked.connect(self.update_all)
+        header_box.addWidget(self.btn_run)
+
+        btn_pdb = QtWidgets.QPushButton("📁 Load PDB", left_container)
+        btn_pdb.clicked.connect(self.onLoadPDB)
+        header_box.addWidget(btn_pdb)
+
+        left_layout.addLayout(header_box)
 
         try:
             from chisurf.gui.autoform.auto_form import AutoForm
 
             self.form = AutoForm(self.model)
-            layout.addWidget(self.form)
+            left_layout.addWidget(self.form)
         except Exception:
             from .autoform_panel import InTreePyQtAutoForm
 
             self.form = InTreePyQtAutoForm(self.model)
-            layout.addWidget(self.form)
+            left_layout.addWidget(self.form)
 
+        self.splitter.addWidget(left_container)
+
+        # Right Visualization Center Tabs
+        self.tabs = QtWidgets.QTabWidget(self)
+
+        # Tab 1: Decay & Dynamics Plots
+        plots_widget = QtWidgets.QWidget(self)
+        plots_layout = QtWidgets.QVBoxLayout(plots_widget)
+
+        self.decay_plot = QuEstPlotCanvas(
+            title="Fluorescence Decay (Donor & FRET)",
+            x_label="Time (ns)",
+            y_label="Counts",
+            log_y=True,
+        )
+        plots_layout.addWidget(self.decay_plot)
+
+        traj_split = QtWidgets.QHBoxLayout()
+        self.traj_plot = QuEstPlotCanvas(
+            title="Dye Trajectory", x_label="Time (ns)", y_label="|r − ⟨r⟩| (Å)"
+        )
+        self.acf_plot = QuEstPlotCanvas(
+            title="Position Autocorrelation (ACF)",
+            x_label="Lag (ns)",
+            y_label="ACF",
+            log_x=True,
+        )
+        traj_split.addWidget(self.traj_plot)
+        traj_split.addWidget(self.acf_plot)
+        plots_layout.addLayout(traj_split)
+
+        self.tabs.addTab(plots_widget, "📈 Plots & Dynamics")
+
+        # Tab 2: Quenching Table
+        self.quencher_widget = QuencherTableWidget(self.model, self)
+        self.tabs.addTab(self.quencher_widget, "🧪 Quenching Chemistry")
+
+        # Tab 3: Project JSON State & Output Log
+        json_widget = QtWidgets.QWidget(self)
+        json_layout = QtWidgets.QVBoxLayout(json_widget)
+        self.json_edit = QtWidgets.QPlainTextEdit(json_widget)
+        self.json_edit.setReadOnly(True)
+        self.json_edit.setStyleSheet("font-family: monospace; font-size: 11px;")
+        json_layout.addWidget(self.json_edit)
+        self.tabs.addTab(json_widget, "📝 Project JSON")
+
+        self.splitter.addWidget(self.tabs)
+
+        # Set initial splitter sizes (40% form, 60% visualization)
+        self.splitter.setSizes([500, 800])
+
+        self.refresh()
 
     def _t(self, key: str) -> str:
-        return ui(key, self.model.locale)
+        return ui(key, self.locale)
 
     # -- the project, in and out -------------------------------------------
 
@@ -96,19 +149,30 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         self.refresh()
 
     def refresh(self) -> None:
-        """Re-read the model into the controls, the plots and the 3D view."""
-        if self.form is None:
-            return
-        self.form.sync_fields()
-        self.form.refresh_plots()
+        """Re-read the model into controls, plots and visualization tabs."""
+        if self.form is not None:
+            self.form.sync_fields()
+            self.form.refresh_plots()
+
+        # Refresh right panel plots
+        self.decay_plot.set_data(self.model.decay_series())
+        self.traj_plot.set_data(self.model.trajectory_series())
+        self.acf_plot.set_data(self.model.autocorrelation_series())
+
+        # Refresh quencher table
+        if hasattr(self, "quencher_widget"):
+            self.quencher_widget.refresh()
+
+        # Refresh JSON view
+        if hasattr(self, "json_edit"):
+            self.json_edit.setPlainText(
+                json.dumps(self.model.to_project_dict(), indent=2)
+            )
 
     # -- menu actions ------------------------------------------------------
-    #
-    # A host's menu bar connects to these; the form's own toolbar calls the
-    # model methods directly. Both end in the same place.
 
     def onLoadPDB(self) -> str | None:
-        """Pick a structure. Also the only way to fill the 3D view."""
+        """Pick a structure."""
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
             self._t("dialog.open_structure"),
@@ -133,7 +197,7 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         return result
 
     def update_all(self):
-        """Simulate, then show the result. The toolbar's ▶ button in method form."""
+        """Simulate, then show the result."""
         result = self.model.run_simulation()
         self.refresh()
         return result

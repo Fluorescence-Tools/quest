@@ -236,7 +236,29 @@ class InTreePyQtAutoForm(QtWidgets.QWidget):
                     chk.toggled.connect(lambda b, a=attr: setattr(self.model, a, b))
                 parent_layout.addWidget(chk)
                 self._fields.append((attr, "toggle", chk))
+            elif sec_type == "table":
+                from .quencher_widget import QuencherTableWidget
 
+                tbl_widget = QuencherTableWidget(self.model)
+                parent_layout.addWidget(tbl_widget)
+                if not hasattr(self, "_tables"):
+                    self._tables = []
+                self._tables.append(tbl_widget)
+            elif sec_type == "plot":
+                from .plots import QuEstPlotCanvas
+
+                title = getattr(sec, "title", None) or (sec.get("title") if isinstance(sec, dict) else "Plot") or "Plot"
+                x_label = getattr(sec, "x_label", "x") if not isinstance(sec, dict) else sec.get("x_label", "x")
+                y_label = getattr(sec, "y_label", "y") if not isinstance(sec, dict) else sec.get("y_label", "y")
+                log_y = bool(getattr(sec, "log_y", False) if not isinstance(sec, dict) else sec.get("log_y", False))
+                log_x = bool(getattr(sec, "log_x", False) if not isinstance(sec, dict) else sec.get("log_x", False))
+                source = getattr(sec, "source", None) or (sec.get("source") if isinstance(sec, dict) else None)
+
+                plot_canvas = QuEstPlotCanvas(title=title, x_label=x_label, y_label=y_label, log_y=log_y, log_x=log_x)
+                parent_layout.addWidget(plot_canvas)
+                if not hasattr(self, "_plots"):
+                    self._plots = []
+                self._plots.append((source, plot_canvas))
 
     def sync_fields(self):
         for attr, kind, widget in self._fields:
@@ -258,5 +280,19 @@ class InTreePyQtAutoForm(QtWidgets.QWidget):
             else:
                 widget.setText(str(val))
 
+        self.refresh_plots()
+        for tbl in getattr(self, "_tables", []):
+            try:
+                tbl.refresh()
+            except Exception:
+                pass
+
     def refresh_plots(self):
-        pass
+        for source, plot_canvas in getattr(self, "_plots", []):
+            if not source:
+                continue
+            fn = getattr(self.model, source, None)
+            if callable(fn):
+                series = fn()
+                plot_canvas.set_data(series)
+
