@@ -2,6 +2,20 @@
 
 ## 2026-08-07
 
+* **Web UI gains a light/dark theme switch.** A sun/moon button
+  (`data-testid="theme-toggle"`) in the topbar toggles `data-theme` on `<html>`
+  and persists the choice in `localStorage["quest-theme"]`. Defaults to dark;
+  an explicit saved value outranks the OS `prefers-color-scheme` (the
+  `:root[data-theme=…]` blocks are declared after the media query, so they win).
+  The `button.primary` label-colour rules already had `data-theme` twins, so the
+  toggle path needed only the control itself — state + effects in
+  `AppLayout.tsx`, `.theme-toggle` CSS, and the `web.theme_toggle` key in all
+  three locales. Verified live in a browser: dark on load, flips to light on
+  click, survives a reload. i18n suite **50 passed**; translation ratchet flat.
+  Concept: [subsystems/webui.md](subsystems/webui.md).
+
+## 2026-08-07
+
 * **Web UI accent/neutrals modernised — indigo + cool slate.** The first refresh
   was too subtle to read as a change; this one changes the palette outright in
   the four theme-token blocks plus the two hard-coded hover tints. Accent

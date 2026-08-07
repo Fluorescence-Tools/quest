@@ -236,6 +236,7 @@
     "web.language": "Langue",
     "web.dye": "Colorant",
     "web.run_select": "Sélectionner une simulation antérieure",
+    "web.theme_toggle": "Basculer entre les modes clair et sombre",
     "web.run": "Lancer la simulation",
     "web.running": "Simulation en cours…",
     "web.results": "Résultats",

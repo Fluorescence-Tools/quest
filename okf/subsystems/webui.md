@@ -95,6 +95,14 @@ the DOM:
   overflow — and the panel-overflow guard stays green.
 - **Primary action** gets a subtle vertical accent gradient + lift instead of
   the flat fill; active tabs and cards use the shared shadow token.
+- **Theme switch** — a sun/moon button in the topbar (`data-testid="theme-toggle"`)
+  flips `data-theme` on `<html>` between `light` and `dark` and persists the
+  choice in `localStorage["quest-theme"]`. Default is **dark**; a saved choice
+  always wins over the OS `prefers-color-scheme` (the `:root[data-theme=…]`
+  blocks come after the media query, so they win). Label via the `web.theme_toggle`
+  key in all three locales. The `@media (prefers-color-scheme: dark)` rules that
+  flip `button.primary`'s label colour have `:root[data-theme=…]` twins so the
+  toggle path is styled too.
 
 The labeling page carries the **FRET acceptor** panel: an enable toggle, the
 acceptor chain/residue/atom selectors, `R0 [Å]` and the acceptor diffusion

@@ -73,6 +73,7 @@
     "web.language": "Language",
     "web.dye": "Dye",
     "web.run_select": "Select a previous simulation run",
+    "web.theme_toggle": "Toggle light/dark mode",
     "web.run": "Run simulation",
     "web.running": "Simulating…",
     "web.results": "Results",
