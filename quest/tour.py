@@ -30,17 +30,17 @@ def get_tour_data() -> dict[str, Any]:
 
 def create_demo_project() -> dict[str, Any]:
     """Create a fully configured demo project dict using 148l.pdb."""
-    project = template_project()
+    project = dict(template_project(with_fret=True))
     if DEMO_PDB_PATH.is_file():
-        project["structure"]["path"] = str(DEMO_PDB_PATH)
-        project["structure"]["chain"] = "E"
-        project["structure"]["residue"] = 118
-        project["structure"]["atom"] = "CB"
+        pdb_str = str(DEMO_PDB_PATH.resolve())
+        project["pdb"] = pdb_str
+        project["attachment"] = {"chain": "E", "residue": 118, "atom": "CB"}
 
-        # Set acceptor dye site on chain E
-        if "fret" in project:
-            project["fret"]["acceptor_chain"] = "E"
-            project["fret"]["acceptor_residue"] = 130
-            project["fret"]["acceptor_atom"] = "CB"
+        if "fret" in project and isinstance(project["fret"], dict):
+            dyes = project["fret"].get("dyes", [])
+            if len(dyes) > 0:
+                dyes[0]["attachment"] = {"chain": "E", "residue": 118, "atom": "CB"}
+            if len(dyes) > 1:
+                dyes[1]["attachment"] = {"chain": "E", "residue": 130, "atom": "CB"}
 
     return project
