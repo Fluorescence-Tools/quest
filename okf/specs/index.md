@@ -11,4 +11,6 @@ that moves the tree toward the target is worth more than one that merely works.
 * [Assessment](assessment.md) - The gap backlog: where the current tree diverges from the target, itemised with ids and status.
 * [Declarative form scheme — AutoForm and the QuEst blueprint](autoform-scheme.md) - The view-spec JSON contract for declaring editors without GUI code, how QuEst generates one spec per language from a single catalog, and what a Python→web port should copy to stop hand-writing two forms.
 * [AutoForm Web Support & ChiSurf Multi-Interface Plugin Architecture](autoform-and-plugin-architecture.md) - PRDs, architecture specifications, and implementation checklist for bringing Web AutoForm support and 5-way ChiSurf plugin interfaces (API, CLI, RPC JSON, ZMQ, Web AutoForm) to QuEst.
+* [ChiSurf AutoForm Integration & Dependency Specification](chisurf-autoform-integration.md) - Comprehensive mapping of ChiSurf AutoForm classes (`AutoForm`, `CollapsibleBox`, `DockArea`), section types, and dual-mode host vs standalone PyQt execution.
+
 
