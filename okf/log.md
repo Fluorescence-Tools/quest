@@ -1,5 +1,36 @@
 # Update Log
 
+## 2026-08-07
+
+* **The web UI's own panel can overflow its card, and two bare `<select>`s had
+  no accessible name — found by scanning the DOM, neither visible to the suite
+  that was green.** Driving the app and inspecting every element whose
+  `scrollWidth > clientWidth + 2` with `overflow-x: visible` caught the
+  quenching table cut off at the advanced card's 560 px body and escaping the
+  existing `no_horizontal_overflow` test, which read only `documentElement`
+  and could not see past the card's `overflow: hidden`. Same sweep flagged the
+  dye and run pickers: bare `<select>`s announced by a screen reader as
+  unlabelled listboxes.
+
+  Fixes, both small and both *seen to fail* first ([workflows/testing.md]):
+
+  1. `min-width: 0` on `.quench-editor` — the grid item was refusing to shrink
+     below its content width (`min-width: auto`), so the wide
+     `quench-table-wrap` scroll container spilled the card instead of scrolling
+     inside itself. Measured: body `scrollWidth` 674 → 560, table scrolls in its
+     own 526 px window.
+  2. `aria-label` on the dye and run selects. Both go through `t()` with new
+     `web.dye` / `web.run_select` keys in all three locales, so the
+     translation-backlog ratchet (90, unmoved) stays flat — a literal
+     `aria-label="…"` matches the ratchet's regex and would have grown the
+     count.
+
+  Guards: `TestLayoutAndAccessibility::test_no_inner_container_overflows_its_box`
+  (parametrised over the four tabs) and `test_the_header_selects_have_accessible_names`.
+  Suite: **531 passed** (library + web backend), **32 passed** (browser e2e,
+  the prior 27 plus these 5), **50 passed** (i18n), TypeScript clean.
+  Concept: [subsystems/webui.md](subsystems/webui.md).
+
 ## 2026-08-06
 
 * **Commit cadence is a rule now: one verified piece, one commit.** Stated by

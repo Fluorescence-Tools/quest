@@ -88,3 +88,18 @@ strings.
 `webui/backend/tests/test_backend_api.py` covers the API directly.
 `tests/test_webui_e2e.py` drives a real browser and **skips unless both servers
 are already running** — see [workflows/testing.md](/workflows/testing.md).
+
+Two of its guards exist because a panel defect had no signal anywhere else:
+
+- **`TestLayoutAndAccessibility::test_no_inner_container_overflows_its_box`**
+  parametrises over all four tabs and fails if any element wider than its box
+  has `overflow-x: visible`. The page-level check missed this class: the
+  advanced card clips with `overflow: hidden`, so the document never scrolled
+  while the quenching table was cut off at the card's 560 px body. Fixed by
+  `min-width: 0` on `.quench-editor`, which lets the `quench-table-wrap` scroll
+  container govern its own width instead of the grid item forcing it wide.
+- **`test_the_header_selects_have_accessible_names`** pins an `aria-label` on
+  the dye and run pickers, which are bare `<select>`s without a wrapping
+  `<label>` (the chain/residue/atom selects are named by their wrapping label,
+  so they are excluded). Both labels go through `t()` and the `web.dye` /
+  `web.run_select` keys, keeping the translation-backlog ratchet flat.

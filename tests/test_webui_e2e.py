@@ -120,6 +120,54 @@ class TestPagesLoad:
         assert overflow <= 1, f"page scrolls horizontally by {overflow}px"
 
 
+class TestLayoutAndAccessibility:
+    @pytest.mark.parametrize("path", ["/labeling", "/simulation", "/scan", "/advanced"])
+    def test_no_inner_container_overflows_its_box(self, page: Page, path: str) -> None:
+        """Content wider than its own box must sit in a scroll container, not
+        spill invisibly past the card.
+
+        The page-level check above misses this class of defect: the advanced
+        card clips with `overflow: hidden`, so the document never scrolls while
+        the quenching table is cut off at the card's 560px body.
+        """
+        _load(page, path)
+        _upload_structure(page)
+        page.wait_for_timeout(1500)
+        bad = page.evaluate(
+            """() => {
+                const bad = [];
+                document.querySelectorAll("body *").forEach((el) => {
+                    if (el.scrollWidth > el.clientWidth + 2) {
+                        const ox = getComputedStyle(el).overflowX;
+                        if (ox === "visible") {
+                            bad.push({
+                                tag: el.tagName.toLowerCase(),
+                                id: el.id,
+                                cls: String(el.className).slice(0, 60),
+                                sw: el.scrollWidth,
+                                cw: el.clientWidth,
+                            });
+                        }
+                    }
+                });
+                return bad;
+            }"""
+        )
+        assert not bad, f"content overflows its box on {path}: {bad}"
+
+    def test_the_header_selects_have_accessible_names(self, page: Page) -> None:
+        """The dye and run pickers are labelled controls, not bare `<select>`s.
+
+        A control without an accessible name is announced by a screen reader as
+        an unlabelled listbox; the chain/residue/atom selects are excluded
+        because their wrapping `<label>` names them.
+        """
+        _load(page, "/labeling")
+        for testid in ("dye-select", "run-select"):
+            name = page.get_by_test_id(testid).get_attribute("aria-label")
+            assert name and name.strip(), f"{testid} has no accessible name"
+
+
 class TestQuenchingEditor:
     def test_shows_pet_active_residues_with_chemistry(self, page: Page) -> None:
         _load(page, "/advanced")

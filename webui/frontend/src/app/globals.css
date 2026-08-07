@@ -1953,6 +1953,11 @@ input[type="number"] {
 }
 
 .quench-editor {
+  /* Let the grid item shrink below its content's intrinsic width, so the
+     `quench-table-wrap` scroll container below governs its own horizontal
+     extent instead of forcing the 560px card wide. Without this the flex/item
+     default `min-width: auto` makes the quenching table spill past the card. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;

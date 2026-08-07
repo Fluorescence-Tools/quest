@@ -246,6 +246,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               value={selectedDyeName}
               onChange={(event) => handleDyeChange(event.target.value)}
               className="header-select"
+              data-testid="dye-select"
+              aria-label={t("web.dye", "Dye")}
             >
               <option value="Custom">Custom...</option>
               {Object.keys(dyes).map((name) => (
@@ -396,7 +398,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           >
             <h2>{t("web.card.runs", "Simulation Runs")}</h2>
             <div className="field" style={{ margin: 0 }}>
-              <select value={selectedJobId || ""} onChange={(e) => handleLoadJob(e.target.value)}>
+              <select
+                value={selectedJobId || ""}
+                onChange={(e) => handleLoadJob(e.target.value)}
+                data-testid="run-select"
+                aria-label={t("web.run_select", "Select a previous simulation run")}
+              >
                 <option value="">-- Active/New Run --</option>
                 {jobs.map((job) => (
                   <option key={job.job_id} value={job.job_id}>
