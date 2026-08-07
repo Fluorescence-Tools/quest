@@ -10,10 +10,14 @@ import React from "react";
 
 export interface TourStep {
   /** CSS selector for the element to spotlight. `data-tour="…"` attributes on
-   *  the host app's elements are the stable and discoverable way to do this. */
+   *  the host app's elements are the stable and discoverable way to do this.
+   *  An empty string shows a centred card with no spotlight. */
   target: string;
   title: string;
   body: string;
+  /** Optional side-effect run once when this step becomes current — e.g. a
+   *  host app routing to the page the target lives on. Run before measuring. */
+  before?: () => void;
 }
 
 export interface TourLabels {
@@ -86,20 +90,39 @@ export function Tour({ open, steps, labels, onClose }: TourProps) {
   }, [open]);
 
   React.useEffect(() => {
-    if (!open || !step || !step.target) return;
+    if (!open || !step) return;
+    // A step may ask the host to route somewhere first (see `before`). It runs
+    // once when the step becomes current, before the target is looked up, so
+    // the retry below has a page that actually contains the selector.
+    step.before?.();
+    if (!step.target) {
+      setRect(emptyRect());
+      return;
+    }
+    let cancelled = false;
+    let attempts = 0;
     const measure = () => {
-      const el = document.querySelector<HTMLElement>(step.target);
+      if (cancelled) return;
+      const el = document.querySelector<HTMLElement>(step.target as string);
       if (!el) {
-        setRect(emptyRect());
+        // The target may only appear after navigation (a page swap) or a data
+        // round-trip; poll briefly before giving up and showing a centered card.
+        attempts += 1;
+        if (attempts < 14) {
+          window.setTimeout(measure, 250);
+        } else {
+          setRect(emptyRect());
+        }
         return;
       }
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       const r = el.getBoundingClientRect();
       setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
     };
-    const t = window.setTimeout(measure, 200);
+    const t = window.setTimeout(measure, 150);
     window.addEventListener("resize", measure);
     return () => {
+      cancelled = true;
       window.clearTimeout(t);
       window.removeEventListener("resize", measure);
     };

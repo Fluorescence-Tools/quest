@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAppContext } from "../context/AppContext";
 import Field from "./Field";
 import HelpBadge from "./HelpBadge";
@@ -186,6 +186,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [clientReady, setClientReady] = React.useState(false);
   const [theme, setTheme] = React.useState<"light" | "dark">("dark");
   const [tourOpen, setTourOpen] = React.useState(false);
+  const router = useRouter();
   React.useEffect(() => {
     setClientReady(true);
   }, []);
@@ -240,7 +241,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Switching language refetches the catalog, so every parameter label
               and help text changes with it — the same translations the desktop
               form and doc/parameters.<code>.md are generated from. */}
-          <div className="header-select-group">
+          <div className="header-select-group" data-tour="language">
             <span className="header-label">{t("web.language", "Language")}:</span>
             <select
               value={locale}
@@ -262,6 +263,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             aria-label={t("web.theme_toggle", "Toggle light/dark mode")}
             title={t("web.theme_toggle", "Toggle light/dark mode")}
             data-testid="theme-toggle"
+            data-tour="theme"
           >
             {theme === "dark" ? (
               <svg className="btn-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -307,6 +309,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             onClick={saveDyePreset}
             title="Save current parameters as a dye preset"
             style={{ minHeight: "26px", fontSize: "13px", display: "flex", alignItems: "center", gap: "4px" }}
+            data-tour="preset"
           >
             💾 Disk Preset
           </button>
@@ -346,6 +349,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             onClick={() => setShowCitationModal(true)}
             className="cite-btn"
             title="Show citation details"
+            data-tour="cite"
           >
             <svg
               className="btn-icon"
@@ -402,6 +406,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               event.preventDefault();
               void loadPdbId(pdbId);
             }}
+            data-tour="pdb"
           >
             <input
               value={pdbId}
@@ -412,8 +417,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             />
             <button type="submit">Load</button>
           </form>
-          <button onClick={() => pdbInputRef.current?.click()}>Upload Structure (PDB/CIF)</button>
-          <button onClick={downloadResult} disabled={downloadDisabled}>
+          <button onClick={() => pdbInputRef.current?.click()} data-tour="upload">Upload Structure (PDB/CIF)</button>
+          <button onClick={downloadResult} disabled={downloadDisabled} data-tour="download">
             Download result
           </button>
           <button onClick={handleClearState} className="clear-btn">
@@ -424,7 +429,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       <section className="main-grid">
         <aside className="control-panel">
-          <div className="sidebar-header-toggle">
+          <div className="sidebar-header-toggle" data-tour="json">
             <h2>Configuration</h2>
             <label className="toggle-switch">
               <span className="toggle-label">JSON Mode</span>
@@ -442,6 +447,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <div
             className="panel-section"
             style={{ borderBottom: "1px solid var(--line)", background: "var(--surface-2)" }}
+            data-tour="runs"
           >
             <h2>{t("web.card.runs", "Simulation Runs")}</h2>
             <div className="field" style={{ margin: 0 }}>
@@ -540,7 +546,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </label>
                   </section>
 
-                  <section className="panel-section compact fret-section">
+                  <section className="panel-section compact fret-section" data-tour="fret">
                     <label className="check-field">
                       <input
                         type="checkbox"
@@ -694,7 +700,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     )}
                   </section>
 
-                  <section className="panel-section compact">
+                  <section className="panel-section compact" data-tour="av">
                     <h2>Accessible volume</h2>
                     <Field
                       label="Linker length"
@@ -746,7 +752,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
               {currentTab === "/simulation" && (
                 <>
-                  <section className="panel-section compact">
+                  <section className="panel-section compact" data-tour="sim-settings">
                     <h2>{t("web.card.settings", "Simulation Settings")}</h2>
                     <Field
                       label="tau0 [ns]"
@@ -833,7 +839,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </div>
                   </section>
 
-                  <section className="panel-section">
+                  <section className="panel-section" data-tour="scan-settings">
                     <h2>{t("web.card.scan_settings", "Scan Settings")}</h2>
                     <label className="check-field" style={{ marginBottom: "8px" }}>
                       <input
@@ -966,7 +972,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
               {currentTab === "/advanced" && (
                 <>
-                  <section className="panel-section compact">
+                  <section className="panel-section compact" data-tour="stickiness">
                     <h2>Dye stickiness</h2>
                     <Field
                       label="Slowing radius"
@@ -1066,7 +1072,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       <Tour
         open={tourOpen}
-        steps={getTourSteps(t)}
+        steps={getTourSteps(t, (path) => {
+          if (window.location.pathname !== path) router.push(path);
+        })}
         labels={getTourLabels(t)}
         onClose={() => setTourOpen(false)}
       />

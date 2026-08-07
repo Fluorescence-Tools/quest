@@ -15,7 +15,7 @@ export default function SimulationPage() {
   const { result } = useAppContext();
 
   return (
-    <div className="simulation-page">
+    <div className="simulation-page" data-tour="sim-page">
       <div className="simulation-primary">
         <div className="result-row simulation-summary-row">
           <div className="result-card">

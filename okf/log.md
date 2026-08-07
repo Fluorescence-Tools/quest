@@ -2,6 +2,19 @@
 
 ## 2026-08-07
 
+* **Tour is now exhaustive and cross-page; `before` hook drives routing.**
+  `Tour.tsx` runs `step.before?.()` when a step becomes current and then polls
+  the target selector up to ~3.5 s before showing a centred card, so a step can
+  route the app (e.g. to `/simulation`) and spotlight a sidebar panel that only
+  exists on that tab. `tourSteps.ts` grew from 4 steps to 24, walking the whole
+  workflow (welcome → PDB → upload → runs → labeling → FRET → AV → viewer →
+  run → simulation settings/results → scan settings/results → advanced →
+  JSON/preset/language/theme/cite/download), each routing to the page it
+  explains via a guarded `navigate` in `AppLayout`. `data-tour` hooks added to
+  the topbar, toolbar, sidebar and every page. Copy is localized en/de/fr
+  (`web.tour.*`). `TestTour` now walks through the cross-page routing; 34 browser
+  e2e and 531 unit/backend tests pass. Concept: [subsystems/webui.md](subsystems/webui.md).
+
 * **New concept: the declarative form scheme, with QuEst as the blueprint.**
   `okf/specs/autoform-scheme.md` documents ChiSurf's AutoForm view-spec JSON
   contract (the section vocabulary: panel/value/choice/toggle/table/dynamic

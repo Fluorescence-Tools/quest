@@ -179,16 +179,13 @@ class TestTour:
         _load(page, "/labeling")
         page.get_by_test_id("tour-btn").click()
         expect(page.locator(".tour-card")).to_be_visible()
+        expect(page.locator(".tour-card-title")).to_have_text("Welcome to QuEst")
+
+        # Walking on to the first real target spotlights it, and the card never
+        # leaves the viewport while the tour is open.
+        page.locator(".tour-btn.primary").click()
         expect(page.locator(".tour-card-title")).to_have_text("Workflow tabs")
-
-        for title in ("Load a structure", "Place the dye", "Run the simulation"):
-            page.locator(".tour-btn.primary").click()
-            page.wait_for_timeout(300)
-            expect(page.locator(".tour-card-title")).to_have_text(title)
-
-        # Every step so far must have spotlighted something.
-        assert page.locator(".tour-highlight").count() == 1
-        # The card never leaves the viewport while the tour is open.
+        expect(page.locator(".tour-highlight")).to_have_count(1)
         assert page.evaluate(
             """() => {
                 const card = document.querySelector(".tour-card");
@@ -198,8 +195,31 @@ class TestTour:
             }"""
         )
 
-        # Done closes the tour and restores body scroll.
-        page.locator(".tour-btn.primary").click()
+        # A later step routes to the Simulation tab via the `before` hook; keep
+        # tabbing through until we reach it, then confirm the page changed.
+        titles = (
+            "Load a structure",
+            "Upload a file",
+            "Simulation runs",
+            "Structure panel",
+            "Place the dye",
+            "FRET acceptor",
+            "Accessible volume",
+            "Structure viewer",
+            "Run the simulation",
+            "Simulation settings",
+        )
+        for title in titles:
+            page.locator(".tour-btn.primary").click()
+            page.wait_for_timeout(250)
+            expect(page.locator(".tour-card-title")).to_have_text(title)
+
+        assert "/simulation" in page.url
+        # The simulation-settings sidebar step still star-spotlights a target.
+        expect(page.locator(".tour-highlight")).to_have_count(1)
+
+        # Escape closes the tour and restores body scroll.
+        page.keyboard.press("Escape")
         expect(page.locator(".tour-card")).to_have_count(0)
         assert page.evaluate("document.body.style.overflow") == ""
 

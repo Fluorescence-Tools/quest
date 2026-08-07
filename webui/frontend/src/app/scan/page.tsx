@@ -179,7 +179,7 @@ export default function ScanPage() {
   };
 
   return (
-    <div className="results-section">
+    <div className="results-section" data-tour="scan-page">
       <div className="results-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
         <div>
           <h2 style={{ margin: 0 }}>Scan Results</h2>

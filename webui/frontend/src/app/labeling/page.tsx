@@ -8,7 +8,7 @@ export default function LabelingPage() {
   const { structure, project, result, surfaceRendering, renderSparsity, onSequenceResidueSelect } = useAppContext();
 
   return (
-    <div className="viewer-card">
+    <div className="viewer-card" data-tour="viewer">
       <div className="card-header">
         <h2>Protein Viewer</h2>
       </div>

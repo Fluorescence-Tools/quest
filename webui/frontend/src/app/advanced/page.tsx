@@ -30,7 +30,7 @@ export default function AdvancedPage() {
 
   return (
     <div className="advanced-settings-page">
-      <section className="result-card advanced-settings-card quench-editor-card">
+      <section className="result-card advanced-settings-card quench-editor-card" data-tour="quench-editor">
         <div className="card-header">
           <h2>Amino-acid specific quenching</h2>
         </div>
@@ -39,7 +39,7 @@ export default function AdvancedPage() {
         </div>
       </section>
 
-      <section className="result-card advanced-settings-card">
+      <section className="result-card advanced-settings-card" data-tour="adv-config">
         <div className="card-header">
           <h2>Simulation Configuration</h2>
         </div>
