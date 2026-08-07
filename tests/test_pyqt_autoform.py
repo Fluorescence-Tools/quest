@@ -72,7 +72,10 @@ def test_transient_decay_generator_workspace(qtbot):
 
     assert w.form is not None
     assert w.splitter is not None
+    assert w.plot_vsplitter is not None
+    assert w.plot_hsplitter is not None
     assert w.tabs.count() == 3
+
 
     # Test simulation run
     results = w.update_all()

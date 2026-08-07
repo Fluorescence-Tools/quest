@@ -85,9 +85,12 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         # Right Visualization Center Tabs
         self.tabs = QtWidgets.QTabWidget(self)
 
-        # Tab 1: Decay & Dynamics Plots
+        # Tab 1: Decay & Dynamics Plots (Separated by QSplitters for flexible scaling)
         plots_widget = QtWidgets.QWidget(self)
         plots_layout = QtWidgets.QVBoxLayout(plots_widget)
+        plots_layout.setContentsMargins(2, 2, 2, 2)
+
+        self.plot_vsplitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical, plots_widget)
 
         self.decay_plot = QuEstPlotCanvas(
             title="Fluorescence Decay (Donor & FRET)",
@@ -95,9 +98,9 @@ class TransientDecayGenerator(QtWidgets.QWidget):
             y_label="Counts",
             log_y=True,
         )
-        plots_layout.addWidget(self.decay_plot)
+        self.plot_vsplitter.addWidget(self.decay_plot)
 
-        traj_split = QtWidgets.QHBoxLayout()
+        self.plot_hsplitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal, plots_widget)
         self.traj_plot = QuEstPlotCanvas(
             title="Dye Trajectory", x_label="Time (ns)", y_label="|r − ⟨r⟩| (Å)"
         )
@@ -107,11 +110,16 @@ class TransientDecayGenerator(QtWidgets.QWidget):
             y_label="ACF",
             log_x=True,
         )
-        traj_split.addWidget(self.traj_plot)
-        traj_split.addWidget(self.acf_plot)
-        plots_layout.addLayout(traj_split)
+        self.plot_hsplitter.addWidget(self.traj_plot)
+        self.plot_hsplitter.addWidget(self.acf_plot)
 
+        self.plot_vsplitter.addWidget(self.plot_hsplitter)
+        self.plot_vsplitter.setSizes([450, 350])
+        self.plot_hsplitter.setSizes([400, 400])
+
+        plots_layout.addWidget(self.plot_vsplitter)
         self.tabs.addTab(plots_widget, "Plots & Dynamics")
+
 
         # Tab 2: Quenching Table
         self.quencher_widget = QuencherTableWidget(self.model, self)
