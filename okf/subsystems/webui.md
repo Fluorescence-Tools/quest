@@ -70,6 +70,30 @@ one definition of "a valid project", shared with the terminal.
 App-router pages: `/` , `/simulation`, `/labeling`, `/scan`, `/advanced`, with
 shared state in `context/AppContext.tsx`.
 
+# Design language
+
+The visual layer lives entirely in `webui/frontend/src/app/globals.css` — no
+inline styles, no per-component styling — so the look is changed by editing the
+stylesheet and *nothing else*. Class names, ids and visible text are contract:
+the browser suite pins them (`tests/test_webui_e2e.py`).
+
+A 2026-08-07 refresh made it denser and slightly more modern without touching
+the DOM:
+
+- **Tokens** (`:root` + the three theme blocks): layered shadows
+  (`--shadow`, `--shadow-lift`), a shared focus ring `--focus` applied
+  `:focus-visible` on buttons/inputs/selects/links, a system font stack
+  `--font-ui`, and an accent-tinted hover wash `--accent-ink`. Palette and
+  accent are unchanged — it is still the teal + rust identity.
+- **Density** (measured at 1440×900): app-shell padding 12→8 px, topbar
+  brand 38→30 px and title 22→18 px, control sidebar 320→296 px, panel
+  sections 7/9→5/8 px, uppercase section headings 12→10.5 px with
+  letter-spacing, tab buttons 4→3 px vertical, workflow/card chrome 8→6 px.
+  Body `scrollWidth == innerWidth` (1440) on all four tabs — no horizontal
+  overflow — and the panel-overflow guard stays green.
+- **Primary action** gets a subtle vertical accent gradient + lift instead of
+  the flat fill; active tabs and cards use the shared shadow token.
+
 The labeling page carries the **FRET acceptor** panel: an enable toggle, the
 acceptor chain/residue/atom selectors, `R0 [Å]` and the acceptor diffusion
 coefficient. Enabling it seeds the acceptor on the *last labelable* residue of

@@ -2,6 +2,21 @@
 
 ## 2026-08-07
 
+* **Visual refresh of the web UI — denser and a little more modern, CSS-only.**
+  The stylesheet is the only place the look lives, so the change is confined to
+  `webui/frontend/src/app/globals.css`; every class name, id and visible string
+  is untouched because the browser suite pins them. New tokens (`--shadow-lift`,
+  `--font-ui`, `--accent-ink`) and a `:focus-visible` ring wired to the shared
+  `--focus` token, a layered (not flat) primary-button gradient and card
+  shadows, plus a real density pass: app-shell padding 12→8, brand 38→30, title
+  22→18, control sidebar 320→296, panel sections 7/9→5/8, section headings
+  12→10.5 with letter-spacing. Measured at 1440×900 across all four tabs: body
+  `scrollWidth == innerWidth` (1440, no horizontal overflow), topbar 38, tab
+  buttons 23, panel rows 51. Suite unchanged and verified after the edit: **32
+  passed** (browser e2e). Concept: [subsystems/webui.md](subsystems/webui.md).
+
+## 2026-08-07
+
 * **The web UI's own panel can overflow its card, and two bare `<select>`s had
   no accessible name — found by scanning the DOM, neither visible to the suite
   that was green.** Driving the app and inspecting every element whose
