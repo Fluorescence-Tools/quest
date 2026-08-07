@@ -63,6 +63,23 @@ def test_health() -> None:
     assert response.json()["status"] == "ok"
 
 
+def test_autoform_spec_endpoint() -> None:
+    client = TestClient(app)
+    response = client.get("/api/autoform-spec")
+    assert response.status_code == 200
+    data = response.json()
+    assert "sections" in data
+    assert len(data["sections"]) > 0
+
+    response_de = client.get("/api/autoform-spec?locale=de")
+    assert response_de.status_code == 200
+    assert response_de.json()["locale"] == "de"
+
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
 def test_template() -> None:
     client = TestClient(app)
     response = client.get("/api/template?with_fret=false")

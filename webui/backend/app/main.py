@@ -175,6 +175,19 @@ def get_parameter_catalog(locale: str | None = None) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@app.get("/api/autoform-spec")
+def get_autoform_spec(locale: str | None = None) -> dict[str, Any]:
+    """Return the AutoForm view specification JSON, optionally translated."""
+    from quest.gui.generate_view_spec import build_view_spec
+    try:
+        lang = locale or quest_i18n.DEFAULT_LOCALE
+        return build_view_spec(lang)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to generate AutoForm spec: {exc}") from exc
+
+
+
+
 @app.get("/api/i18n")
 def get_i18n(locale: str | None = None) -> dict[str, Any]:
     """The available languages, and the UI strings for the requested one."""

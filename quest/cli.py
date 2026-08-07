@@ -502,6 +502,26 @@ def gui() -> None:
     start_gui()
 
 
+@cli.command("rpc")
+@click.option("--zmq", is_flag=True, help="Run ZeroMQ RPC server.")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind ZeroMQ RPC server.")
+@click.option("--port", default=5555, show_default=True, type=int, help="Port to bind ZeroMQ RPC server.")
+def rpc_cmd(zmq: bool, host: str, port: int) -> None:
+    """Start QuEst RPC services (e.g. ZeroMQ RPC server)."""
+    from quest.rpc.dispatcher import ServiceDispatcher
+    from quest.rpc.services import register_services
+    from quest.rpc.zmq_server import ZMQServer
+
+    dispatcher = ServiceDispatcher()
+    register_services(dispatcher)
+
+    if zmq or True:
+        server = ZMQServer(dispatcher, host=host, port=port)
+        click.echo(f"Starting QuEst ZeroMQ RPC server on {server.endpoint}...")
+        server.start(in_background=False)
+
+
+
 def _validate_project(
     project: Mapping[str, Any],
     project_path: Path | None = None,

@@ -22,6 +22,9 @@ import {
 } from "../lib/projectHelpers";
 import { Tour } from "./tour/Tour";
 import { getTourLabels, getTourSteps } from "./tour/tourSteps";
+import { AutoForm } from "./autoform";
+import { AutoFormSpec } from "./autoform/types";
+
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -186,10 +189,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [clientReady, setClientReady] = React.useState(false);
   const [theme, setTheme] = React.useState<"light" | "dark">("dark");
   const [tourOpen, setTourOpen] = React.useState(false);
+  const [useAutoform, setUseAutoform] = React.useState(false);
+  const [autoformSpec, setAutoformSpec] = React.useState<AutoFormSpec | null>(null);
   const router = useRouter();
+
+  React.useEffect(() => {
+    if (useAutoform) {
+      fetch(`/api/autoform-spec?locale=${locale}`)
+        .then((res) => res.json())
+        .then((data) => setAutoformSpec(data))
+        .catch((err) => console.error("Failed to load AutoForm spec", err));
+    }
+  }, [useAutoform, locale]);
+
   React.useEffect(() => {
     setClientReady(true);
   }, []);
+
   // Hydrate the theme from storage; default to dark, but never override the
   // OS/hard refresh with a stale guess once an explicit value is saved.
   React.useEffect(() => {
@@ -429,19 +445,39 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       <section className="main-grid">
         <aside className="control-panel">
-          <div className="sidebar-header-toggle" data-tour="json">
+          <div className="sidebar-header-toggle" data-tour="json" style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "space-between" }}>
             <h2>Configuration</h2>
-            <label className="toggle-switch">
-              <span className="toggle-label">JSON Mode</span>
-              <div className="switch">
-                <input
-                  type="checkbox"
-                  checked={showJson}
-                  onChange={(event) => handleToggleJson(event.target.checked)}
-                />
-                <span className="slider"></span>
-              </div>
-            </label>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <label className="toggle-switch">
+                <span className="toggle-label">AutoForm</span>
+                <div className="switch">
+                  <input
+                    type="checkbox"
+                    checked={useAutoform}
+                    onChange={(event) => {
+                      setUseAutoform(event.target.checked);
+                      if (event.target.checked && showJson) setShowJson(false);
+                    }}
+                    data-testid="autoform-toggle"
+                  />
+                  <span className="slider"></span>
+                </div>
+              </label>
+              <label className="toggle-switch">
+                <span className="toggle-label">JSON</span>
+                <div className="switch">
+                  <input
+                    type="checkbox"
+                    checked={showJson}
+                    onChange={(event) => {
+                      handleToggleJson(event.target.checked);
+                      if (event.target.checked && useAutoform) setUseAutoform(false);
+                    }}
+                  />
+                  <span className="slider"></span>
+                </div>
+              </label>
+            </div>
           </div>
 
           <div
@@ -471,7 +507,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
           </div>
-          {!showJson ? (
+          {useAutoform ? (
+            <div className="panel-section autoform-wrapper" style={{ padding: "12px" }}>
+              {autoformSpec ? (
+                <AutoForm
+                  spec={autoformSpec}
+                  data={project}
+                  onChange={(path, val) => updateProject(path, val)}
+                  catalog={catalog || undefined}
+
+                />
+              ) : (
+                <div style={{ padding: "12px", color: "var(--text-muted)" }}>Loading AutoForm spec...</div>
+              )}
+            </div>
+          ) : !showJson ? (
+
             <div className="setup-vertical-stack">
               {currentTab === "/labeling" && (
                 <>
