@@ -121,12 +121,17 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         self.tabs.addTab(plots_widget, "Plots & Dynamics")
 
 
-        # Tab 2: Quenching Table
+        # Tab 2: 3D Molecular Structure (ChiMol)
+        from .chimol_widget import ChiMolStructureWidget
+
+        self.chimol_widget = ChiMolStructureWidget(self.model, self)
+        self.tabs.addTab(self.chimol_widget, "3D Structure (ChiMol)")
+
+        # Tab 3: Quenching Table
         self.quencher_widget = QuencherTableWidget(self.model, self)
         self.tabs.addTab(self.quencher_widget, "Quenching Chemistry")
 
-
-        # Tab 3: Project JSON State & Output Log
+        # Tab 4: Project JSON State & Output Log
         json_widget = QtWidgets.QWidget(self)
         json_layout = QtWidgets.QVBoxLayout(json_widget)
         self.json_edit = QtWidgets.QPlainTextEdit(json_widget)
@@ -170,6 +175,11 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         # Refresh quencher table
         if hasattr(self, "quencher_widget"):
             self.quencher_widget.refresh()
+
+        # Refresh ChiMol 3D structure viewer
+        if hasattr(self, "chimol_widget"):
+            self.chimol_widget.reload()
+
 
         # Refresh JSON view
         if hasattr(self, "json_edit"):

@@ -74,7 +74,9 @@ def test_transient_decay_generator_workspace(qtbot):
     assert w.splitter is not None
     assert w.plot_vsplitter is not None
     assert w.plot_hsplitter is not None
-    assert w.tabs.count() == 3
+    assert w.tabs.count() == 4
+    assert w.chimol_widget is not None
+
 
 
     # Test simulation run
