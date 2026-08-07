@@ -332,39 +332,46 @@ export default function ProteinViewer({
     loadGenerationRef.current = generation;
 
     async function loadNgl() {
-      if (!structure) {
-        disposeCurrentStage();
-        setFallbackViewer(false);
-        if (containerRef.current) {
-          containerRef.current.innerHTML = "";
-        }
-        setViewerStatus("Upload structure to inspect");
-        return;
-      }
-
       if (!containerRef.current) return;
 
       setFallbackViewer(false);
-      setViewerStatus("Loading NGL viewer");
 
       if (!hasWebGlSupport()) {
-        // NGL cannot run without WebGL and its internal render loop throws
-        // asynchronously if constructed anyway. Go straight to the fallback.
-        throw new Error("WebGL is not available in this browser");
+        setFallbackViewer(true);
+        setViewerStatus(structure ? `${structure.filename}` : "3D Viewport — WebGL unavailable");
+        return;
       }
 
       await ensureNglLoaded();
 
       if (disposed || !containerRef.current || !window.NGL) return;
 
-      disposeCurrentStage();
+      if (!stageRef.current) {
+        containerRef.current.innerHTML = "";
+        const stageInstance = new window.NGL.Stage(containerRef.current, {
+          backgroundColor: "white",
+          quality: "medium",
+        });
+        stageRef.current = stageInstance;
+        setStage(stageInstance);
+      }
 
-      const stageInstance = new window.NGL.Stage(containerRef.current, {
-        backgroundColor: "white",
-        quality: "medium",
-      });
-      stageRef.current = stageInstance;
-      setStage(stageInstance);
+      const stageInstance = stageRef.current;
+
+      if (componentRef.current) {
+        try {
+          stageInstance.removeComponent(componentRef.current);
+        } catch (error) {}
+        componentRef.current = null;
+        setComponent(null);
+      }
+
+      if (!structure) {
+        setViewerStatus("3D Viewport — Ready for PDB structure");
+        return;
+      }
+
+      setViewerStatus("Loading structure into 3D viewer");
 
       const fileExt = structure.filename.split(".").pop()?.toLowerCase() || "pdb";
       const blob = new File([structure.pdb_text], structure.filename, { type: "text/plain" });
@@ -388,6 +395,7 @@ export default function ProteinViewer({
       safeHandleResize(stageInstance);
       setViewerStatus(`${structure.filename}: ${structure.atom_count} atoms`);
     }
+
 
     loadNgl().catch((error) => {
       if (hasWebGlSupport()) {
@@ -761,11 +769,7 @@ export default function ProteinViewer({
       <div className="protein-viewer">
         <div ref={containerRef} className="ngl-stage" />
         {fallbackViewer && <canvas ref={fallbackCanvasRef} className="fallback-stage" />}
-        {!structure ? (
-          <div className="viewer-placeholder">{viewerStatus}</div>
-        ) : (
-          <div className="viewer-badge">{viewerStatus}</div>
-        )}
+        <div className="viewer-badge">{viewerStatus}</div>
         {structure && (
           // Without this the magenta spheres are unexplained decoration. They
           // are the quenching centres — the same atoms the simulation uses.
