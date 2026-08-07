@@ -77,6 +77,35 @@ inline styles, no per-component styling — so the look is changed by editing th
 stylesheet and *nothing else*. Class names, ids and visible text are contract:
 the browser suite pins them (`tests/test_webui_e2e.py`).
 
+## Guided tour (`components/tour/`)
+
+`Tour.tsx` is a **dependency-free, quest-agnostic onboarding overlay** — it
+imports nothing from quest, knows no i18n, and takes `steps` + `labels` as
+props. It is meant to be copy-pasted into FPSIMP unchanged (same React tree, no
+React DOM). QuEst's shape lives in `tourSteps.ts`: `getTourSteps(t)` returns
+`{ target, title, body }[]` spotting `[data-tour="…"]` hooks, `getTourLabels(t)`
+builds the control labels, and both pull every string through `t()` so the
+translation ratchet stays flat.
+
+How it works: opening locks `body` scroll; each step `scrollIntoView`s the
+target, measures it with `getBoundingClientRect`, and draws a transparent
+**spotlight** whose huge `box-shadow` (`0 0 0 9999px rgba(…,0.6)`) dims
+everything but the target — the one-element cutout, no four-pane mask. The
+tooltip card sits below (or above) the box, clamped into the viewport, and is
+repositioned on resize/scroll. Keys: `Esc`/click-elsewhere close, `←→` step,
+`Enter` advances. Labels (`next`, `prev`, `done`, `close`,
+`stepIndicator(c,t)`) are passed in already-translated. Spotlight targets live
+on `data-tour` attributes, so steps are stable under refactors. The "Tour"
+button is `data-testid="tour-btn"`; the tour's step copy is the `web.tour.*`
+keys in all three locales.
+
+## The CSS refresh
+
+The visual layer lives entirely in `webui/frontend/src/app/globals.css` — no
+inline styles, no per-component styling — so the look is changed by editing the
+stylesheet and *nothing else*. Class names, ids and visible text are contract:
+the browser suite pins them (`tests/test_webui_e2e.py`).
+
 A 2026-08-07 refresh made it denser and slightly more modern without touching
 the DOM:
 

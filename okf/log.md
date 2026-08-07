@@ -2,6 +2,25 @@
 
 ## 2026-08-07
 
+* **Web UI gains a guided user tour, built to be shared with FPSIMP.**
+  `webui/frontend/src/components/tour/Tour.tsx` is a quest-agnostic overlay —
+  no quest imports, no i18n, pure `steps`/`labels` props — so FPSIMP can reuse
+  the file unchanged. It locks body scroll, `scrollIntoView`s each target,
+  measures it and dims everything else with a one-element spotlight (a
+  transparent box whose `0 0 0 9999px` box-shadow is the mask; no four-pane
+  cutout), then shows a tooltip card clamped into the viewport, repositioned on
+  resize/scroll. Keys: Esc closes, ←/→/Enter step. QuEst's shape is
+  `tourSteps.ts` (`getTourSteps`/`getTourLabels`), targeting `data-tour="…"`
+  hooks on the tabs, structure panel, labeling panel and the Run button, with
+  all copy in `web.tour.*` keys across en/de/fr (ratchet flat). Triggered by a
+  compass button (`data-testid="tour-btn"`) in the topbar. Verified in a real
+  browser: every step spotlights and stays in-view, Done/Esc close and restore
+  body scroll. TypeScript clean, i18n **50 passed**, browser e2e **34 passed**
+  (two new `TestTour` tests). Concept:
+  [subsystems/webui.md](subsystems/webui.md).
+
+## 2026-08-07
+
 * **Web UI gains a light/dark theme switch.** A sun/moon button
   (`data-testid="theme-toggle"`) in the topbar toggles `data-theme` on `<html>`
   and persists the choice in `localStorage["quest-theme"]`. Defaults to dark;

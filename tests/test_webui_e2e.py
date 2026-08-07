@@ -168,6 +168,49 @@ class TestLayoutAndAccessibility:
             assert name and name.strip(), f"{testid} has no accessible name"
 
 
+class TestTour:
+    """The guided tour is a reusable overlay; test the QuEst shape of it.
+
+    Steps spotlight a target (`.tour-highlight` appears) and the control labels
+    come through `t()`, so the copy shown here is the English fallback.
+    """
+
+    def test_the_guide_walks_through_every_step(self, page: Page) -> None:
+        _load(page, "/labeling")
+        page.get_by_test_id("tour-btn").click()
+        expect(page.locator(".tour-card")).to_be_visible()
+        expect(page.locator(".tour-card-title")).to_have_text("Workflow tabs")
+
+        for title in ("Load a structure", "Place the dye", "Run the simulation"):
+            page.locator(".tour-btn.primary").click()
+            page.wait_for_timeout(300)
+            expect(page.locator(".tour-card-title")).to_have_text(title)
+
+        # Every step so far must have spotlighted something.
+        assert page.locator(".tour-highlight").count() == 1
+        # The card never leaves the viewport while the tour is open.
+        assert page.evaluate(
+            """() => {
+                const card = document.querySelector(".tour-card");
+                const r = card.getBoundingClientRect();
+                return r.top >= 0 && r.bottom <= window.innerHeight
+                    && r.left >= 0 && r.right <= window.innerWidth;
+            }"""
+        )
+
+        # Done closes the tour and restores body scroll.
+        page.locator(".tour-btn.primary").click()
+        expect(page.locator(".tour-card")).to_have_count(0)
+        assert page.evaluate("document.body.style.overflow") == ""
+
+    def test_escape_closes_the_tour(self, page: Page) -> None:
+        _load(page, "/labeling")
+        page.get_by_test_id("tour-btn").click()
+        expect(page.locator(".tour-card")).to_be_visible()
+        page.keyboard.press("Escape")
+        expect(page.locator(".tour-card")).to_have_count(0)
+
+
 class TestQuenchingEditor:
     def test_shows_pet_active_residues_with_chemistry(self, page: Page) -> None:
         _load(page, "/advanced")
