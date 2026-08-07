@@ -50,6 +50,8 @@ class TransientDecayGenerator(QtWidgets.QWidget):
 
         # Splitter: Left = AutoForm Controls, Right = Visualization Center
         self.splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal, self)
+        self.splitter.setHandleWidth(6)
+        self.splitter.setChildrenCollapsible(False)
         main_layout.addWidget(self.splitter)
 
         # Left AutoForm Panel
@@ -91,6 +93,8 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         plots_layout.setContentsMargins(2, 2, 2, 2)
 
         self.plot_vsplitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical, plots_widget)
+        self.plot_vsplitter.setHandleWidth(6)
+        self.plot_vsplitter.setChildrenCollapsible(False)
 
         self.decay_plot = QuEstPlotCanvas(
             title="Fluorescence Decay (Donor & FRET)",
@@ -101,6 +105,9 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         self.plot_vsplitter.addWidget(self.decay_plot)
 
         self.plot_hsplitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal, plots_widget)
+        self.plot_hsplitter.setHandleWidth(6)
+        self.plot_hsplitter.setChildrenCollapsible(False)
+
         self.traj_plot = QuEstPlotCanvas(
             title="Dye Trajectory", x_label="Time (ns)", y_label="|r − ⟨r⟩| (Å)"
         )
@@ -119,6 +126,7 @@ class TransientDecayGenerator(QtWidgets.QWidget):
 
         plots_layout.addWidget(self.plot_vsplitter)
         self.tabs.addTab(plots_widget, "Plots & Dynamics")
+
 
 
         # Tab 2: 3D Molecular Structure (ChiMol)
