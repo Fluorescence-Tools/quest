@@ -85,12 +85,16 @@ class ChiMolStructureWidget(QtWidgets.QWidget):
 
             structure, coords0 = load_structure_payload(path_obj, structure_factory=_Struct)
             name = path_obj.stem
-            if hasattr(self._viewer, "add_structure"):
-                self._viewer.add_structure(structure, coords0, name=name)
+            if structure is not None:
+                self._viewer.add_structure(structure, name=name, source_path=str(path_obj))
+            elif coords0 is not None:
+                import numpy as np
+                self._viewer.add_coordinates(np.asarray(coords0, dtype=float), name=name, source_path=str(path_obj))
             elif hasattr(self._viewer, "load_file"):
                 self._viewer.load_file(str(path_obj))
 
             self._loaded_pdb = str(path_obj)
+
         except Exception as exc:
             self._show_placeholder(f"3D Structure Viewer (ChiMol)\nFile: {path_obj.name}\n({exc})")
 
