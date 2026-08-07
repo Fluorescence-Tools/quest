@@ -76,8 +76,11 @@ class QuEstWindow(QtWidgets.QMainWindow):
 
         toolbar.addSeparator()
 
-        action_demo = toolbar.addAction("Demo Mode")
-        action_demo.triggered.connect(self._run_demo)
+        action_guide = toolbar.addAction("Guide")
+        action_guide.triggered.connect(self._run_guide)
+
+        action_help = toolbar.addAction("Help")
+        action_help.triggered.connect(self._show_help)
 
         action_web = toolbar.addAction("Open Web UI")
         action_web.triggered.connect(self._open_web_ui)
@@ -87,8 +90,6 @@ class QuEstWindow(QtWidgets.QMainWindow):
 
         # File Menu
         file_menu = mb.addMenu(self._t("menu.file"))
-        file_menu.addAction("Demo Mode (148L PDB)...").triggered.connect(self._run_demo)
-        file_menu.addSeparator()
         file_menu.addAction(self._t("menu.load_structure") + "...").triggered.connect(
             self.dg.onLoadPDB
         )
@@ -107,18 +108,32 @@ class QuEstWindow(QtWidgets.QMainWindow):
         action_run = sim_menu.addAction("Run Simulation")
         action_run.setShortcut("Ctrl+R")
         action_run.triggered.connect(self.dg.update_all)
-        sim_menu.addAction("Run 148L Demo Simulation").triggered.connect(self._run_demo)
 
         # Help Menu
         help_menu = mb.addMenu(self._t("menu.help"))
-        help_menu.addAction("Guided Tour / Demo Mode").triggered.connect(self._run_demo)
+        help_menu.addAction("Guide").triggered.connect(self._run_guide)
+        help_menu.addAction("Help / Documentation").triggered.connect(self._show_help)
+        help_menu.addSeparator()
         help_menu.addAction("Open Web Interface").triggered.connect(self._open_web_ui)
         help_menu.addSeparator()
         help_menu.addAction(self._t("menu.about")).triggered.connect(self._show_about)
 
-    def _run_demo(self) -> None:
+    def _run_guide(self) -> None:
         from .guided_tour import start_guided_tour
         start_guided_tour(self.dg, model=self.dg.model)
+
+    def _show_help(self) -> None:
+        from qtpy import QtWidgets
+        QtWidgets.QMessageBox.information(
+            self,
+            "QuEst Help & Documentation",
+            "<b>QuEst Tethered Dye Brownian Dynamics Simulator</b><br/><br/>"
+            "• <b>Guide</b>: Starts the step-by-step interactive workspace tour.<br/>"
+            "• <b>Load Structure</b>: Select a PDB macromolecular structure.<br/>"
+            "• <b>Run Simulation</b>: Compute dye diffusion, PET quenching, and decay histograms.<br/>"
+            "• <b>Web UI</b>: Open the local web interface on http://localhost:3000."
+        )
+
 
 
     def _create_statusbar(self) -> None:

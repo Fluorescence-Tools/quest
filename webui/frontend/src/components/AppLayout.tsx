@@ -310,9 +310,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <button
             className="theme-toggle"
             onClick={startDemoTour}
-            aria-label={t("web.tour", "Tour")}
-            title={t("web.tour", "Tour")}
-            data-testid="tour-btn"
+            aria-label={t("web.guide", "Guide")}
+            title={t("web.guide", "Guide")}
+            data-testid="guide-btn"
           >
             <svg className="btn-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3"></circle>

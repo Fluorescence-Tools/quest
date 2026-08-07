@@ -69,11 +69,16 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         btn_pdb.clicked.connect(self.onLoadPDB)
         header_box.addWidget(btn_pdb)
 
-        btn_demo = QtWidgets.QPushButton("Demo Mode", left_container)
-        btn_demo.clicked.connect(self.onDemoMode)
-        header_box.addWidget(btn_demo)
+        btn_guide = QtWidgets.QPushButton("Guide", left_container)
+        btn_guide.clicked.connect(self.onGuide)
+        header_box.addWidget(btn_guide)
+
+        btn_help = QtWidgets.QPushButton("Help", left_container)
+        btn_help.clicked.connect(self.onHelp)
+        header_box.addWidget(btn_help)
 
         left_layout.addLayout(header_box)
+
 
 
         try:
@@ -227,10 +232,22 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         self.refresh()
         return result
 
-    def onDemoMode(self):
-        """Start guided tour with 148L demo mode."""
+    def onGuide(self):
+        """Start interactive guided tour."""
         from .guided_tour import start_guided_tour
         return start_guided_tour(self, model=self.model)
+
+    def onHelp(self):
+        """Show parameter catalog / help dialog."""
+        QtWidgets.QMessageBox.information(
+            self,
+            "QuEst Help",
+            "<b>QuEst Help & Parameters</b><br/><br/>"
+            "• Configure dye parameters, attachment chain/residue/atom.<br/>"
+            "• Quenching chemistry table defines kQ and contact radii per residue.<br/>"
+            "• Press <b>Run Simulation</b> to calculate fluorescence decay."
+        )
+
 
     def update_all(self):
         """Simulate, then show the result."""

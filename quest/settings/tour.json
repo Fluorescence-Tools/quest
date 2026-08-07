@@ -1,17 +1,17 @@
 {
-  "title": "QuEst Guided Tour & Demo Mode",
+  "title": "QuEst Interactive Guide",
   "demo_pdb": "148l.pdb",
   "steps": [
     {
       "id": "welcome",
-      "title": "Welcome to QuEst Demo Mode",
+      "title": "Welcome to the QuEst Guide",
       "text": "This guided tour walks through tethered dye Brownian dynamics simulations using <b>T4 Lysozyme (PDB: 148L)</b> as the reference structure.<br/><br/>Click <b>Next</b> to explore the workspace.",
-      "target": {"action": "Demo Mode"}
+      "target": {"action": "Guide"}
     },
     {
       "id": "load_structure",
       "title": "Structure Loading (148L PDB)",
-      "text": "The PDB file defines the macromolecular coordinates for dye attachment and collision calculations. In demo mode, <b>148l.pdb</b> is automatically loaded as the target structure.",
+      "text": "The PDB file defines the macromolecular coordinates for dye attachment and collision calculations. In guide mode, <b>148l.pdb</b> is automatically loaded as the target structure.",
       "target": {"action": "Load PDB"}
     },
     {
