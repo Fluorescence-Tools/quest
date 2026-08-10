@@ -1,6 +1,216 @@
 # Update Log
 
+## 2026-08-10
+
+* **A session's worth of finished work was sitting uncommitted; it is committed
+  now, in five pieces.** The bundle described the 2026-08-09 AutoForm migration
+  and the 2026-08-07 desktop viewer work as landed, and the tree held all of it
+  as modifications. Committed as `74d7421` (gitignore), `c79ec26` (water),
+  `c31e3d2` (RPC), `7170f58` (web AutoForm), `30fae2c` (click-to-select), each
+  verified green rather than taken on trust. Re-measured baseline:
+  **695 passed, 1 skipped** — two more than the 693 the handover recorded, from
+  tests added after that measurement.
+
+* **`.gitignore` had been hiding three frontend sources, and the frontend could
+  not be built from a clean clone.** The standard Python-packaging block
+  contains an unanchored `lib/`, which also matches
+  `webui/frontend/src/lib/` — so `autoformPaths.ts` (the fix the 2026-08-09
+  entry below is *about*), `parameterCatalog.ts` and `projectHelpers.ts` had
+  never been committed, in a tree whose history looked clean. The working copy
+  was the only copy. `/lib/` and `/lib64/` are anchored to the repository root
+  now; neither directory exists here, so nothing else changed.
+
+  **The general lesson is worth more than the fix: `git status` looks clean
+  when a file is ignored, so "the tree is clean" is not evidence that the tree
+  is committed.** `git status --ignored=matching --untracked-files=all` is what
+  answers the question, and it is cheap to run before trusting a handover
+  sentence that says everything is committed.
+
+* **The ZMQ transport did not serialise its results, and had lost an error
+  code.** `process_message` returned the dispatcher envelope untouched, so a
+  handler returning a native object (numpy array, `DecaySimulationResult`)
+  raised inside `json.dumps` and the caller got no reply at all; the transport
+  is exactly the boundary [the contract](/subsystems/rpc.md) names for
+  `to_payload`. It converts there now — and only when the envelope *has* a
+  `result`, since a failure envelope carries none and should not be handed a
+  null one. `serve_one` also no longer lets an unhandled error kill the poll
+  loop without replying.
+
+  Separately, both `fail()` call sites had been downgraded from
+  `invalid_request`/`invalid_payload` to the default `operation_failed`, with
+  tests written to match. The cause is that `service_error` *validates* codes
+  against `ERROR_CODES` and neither name was in the table — so the passing test
+  encoded the workaround. `invalid_request` is in the table now (a malformed
+  envelope is the caller's fault, not a failed operation, and a host reacts to
+  it differently), the call sites are restored, and the tests assert the code.
+
+* **One water filter, not two.** `metadata.py` carried a byte-identical copy of
+  `reader.strip_water_pdb_text` under a private name; it imports the one
+  implementation now. Same behaviour, one place to correct it.
+
+## 2026-08-09
+
+* **The web UI is AutoForm-only; the legacy hand-written form is gone.**
+  QuEst's two presentation surfaces now share one declarative view spec — the
+  desktop renders `quest.view.json` through ChiSurf's AutoForm, and the web
+  renders the same spec from `/api/autoform-spec` through the React
+  `components/autoform`. No form is hand-written in either toolkit.
+
+  - `webui/frontend/src/components/AppLayout.tsx` dropped its three-way
+    `useAutoform ? <AutoForm> : !showJson ? <legacy> : <json>` ternary and the
+    AutoForm/JSON toggle pair; AutoForm is unconditional and only the JSON
+    overlay toggle remains. The whole `<div className="setup-vertical-stack">`
+    legacy block (~540 lines) was deleted, along with the now-dead
+    `useAutoform` state, `Field`/`HelpBadge`/`getParameterHelp` imports and the
+    `chainSelectDisabled`/`residueSelectDisabled`/`atomSelectDisabled` vars.
+  - The scan residue picker + Calculate Scan button moved out of the deleted
+    sidebar into `webui/frontend/src/app/scan/page.tsx` (a new "Scan Settings"
+    card above the results), so the scan workflow survives AutoForm-only.
+  - **Bug fix (web AutoForm): flat `attr` names never matched the nested
+    project schema.** The view spec names fields by their `ProjectFormModel`
+    flat attribute (`attachment_chain`, `fret_enabled`, `fret_R0`), but the
+    project JSON stores `attachment.chain`, `fret.enabled`,
+    `fret.R0_matrix[0][1]`. The web AutoForm wrote/read flat keys that the
+    backend rejects. New `webui/frontend/src/lib/autoformPaths.ts` maps every
+    `attr` to its project path; `AutoSection` resolves through it. The write
+    path routes `fret.enabled` to `setFretEnabled` (which seeds the acceptor
+    dye and R0 — a bare `fret.enabled=true` left a one-dye project) and
+    `fret.R0_matrix.0.1` to `setForsterRadius` (a list cell `setNested` cannot
+    index). `test_autoform_blueprint.py` keeps the map in step with the catalog.
+  - **Browser e2e tests rewritten for AutoForm selectors** (`test_webui_e2e.py`):
+    the `_use_legacy_form` helper is deleted; helpers `_autoform_field` /
+    `_autoform_input` / `_autoform_check` locate AutoForm fields by label;
+    tests write chain/residue through the AutoForm number inputs or the JSON
+    editor; FRET tests toggle `fret.enabled` via the AutoForm checkbox. The
+    test id for the guide button is `guide-btn` (was `tour-btn`); the
+    `_server_is_up` timeout is 10 s (a Next.js dev server takes >3 s cold).
+  - **Two pre-existing baselines fixed along the way:** the i18n hardcoded-
+    string ratchet dropped 91 → 74 (the legacy form was most of the backlog),
+    and `test_backend_api.py`'s atom_count updated 1525 → 1385 (water
+    stripping, same as the earlier `test_runs_and_structure_info.py` fix).
+
+  Baselines: **693 passed, 1 skipped** (library + Qt + backend) and **54
+  passed** (browser e2e). The two previously-reported browser failures (tour
+  cross-page navigation and the FRET simulation 500) were both fixed: the FRET
+  500 was the missing acceptor-seeding bug above, and the tour test now passes.
+  Concept: [specs/autoform-scheme.md](specs/autoform-scheme.md).
+
+## 2026-08-08
+
+* **Plot-population tests for both GUI surfaces: verify the actual curves reach
+  the canvas, not just the model.** The existing tests checked that the model's
+  data series (`decay_series()`, `trajectory_series()`, …) were non-empty after
+  a run — which proves the simulation worked, but not that the user *sees* a
+  curve. New tests pin the rendering path end-to-end:
+
+  - **PyQt** (`tests/test_gui_simulation.py`, 3 new):
+    `test_the_pyqtgraph_canvases_carry_curves` inspects the pyqtgraph
+    `PlotWidget`'s `listDataItems()` after `refresh()` — every canvas (decay,
+    trajectory, autocorrelation) must hold a curve with real points.
+    `test_a_fret_run_populates_two_decay_curves` checks the FRET case produces
+    two curves on the decay canvas. `test_a_screenshot_is_non_blank` grabs the
+    widget to a pixmap and verifies >10 distinct colours, proving something was
+    actually painted.
+
+  - **Web** (`tests/test_webui_e2e.py`, 4 new `TestWebPlotsPopulate`):
+    `test_decay_path_has_coordinates`,
+    `test_trajectory_path_has_coordinates`,
+    `test_autocorrelation_path_has_coordinates` verify the SVG `<path>`
+    elements (`path.donor-line`, `path.trajectory-line`,
+    `path.autocorr-line`) carry `d` attributes with >5 line segments after a
+    simulation. `test_plots_are_empty_before_a_run` verifies the empty-state
+    message shows and no `path.donor-line` exists before any run.
+
+  Also fixed: the `_server_is_up` timeout was 3 s, but a Next.js dev server
+  takes 4-6 s on first request, causing the entire browser suite to skip.
+  Raised to 10 s. The `_use_legacy_form` helper now uses `evaluate()` to toggle
+  the AutoForm checkbox (the styled switch's real checkbox is hidden, so
+  Playwright's click times out intermittently).
+
+* **Fixed 5 test failures from in-flight changes and filled ZMQ transport gaps.**
+  - **Duplicate `pdb` in view spec** (`test_view_spec`): the read-only structure
+    display in the dock panel was bound to `attr: "pdb"`, same as the file picker.
+    Added `ProjectFormModel.structure_label` (a derived read-only property showing
+    the filename) and pointed the dock panel at it. Regenerated all three view
+    specs. The drift guard (`test_each_scalar_field_appears_exactly_once`) passes.
+  - **Atom-count baseline** (`test_runs_and_structure_info`): water stripping
+    changed `atom_count` from 1525 to 1385 and chain E residues from 291 to 164
+    (HOH waters removed). Updated the assertion.
+  - **Missing `web.guide` i18n key** (`test_i18n`): the frontend references
+    `t("web.guide")` for the Guide button; added to en/de/fr locale files.
+  - **Missing OKF frontmatter** (`chisurf-autoform-integration.md`): added YAML
+    frontmatter to satisfy `okf_validate.py`.
+  - **ZMQ transport gap tests** (6 new in `test_zmq_rpc.py`): `quest.scan`,
+    `quest.dyes.save`, `quest.runs.get`, `quest.jobs.get` were tested in-process
+    only; now each has a ZMQ round-trip test. All 16 RPC methods are now covered
+    on at least two transports.
+  - **Browser e2e selector fixes** (`test_webui_e2e.py`): the AutoForm toggle
+    introduced two `.toggle-switch .switch` elements, breaking strict-mode
+    locators; `tour-btn` testid was renamed to `guide-btn`; tests that need the
+    hand-written form now call `_use_legacy_form(page)` to switch off AutoForm.
+    Result: 48 of 50 browser tests pass (was 27 of 50).
+
+  Baseline: **669 passed, 1 skipped** (library + Qt + backend); **48 passed,
+  2 failed** (browser e2e — tour cross-page navigation and a FRET simulation
+  500, both pre-existing). OKF: 0 errors, 0 warnings without `--check-paths`.
+
+* **Comprehensive test coverage for the plugin blueprint: all 16 RPC methods,
+  the ZMQ wire transport, the API facade, and the autoform view-spec contract.**
+  Four new test files (139 tests total) pin the surfaces that make QuEst a
+  reusable ChiSurf plugin / webapp / Electron app / standalone PyQt app:
+
+  - `tests/test_rpc_methods.py` (70 tests): every registered RPC method through
+    the in-process transport — success shape, error shape, JSON serializability,
+    envelope consistency.
+  - `tests/test_zmq_rpc.py` (24 tests, replaces the 1-test original): every
+    read-only method over a real ZMQ REQ/REP socket, the wire protocol (id
+    echo, unknown method, garbage payload), and `process_message` directly.
+  - `tests/test_api_facade.py` (25 tests): every public verb on `quest.api`
+    (`template`, `validate`, `simulate`, `scan`, `describe`, `parameter_catalog`,
+    `dyes`, `structure_metadata`), the `use_client` swap mechanism, error
+    propagation, and the native-vs-serialised boundary.
+  - `tests/test_autoform_blueprint.py` (20 tests): the view-spec generation
+    pipeline — committed JSON files vs. generated output (drift guard), the
+    form-model binding contract, and cross-surface consistency (catalog ↔ spec
+    ↔ project template ↔ TypeScript renderer types).
+
+  **Bug fix in `quest/rpc/zmq_server.py`:** the ZMQ server used
+  `invalid_request` and `invalid_payload` as error codes, which are not in
+  `ERROR_CODES`; the resulting `ValueError` crashed the server thread and left
+  the REQ/REP socket permanently stuck. Fixed to use `operation_failed` (the
+  generic catch-all), and `serve_one` now catches any unhandled exception and
+  always sends a reply so the socket pairing never breaks.
+
+  **Bug fix in `quest/rpc/zmq_server.py`:** the server now calls
+  `to_payload` before `json.dumps`, making it a proper transport per the
+  contract. Previously it tried to `json.dumps` a native `DecaySimulationResult`
+  (with numpy arrays), which raises `TypeError`.
+
+  **Expanded `tests/test_webui_e2e.py`:** new `TestApiEndpoints` (11 browser
+  tests pinning every REST endpoint — health, template, parameter-catalog,
+  dyes, quenching-defaults, i18n, jobs, autoform-spec), plus
+  `TestStructureMetadataViaBrowser` and `TestJsonProjectEditor` for the upload
+  and JSON-editor workflows.
+
+  Baseline with the new suite: **680 passed, 1 skipped** (library + Qt GUI +
+  web backend). The 6 pre-existing failures are from in-flight changes
+  (water stripping changed atom_count, view-spec has a duplicate `pdb` field)
+  and are not introduced by this work. Concept:
+  [specs/autoform-scheme.md](specs/autoform-scheme.md),
+  [specs/plugin-integration.md](specs/plugin-integration.md).
+
 ## 2026-08-07
+
+* **Water is now explicitly stripped after the IMP parse, as a defensive
+  guarantee.** `_strip_waters` in `quest/core/structure/reader.py` removes every
+  atom whose residue name identifies it as water (`HOH`, `WAT`, `TIP3`, `SOL`,
+  … — see `_WATER_RESIDUE_NAMES`). IMP's default PDB selector already drops
+  waters, but relying on that alone couples QuEst's correctness to an external
+  default. The filter runs in `_read_with_imp` and is case-insensitive,
+  whitespace-tolerant and safe on empty arrays. No numeric change — baselines
+  are identical because IMP was already stripping. Covered by
+  `tests/test_water_stripping.py` (10 tests). Concept:
+  [subsystems/structure-io.md](subsystems/structure-io.md).
 
 * **Tour is now exhaustive and cross-page; `before` hook drives routing.**
   `Tour.tsx` runs `step.before?.()` when a step becomes current and then polls

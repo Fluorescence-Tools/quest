@@ -1,11 +1,26 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with
-code in this repository.
+This file provides guidance to AI coding agents working in this repository.
 
 QuEst (QUenching ESTimation) predicts the fluorescence decay of a dye tethered
 to a protein by a flexible linker, from the structure alone — PET quenching by
 nearby amino acids, plus optional FRET.
+
+## Both surfaces must stay in sync
+
+QuEst has **two user-facing surfaces**: the **PyQt desktop GUI** (`quest/gui/`)
+and the **Web UI** (`webui/`). Every feature must work on both. A change that
+only reaches one surface is a bug. When adding or changing a feature:
+
+1. **Identify both surfaces.** Search for the feature in both `quest/gui/` and
+   `webui/frontend/src/`. If it exists in one, it must exist in the other.
+2. **Implement on both.** Do not defer the second surface to a later commit.
+3. **Test on both.** The PyQt tests (`tests/test_pyqt_*.py`) and the browser
+   e2e (`tests/test_webui_e2e.py`) must both pass.
+4. **The sequence viewer, 3D structure viewer, and AA selection** are the most
+   common divergence points. Click-to-select a residue in the 3D viewer, the
+   sequence bar, or the autoform dropdowns must update the same model state on
+   both surfaces.
 
 ## Read the OKF bundle first — it is this project's memory
 

@@ -11,6 +11,32 @@ stale_after: 2026-10-28
 
 # Read this, then [`specs/programme-2026-07.md`](specs/programme-2026-07.md), then [`log.md`](log.md)
 
+**2026-08-10 — everything below is now committed, and `.gitignore` was hiding
+three frontend sources.** The AutoForm migration and the desktop viewer work
+described here as "landed" were all uncommitted modifications; they are five
+commits now (`74d7421`, `c79ec26`, `c31e3d2`, `7170f58`, `30fae2c`), each
+re-verified rather than trusted. **`lib/` in `.gitignore` was unanchored and
+also matched `webui/frontend/src/lib/`**, so `autoformPaths.ts`,
+`parameterCatalog.ts` and `projectHelpers.ts` had never been committed and the
+frontend could not be built from a clean clone — fixed by anchoring `/lib/`.
+The library baseline is **695 passed, 1 skipped** (two more than the 693 below,
+from tests added after that measurement). Nothing is pushed.
+
+**2026-08-09 — the web UI is AutoForm-only, and the previous headline
+baselines changed.** The legacy hand-written React form was deleted from
+`webui/frontend/src/components/AppLayout.tsx`; AutoForm (backed by the same
+`/api/autoform-spec` JSON the desktop renders through ChiSurf) is unconditional,
+with only a JSON overlay toggle remaining. The scan residue picker moved into
+`webui/frontend/src/app/scan/page.tsx`. A real **web AutoForm bug** was fixed
+en route: the flat `attr` names in the view spec never matched the nested
+project schema, so FRET never seeded its acceptor and several fields wrote keys
+the backend rejected — see `webui/frontend/src/lib/autoformPaths.ts`.
+
+Final baselines (measured 2026-08-09): **693 passed, 1 skipped** (library + Qt
++ backend) and **54 passed** (browser e2e, Playwright). Both browser failures
+that were open on 2026-08-08 (tour cross-page navigation, FRET simulation 500)
+are **closed** — the 500 was the acceptor-seeding bug above.
+
 **2026-08-06 — the bundle is now OKF v0.2, and every path in it was re-checked
 against the tree.** The migration added the frontmatter families, `sources`,
 `okf_version: "0.2"`, a vendored validator, and two new concepts
@@ -35,13 +61,12 @@ python3 okf/references/tools/okf_validate.py okf --version 0.2 \
 ```
 
 **The baseline is 0 warnings without `--check-paths`** (no concept is stale)
-**and 21 with it** -- every one a sentence that names a path *because it is
-gone*. More than 21 means something new rotted — all of them prose that names a path
-because it is gone. More than 20 means something new rotted. The sentence below
-about `known-issues.md` having no open entry was true on 2026-07-28 and is not
-now.
+**and 20 with it** (re-measured 2026-08-10) -- every one a sentence that names a
+path *because it is gone*. More than 20 means something new rotted. The sentence
+below about `known-issues.md` having no open entry was true on 2026-07-28 and is
+not now.
 
-**Everything else is committed and clean; nothing is pushed.** A thirteen-phase
+**Nothing is pushed.** A thirteen-phase
 programme was agreed by interview on 2026-07-28 and **twelve of its thirteen
 phases are done** (seventeen commits in `quest`, two in `imp-tricks`, one in
 `chisurf`). **Every `LAY-*` row is closed, on both sides.**
@@ -61,14 +86,15 @@ everything ([workflows/environment.md](workflows/environment.md)).
 
 | | tests |
 |---|---|
-| library + Qt GUI + web backend, one command | **531 passed, 1 skipped** |
+| library + Qt GUI + web backend, one command | **695 passed, 1 skipped** |
 | notebooks + examples (`-m notebooks`) | **16 passed, 2 skipped** |
-| browser e2e (Playwright, both servers up) | **27 passed** |
+| browser e2e (Playwright, both servers up) | **54 passed** |
 | ChiSurf `quenching_estimator` | **14 passed** |
 | notebooks + examples (`-m notebooks`, cold cache) | **16 passed** |
 | imp-tricks `tests/bff` | **201 passed, 24 skipped, 5 failed** — the 5 predate all of this |
 
-Nothing in that table is stale: every row was measured on 2026-07-28.
+Library row measured 2026-08-10, browser row 2026-08-09; the rest last measured
+on 2026-07-28 and unchanged since.
 
 **Numbers moved twice, and both are re-baselined in `tests/baselines/`.** If you
 are comparing against anything computed before 2026-07-28, read the phase 3 and
@@ -129,16 +155,25 @@ residue identity were both wrong, on both backends.
    The prune of [references/known-issues.md](references/known-issues.md) is
    done (`a78709a`).
 
-# A trap the catalog hides
+# A solved trap: the catalog drove a three-place edit
 
-**A parameter added to `quest/settings/parameter_catalog.json` reaches
-`doc/parameters*.md` and the Qt form automatically — and the web UI never.**
-`quest/gui/quest.view.json` is *generated* from the catalog;
-`webui/frontend/src/components/AppLayout.tsx` is hand-written React. `fret.kappa2`
-shipped on 2026-07-28 with two of the three surfaces wired and nothing failing.
+> **Closed 2026-08-09.** The web form is AutoForm-only now. Previously the Qt form
+> was generated from the catalog but the web form was hand-written React, so
+> adding a parameter was a three-place edit and the web was the surface that
+> fell behind (`fret.kappa2` shipped there on 2026-07-28 with two of three
+> surfaces wired).
 
-Until the web panel is generated from the catalog too, adding a parameter is a
-**three-place** edit, and only two of them are automatic.
+**A parameter added to `quest/settings/parameter_catalog.json` now reaches
+every surface from one spec.** `quest/gui/quest.view.json` is *generated* from
+the catalog; `/api/autoform-spec` serves the same `build_view_spec(locale)`;
+the desktop renders it through ChiSurf's AutoForm and the web through
+`webui/frontend/src/components/autoform/`. The glue that keeps the web in step
+with the project schema is `webui/frontend/src/lib/autoformPaths.ts` (spec
+`attr` → nested project path), and `tests/test_autoform_blueprint.py` fails if
+the catalog grows a parameter that map does not cover.
+
+Adding a parameter is now a **one-place** edit (the catalog) with the mapping
+table the one follow-up, not three hand-synchronised surfaces.
 
 # Still open, needing a decision
 
@@ -162,6 +197,31 @@ Until the web panel is generated from the catalog too, adding a parameter is a
 Ordered by how much. The first four were all learned or corrected on
 2026-07-28.
 
+- **"The tree is clean" is not evidence that the tree is committed.** An
+  ignored file never appears in `git status`, and `lib/` in `.gitignore` — the
+  unanchored entry from the standard Python block — matched
+  `webui/frontend/src/lib/`, so three frontend sources lived only in the
+  working copy for weeks. Before trusting such a sentence, run
+  `git status --ignored=matching --untracked-files=all` and read past the
+  `node_modules`/`.pixi` noise.
+- **A view-spec `attr` is not the project path.** The spec names fields by the
+  flat `ProjectFormModel` attribute (`attachment_chain`, `fret_enabled`,
+  `fret_R0`), and the project JSON is nested (`attachment.chain`,
+  `fret.enabled`, `fret.R0_matrix[0][1]`). Reading/writing the flat key silently
+  produced projects the backend rejected — FRET never seeded its acceptor and
+  "worked" as a one-dye donor run. The web resolves through
+  `webui/frontend/src/lib/autoformPaths.ts`; the Qt side has `FIELD_PATHS`.
+- **Enabling FRET is not `set fret.enabled = true`.** The acceptor dye and R0
+  matrix must be seeded (on the last labelable residue, not a water); a bare
+  toggle leaves a project that "validates" but cannot transfer. The web routes
+  the `fret.enabled` field through `setFretEnabled` for this reason.
+- **The Next.js dev server takes > 3 s on a cold request**, which was silently
+  skipping the entire browser suite (the module-scoped `_server_is_up` check).
+  The timeout is 10 s now; prime the frontend with one request before a run.
+- **A styled toggle's real checkbox is hidden** (`.switch input` is
+  `display:none`), so Playwright's `.click()` on the switch times out
+  intermittently. Drive the checkbox through its label or `evaluate()`, or use
+  `.check()` — not a click on the visible `.slider`.
 - **Clear *both* numba caches.** `tests/conftest.py` imports ChiSurf, which sets
   `NUMBA_CACHE_DIR=~/.chisurf/cache` into `os.environ`, so under pytest numba
   reads and writes *there* — not beside the source. The command recorded here
