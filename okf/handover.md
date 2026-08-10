@@ -19,8 +19,9 @@ re-verified rather than trusted. **`lib/` in `.gitignore` was unanchored and
 also matched `webui/frontend/src/lib/`**, so `autoformPaths.ts`,
 `parameterCatalog.ts` and `projectHelpers.ts` had never been committed and the
 frontend could not be built from a clean clone — fixed by anchoring `/lib/`.
-The library baseline is **695 passed, 1 skipped** (two more than the 693 below,
-from tests added after that measurement). Nothing is pushed.
+The library baseline is **706 passed, 1 skipped** — 695 after the sweep, plus
+the eleven tests that came with the desktop-run and CI work below. Nothing is
+pushed.
 
 **2026-08-09 — the web UI is AutoForm-only, and the previous headline
 baselines changed.** The legacy hand-written React form was deleted from
@@ -94,14 +95,14 @@ everything ([workflows/environment.md](workflows/environment.md)).
 
 | | tests |
 |---|---|
-| library + Qt GUI + web backend, one command | **695 passed, 1 skipped** |
+| library + Qt GUI + web backend, one command | **706 passed, 1 skipped** |
 | notebooks + examples (`-m notebooks`) | **16 passed, 2 skipped** |
 | browser e2e (Playwright, both servers up) | **54 passed** |
 | ChiSurf `quenching_estimator` | **14 passed** |
 | notebooks + examples (`-m notebooks`, cold cache) | **16 passed** |
 | imp-tricks `tests/bff` | **201 passed, 24 skipped, 5 failed** — the 5 predate all of this |
 
-Library row measured 2026-08-10, browser row 2026-08-09; the rest last measured
+Library row measured 2026-08-10 (re-measured after the desktop-run change), browser row 2026-08-09; the rest last measured
 on 2026-07-28 and unchanged since.
 
 **Numbers moved twice, and both are re-baselined in `tests/baselines/`.** If you
@@ -135,14 +136,20 @@ residue identity were both wrong, on both backends.
    changes: publish to anaconda.org (`tpeulen`) and PyPI, then pin the version
    in `pixi.toml` and `rattler-recipe/recipe.yaml` in place of the current `*`.
 
-   **The standing consequence is that two CI jobs cannot solve.** `pixi.toml`
-   declares `imp-tricks = "*"` on the `py` feature, and no public channel has
-   it, so the `default` and `desktop` environments are unsolvable:
+   **The two red CI jobs are fixed (2026-08-10), without publishing anything.**
+   `default` and `desktop` were unsolvable because the `py` feature required
+   `imp-tricks`, which no channel serves — and, it turned out, also `labellib`,
+   whose numpy-2 builds are on the **`dev` label** of the `tpeulen` channel
+   rather than its root. `pixi lock` now solves all four environments. What it
+   cost is stated rather than hidden: a pixi environment cannot compute an
+   accessible volume, so **141 tests skip there with that reason and ~550 still
+   run**. Details in [workflows/environment.md](workflows/environment.md) and
+   [workflows/testing.md](workflows/testing.md).
 
    | CI job | environment | state |
    |---|---|---|
-   | `test` | `default` (`py` + web + test) | **red — cannot solve** |
-   | `gui` | `desktop` (`py` + gui + web + test) | **red — cannot solve** |
+   | `test` | `default` (`py` + web + test) | **solves; ~550 tests, 141 skipped** |
+   | `gui` | `desktop` (`py` + gui + web + test) | **solves** (the Qt suite skips without ChiSurf, as before) |
    | `frontend` | `frontend` (separate solve-group) | green |
    | `package` | `build` (`no-default-feature`) | green |
 
@@ -150,14 +157,8 @@ residue identity were both wrong, on both backends.
    `build` never carry the `py` feature. Corrected 2026-07-28 by reading
    `pixi.toml`'s `[environments]` against `.github/workflows/ci.yml`.
 
-   A permanently red job is worse than a missing one, because it trains people
-   to ignore the light. **This is unresolved and wants a decision** — see the
-   next section.
-   **This needs credentials and is the one phase that cannot be done
-   unattended.** The recipe is written
-   (`~/dev/imp-tricks/rattler-recipe/recipe.yaml`) and the version is bumped.
-   Publication is what turns CI green — the `*` constraint makes all four jobs
-   red today, deliberately.
+   Publishing imp-tricks remains the thing that would make CI cover the
+   simulation path, and it still needs credentials.
 
 2. **Phase 13 — the last of the closeout**: rewrite this file once 12 lands.
    The prune of [references/known-issues.md](references/known-issues.md) is
@@ -185,13 +186,11 @@ table the one follow-up, not three hand-synchronised surfaces.
 
 # Still open, needing a decision
 
-- **What to do about the two permanently red CI jobs**, now that publication is
-  off the table indefinitely. Three options, none taken: make `imp-tricks` an
-  *optional* pixi feature so `default`/`desktop` solve and the IMP-dependent
-  tests skip explicitly; disable the two jobs with a comment pointing here; or
-  leave them red and accept that CI signals nothing for the library and GUI.
-  The first is the only one that keeps CI meaningful, and it costs an honest
-  accounting of what is then untested.
+- ~~**What to do about the two permanently red CI jobs**~~ — **done
+  2026-08-10**, by the first of the three options: `imp-tricks` is a pixi
+  feature no environment uses, and the tests that need it skip with a stated
+  reason (141 of them). The accounting it was said to cost is in
+  [workflows/testing.md](workflows/testing.md).
 - **Where ChiSurf's fps.json `payload.py` belongs** (`DUP-07` remainder). The
   owner is not convinced `chisurf/core` is right. Nothing depends on it.
 - **`asa`/`spherePoints` → `IMP.cgmol.sterics.asa`** (`DUP-05` remainder). Cold

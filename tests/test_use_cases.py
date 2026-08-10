@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import json
 import numpy as np
+import pytest
 from pathlib import Path
 from click.testing import CliRunner
 
@@ -112,6 +113,7 @@ def test_cli_validate_use_case(tmp_path: Path) -> None:
     assert "valid" in result.output.lower()
 
 
+@pytest.mark.needs_av
 def test_cli_simulate_use_case(tmp_path: Path) -> None:
     """Test CLI simulate command with output csv/json generation."""
     runner = CliRunner()
@@ -131,6 +133,7 @@ def test_cli_simulate_use_case(tmp_path: Path) -> None:
     assert "donor" in lines[0]
 
 
+@pytest.mark.needs_av
 def test_cli_simulate_grid_sweep_use_case(tmp_path: Path) -> None:
     """Test CLI simulate command doing a grid parameter sweep."""
     runner = CliRunner()

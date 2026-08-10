@@ -52,6 +52,7 @@ def test_quencher_widget(qtbot):
     tbl._reset_defaults()
 
 
+@pytest.mark.needs_av
 def test_transient_decay_generator_workspace(qtbot):
     from pathlib import Path
     pdb_path = Path(__file__).parent / "148l.pdb"

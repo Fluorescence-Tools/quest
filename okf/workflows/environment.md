@@ -17,7 +17,7 @@ sources:
 
 # pixi drives the whole project
 
-`pixi.toml` declares five environments — `default` (library, CLI, web backend),
+`pixi.toml` declares four environments — `default` (library, CLI, web backend),
 `desktop` (adds Qt), `frontend` (the Node toolchain), and `build`
 (rattler-build alone, so packaging does not solve the science stack):
 
@@ -32,6 +32,32 @@ pixi run -e build build-pkg      # conda package via rattler-build
 The conda package comes from `rattler-recipe/recipe.yaml`; `conda-recipe/` and
 its `conda mambabuild` workflow are gone, as is the CI that filtered on
 `modules/quest/**` and therefore never ran.
+
+## All four environments solve again (2026-08-10)
+
+`default` and `desktop` were unsolvable — and their two CI jobs permanently red
+— because the `py` feature required packages no public channel serves. Both
+causes are now handled, and they are different:
+
+- **`labellib` comes from the `dev` label of the owner's channel.** Not the
+  channel root: `https://conda.anaconda.org/tpeulen`'s `main` label stops at the
+  2020 builds, which are py37-py39 and pin `numpy <2`, so the solve failed with
+  *"labellib 1.0.0 would require numpy >=1.22.4,<2.0a0"* against this project's
+  `numpy >=2.0`. The `dev` label carries py310-py313 builds against numpy ≥ 2.2.
+  It has no `osx-64` or `linux-aarch64` build, so the `py` feature restricts
+  itself to `osx-arm64`, `linux-64` and `win-64` — which is exactly the CI
+  matrix (ubuntu / macos-arm / windows).
+- **`imp-tricks` is a feature no environment uses.** Publication was ruled out
+  (2026-07-28, it stays local), so anything that required it would make
+  `pixi lock` fail outright. The feature is declared, unreferenced, one word in
+  `[environments]` away from being switched on the day it is published.
+
+The consequence is stated rather than glossed: **a pixi environment cannot
+compute an accessible volume**, because both AV backends dispatch through
+`IMP.bff.av` ([subsystems/accessible-volume.md](/subsystems/accessible-volume.md)).
+141 tests skip there with that reason and ~550 still run — the contract, the
+project schema, the RPC envelopes, i18n, the view spec, the form model. That is
+CI signal where there was a red light nobody could act on.
 
 **For day-to-day work on this machine the `arm64` conda environment is
 canonical** — it carries the compiled `IMP.bff`, which a pixi-solved `imp` may

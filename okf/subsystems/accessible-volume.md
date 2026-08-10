@@ -38,6 +38,17 @@ An unavailable or misspelled backend raises immediately, naming what *is*
 usable, rather than failing later with an empty volume. `AV.av_backend` records
 which one ran, and `verbose=True` prints it.
 
+**Both rows in that table go through imp-tricks, so "LabelLib is the fallback"
+does not mean QuEst can compute an AV without imp-tricks.** The single call is
+`IMP.bff.av.compute_av(..., backend=…)` — the dispatch is *upstream's*, and
+`density2points` comes from `IMP.bff.av._kernels` too. Measured 2026-08-10 with
+`IMP_TRICKS_SRC` pointed at nothing: 98 tests fail and 8 error, including the
+`labellib`-parametrised baselines. The choice in the table is a choice *inside*
+imp-tricks, not a way to do without it. `imp_tricks_av_available()` is the
+predicate for "can this interpreter compute an accessible volume at all", and
+what `tests/conftest.py` uses to skip rather than fail
+([workflows/testing.md](/workflows/testing.md)).
+
 **`simulation_type` must be `"AV1"`; anything else raises.** This concept
 previously said AV3 "only takes effect on the LabelLib path" — it took effect on
 neither. The LabelLib branch called `calculate3R`, which was deleted in

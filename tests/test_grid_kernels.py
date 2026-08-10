@@ -89,6 +89,7 @@ def scenario(request):
     return density, ng, dg, radii, centers, origin
 
 
+@pytest.mark.needs_av
 def test_subav_matches_reference(scenario):
     density, ng, dg, radii, centers, origin = scenario
     assert np.array_equal(

@@ -2,6 +2,71 @@
 
 ## 2026-08-10
 
+* **The desktop run is a job, and the window survives it.** `LAY-07` closed on
+  2026-07-28 by building `quest/tasks.py`; the desktop went on calling
+  `simulate_project` on the GUI thread anyway, so the surface that motivated the
+  mechanism was the one not using it (found by re-reading
+  [subsystems/gui.md](/subsystems/gui.md) against the code this morning).
+
+  `ProjectFormModel` now has `start_simulation` (registers a job, spawns the
+  worker, returns the `job_id`), `wait_simulation(timeout)`, `poll_simulation`
+  and `cancel_simulation`; `run_simulation` is those joined, so the synchronous
+  contract headless callers depend on is unchanged and there is still only one
+  code path. **The worker never notifies** — a listener redraws widgets and
+  that is only safe on the GUI thread — which is why applying the outcome is a
+  separate call; `test_the_worker_never_notifies` records the thread every
+  listener fires on. `update_all` pumps the event queue between joins and
+  ignores re-entrant clicks, which pumping makes possible.
+
+  Two limits are written into the code rather than discovered later. The
+  trajectory kernels are `njit(nogil=True)` so the GUI thread really does get
+  the interpreter back during the dominant cost, but the AV grid kernels are
+  `parallel=True` without `nogil` and still hold it — a smaller freeze, not
+  none. And cancelling a single simulation cannot interrupt it: `_simulate_traj`
+  is one `njit` call and a jitted kernel cannot poll a flag, so Cancel discards
+  the result rather than stopping the work. A scan does stop.
+
+  Also: clicking ▶ on a broken project no longer raises out of the Qt slot; the
+  failure shows in the status line. `run_simulation()` still raises.
+  Baseline: **706 passed, 1 skipped** (was 695; 11 new tests).
+
+* **The two permanently red CI jobs are green, and nothing was published.**
+  This was the open decision the handover carried; taking it needed a
+  measurement it did not have.
+
+  **What was actually wrong was two things, not one.** `imp-tricks` was the
+  known blocker. The second surfaced on the first solve attempt: **`labellib`
+  is not on conda-forge at all**, and on the owner's channel its `main` label
+  stops at the 2020 builds — py37-py39, pinning `numpy <2` against this
+  project's `numpy >=2.0`. The numpy-2 builds live on the channel's **`dev`
+  label**, for `linux-64`, `osx-arm64` and `win-64` only. So `[feature.py]`
+  points at `https://conda.anaconda.org/tpeulen/label/dev` and restricts itself
+  to those three platforms — which is exactly the CI matrix. `imp-tricks`
+  became a feature **no environment uses**: anything requiring it would take
+  `pixi lock` down with it. `pixi lock` now solves all four environments.
+
+  **The cost, measured rather than assumed.** Both AV backends dispatch through
+  `IMP.bff.av`, so "LabelLib is the fallback" never meant QuEst could compute an
+  accessible volume without imp-tricks — with `IMP_TRICKS_SRC` pointed at
+  nothing, **98 tests failed and 8 errored**, including the `labellib`
+  baselines. That correction is now in
+  [subsystems/accessible-volume.md](/subsystems/accessible-volume.md).
+
+  Turning that into signal took two mechanisms in `tests/conftest.py`, because
+  the failures arrive two ways: `hookwrapper` hooks rewrite QuEst's own
+  sentinel message into a skip (most of the suite, no annotations), and
+  `@pytest.mark.needs_av` marks the tests that *swallow* the error and assert on
+  a status instead — an envelope's `ok: False`, a CLI exit code, a status line
+  reading "Failed". **Neither converts anything where imp-tricks is present**,
+  so a real regression cannot be laundered into a skip. Result without it:
+  **550 passed, 141 skipped, 0 failed**. Twelve of those skips are over-skip
+  from marking by module rather than by test, and are recorded as such.
+
+  What CI now covers is the contract, the project schema, the RPC envelopes,
+  i18n, the view spec and the form model — the layer that changed most this
+  week. What it does not cover is every number: publishing imp-tricks is still
+  the only thing that would test the simulation path in CI.
+
 * **A session's worth of finished work was sitting uncommitted; it is committed
   now, in five pieces.** The bundle described the 2026-08-09 AutoForm migration
   and the 2026-08-07 desktop viewer work as landed, and the tree held all of it

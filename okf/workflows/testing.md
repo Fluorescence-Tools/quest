@@ -55,13 +55,41 @@ of a combined run. Deselecting says so; silently skipping would not. A combined
 run reports `22 deselected`, which is the signal that the browser layer still
 needs its own command.
 
-Baseline on **2026-07-28**, all in `arm64`:
+Baseline, all in `arm64`:
 
-| command | result |
-|---|---|
-| (1) library + GUI + web backend | **404 passed, 1 skipped** in ~92 s |
-| (2) notebooks + examples | **16 passed, 2 skipped** |
-| (3) browser e2e, servers up | see [handover.md](../handover.md) |
+| command | result | measured |
+|---|---|---|
+| (1) library + GUI + web backend | **706 passed, 1 skipped** in ~2 m 50 s | 2026-08-10 |
+| (2) notebooks + examples | **16 passed, 2 skipped** | 2026-07-28 |
+| (3) browser e2e, servers up | see [handover.md](../handover.md) | 2026-08-09 |
+
+# Without imp-tricks the suite skips; it does not fail
+
+QuEst's accessible volume dispatches through `IMP.bff.av` on *both* backends
+([subsystems/accessible-volume.md](/subsystems/accessible-volume.md)), so an
+interpreter without imp-tricks cannot simulate at all. Left alone that is 98
+failures and 8 errors — noise that hides every real one. `tests/conftest.py`
+turns it into an explicit skip, in two mechanisms because the failures arrive
+two ways:
+
+- **Two `hookwrapper` hooks** (`pytest_runtest_setup`, `pytest_runtest_call`)
+  rewrite QuEst's own sentinel — "accessible volume requires `IMP.bff.av`" —
+  into a skip carrying the reason. This covers most of the suite without
+  annotating a single test.
+- **`@pytest.mark.needs_av`** for tests that *swallow* that error and assert on
+  a status instead: an RPC envelope with `ok: False`, a CLI exit code, a form
+  whose status line reads "Failed". A hook cannot see the cause there, so those
+  tests say what they need.
+
+**Neither converts anything where imp-tricks is present**: the guard resolves
+once, and on a machine that can compute an AV both paths return immediately. A
+real regression cannot be laundered into a skip.
+
+Measured 2026-08-10 with `IMP_TRICKS_SRC=/nonexistent`: **550 passed, 141
+skipped, 0 failed**. Twelve of those skips are over-skip — tests inside a
+module or class marked `needs_av` that would have passed anyway — which is the
+price of marking by module rather than by test, and is recorded rather than
+rounded away.
 
 `pytest tests -m notebooks` gave **6 failed / 10 passed** from 2026-07-26 until
 2026-07-28. It is fixed, and the cause was not what was recorded — see

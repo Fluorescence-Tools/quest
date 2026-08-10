@@ -51,6 +51,7 @@ include = ["quest*"]
 markers = [
   "browser: drives the web UI in a real browser; needs both servers and its own process",
   "notebooks: executes the notebooks through nbclient; spawns kernels, so it needs its own process",
+  "needs_av: computes an accessible volume, so it needs imp-tricks; skipped with a reason where IMP.bff.av is not importable",
 ]
 # Two suites are deselected by default and run by their own pixi tasks:
 # `test-e2e` (browser) and `test-notebooks`.

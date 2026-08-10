@@ -167,6 +167,7 @@ class TestValidate:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.needs_av
 class TestSimulate:
     def test_simulate_returns_native_arrays(self, client) -> None:
         r = client.call("quest.simulate", {"project": _project()})
@@ -475,6 +476,7 @@ class TestRuns:
         r = client.call("quest.runs.get", {"job_id": "nonexistent-uuid"})
         assert r["ok"] is False
 
+    @pytest.mark.needs_av
     def test_get_after_simulate(self, client, tmp_path) -> None:
         sim = client.call(
             "quest.simulate",

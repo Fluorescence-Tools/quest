@@ -44,12 +44,37 @@ desktop-dist = { cmd = "npm run dist", cwd = "webui/desktop", depends-on = ["des
 # its backend dispatch; IMP carries the structure reader and the compiled
 # IMP.bff backend; LabelLib is the fallback backend.
 #
-# `imp-tricks` is not on conda-forge yet (it lives on a private GitLab), so
-# every pixi environment below fails to solve until it is published. That is
-# accepted rather than worked around: QuEst really does require it now, and a
-# manifest that pretended otherwise would be lying about what it needs. Day-to-
-# day work uses the `arm64` conda environment plus the checkout path shim in
-# `quest/hosts/imp_tricks.py` — see okf/workflows/environment.md.
+# **Two dependencies are not on conda-forge**, and they are handled differently
+# because their situations differ (measured 2026-08-10, `pixi search`):
+#
+#   labellib    on the owner's `tpeulen` channel, and specifically on its **dev
+#               label**: the `main` label stops at the 2020 builds, which are
+#               py37-py39 and pin `numpy <2`, so pointing at the bare channel
+#               fails with "labellib 1.0.0 would require numpy <2.0a0" while
+#               this project requires numpy >=2. The dev label carries
+#               py310-py313 builds against numpy >=2.2, for linux-64,
+#               osx-arm64 and win-64 — hence the `platforms` list below, which
+#               drops the two it has no build for.
+#   imp-tricks  on no public channel at all. Publication was ruled out on
+#               2026-07-28 (it stays local), so it is a feature *no environment
+#               uses*, below.
+#
+# It used to sit in this list, which made `default` and `desktop` unsolvable and
+# left two CI jobs permanently red — and a permanently red job trains people to
+# ignore the light. An environment without it cannot compute an accessible
+# volume at all (both AV backends route through `IMP.bff.av`), so 141 tests skip
+# there with a stated reason and ~550 still run: the contract, the project
+# schema, the RPC envelopes, i18n, the view spec, the form model. That is the
+# honest trade, recorded rather than glossed.
+#
+# Day-to-day work uses the `arm64` conda environment plus the checkout path shim
+# in `quest/hosts/imp_tricks.py` — see okf/workflows/environment.md.
+[feature.py]
+channels = ["conda-forge", "https://conda.anaconda.org/tpeulen/label/dev"]
+# osx-64 and linux-aarch64 are deliberately absent: `labellib`'s dev label has
+# no build for either. The CI matrix (ubuntu / macos-arm / windows) is covered.
+platforms = ["osx-arm64", "linux-64", "win-64"]
+
 [feature.py.dependencies]
 python = ">=3.10,<3.13"
 numpy = ">=2.0"
@@ -60,8 +85,15 @@ pyyaml = "*"
 tqdm = "*"
 labellib = "*"
 imp = "*"
-imp-tricks = "*"
 pytables = "*"
+
+# imp-tricks owns the accessible-volume computation, and **no environment below
+# includes this feature**, on purpose: nothing public ships the package, so any
+# environment that carried it would be unsolvable and would take `pixi lock`
+# down with it. The feature exists so that the day it *is* published, turning it
+# on is one word in `[environments]` rather than an archaeology exercise.
+[feature.imp-tricks.dependencies]
+imp-tricks = "*"
 
 [feature.py.pypi-dependencies]
 quest = { path = ".", editable = true }

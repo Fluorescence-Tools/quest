@@ -133,6 +133,7 @@ def test_run_fps_scan(base_project, tmp_path):
     assert "contact_to_free_ratio" in res
     assert res["contact_to_free_ratio"] is not None
 
+@pytest.mark.needs_av
 def test_cli_scan_command(base_project, tmp_path):
     """Verify that the quest scan command runs headlessly using CliRunner."""
     project_file = tmp_path / "project.json"
