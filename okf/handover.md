@@ -192,7 +192,15 @@ table the one follow-up, not three hand-synchronised surfaces.
   reason (141 of them). The accounting it was said to cost is in
   [workflows/testing.md](workflows/testing.md).
 - **Where ChiSurf's fps.json `payload.py` belongs** (`DUP-07` remainder). The
-  owner is not convinced `chisurf/core` is right. Nothing depends on it.
+  owner is not convinced `chisurf/core` is right, and **upstream has since ruled
+  against it**: ChiSurf's own `okf/specs/chimol.md` (2026-08-10, `a2ff49665`)
+  places the labelling plugin — the `LabelStructure` widget that owns this
+  payload — **in ChiMOL**, on the grounds that placing a dye on a structure is
+  structural work done while looking at the structure. It sits in `modelling/`
+  only until ChiMOL hardens, and **the `fps_json_payload` getter/setter seam is
+  what the move rides on, so that seam must stay intact.** So the answer is
+  neither `chisurf/core` nor here; the question is now *when*, not *where*.
+  Nothing in QuEst depends on it.
 - **`asa`/`spherePoints` → `IMP.cgmol.sterics.asa`** (`DUP-05` remainder). Cold
   path; deliberately not rushed.
 - **The scratch files in the tree**: `out.xyz`, `out_slow.xyz`, `test.pdb`,
