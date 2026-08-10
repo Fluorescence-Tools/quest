@@ -401,11 +401,12 @@
           "title": "Structure",
           "sections": [
             {
-              "type": "custom",
-              "key": "chimol",
-              "target": "preview_models",
-              "title": "Structure",
-              "height": 320
+              "type": "value",
+              "attr": "structure_label",
+              "kind": "str",
+              "label": "Structure",
+              "read_only": true,
+              "description": "Outcome of the last simulation."
             }
           ]
         },

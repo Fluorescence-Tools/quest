@@ -391,6 +391,22 @@ export default function ProteinViewer({
       componentRef.current = compInstance;
       setComponent(compInstance);
       if (!setupRepresentations(compInstance, project)) return;
+
+      // Click-to-select a residue on the 3D structure. NGL fires
+      // pickingProxy on stage.signals.clicked with the atom/residue under the
+      // cursor. This calls onResidueSelect just like the sequence bar does.
+      if (onResidueSelect) {
+        stageInstance.signals.clicked.add((picked: any) => {
+          if (!picked || !picked.atom) return;
+          const atom = picked.atom;
+          const chainId = atom.chainname;
+          const residueId = atom.resno;
+          if (chainId && residueId != null) {
+            onResidueSelect(chainId, residueId);
+          }
+        });
+      }
+
       compInstance.autoView();
       safeHandleResize(stageInstance);
       setViewerStatus(`${structure.filename}: ${structure.atom_count} atoms`);

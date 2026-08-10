@@ -367,8 +367,8 @@ class TestTheTranslationBacklogOnlyShrinks:
     **Lower the number when you translate something.** It is the work item.
     """
 
-    #: Measured 2026-07-28. Only ever edit this downwards.
-    BACKLOG = 91
+    #: Measured 2026-08-09 (91 on 2026-07-28). Only ever edit this downwards.
+    BACKLOG = 74
 
 
     JSX_TEXT = re.compile(r">\s*([A-Z][A-Za-z][A-Za-z /&'-]{2,40})\s*<")

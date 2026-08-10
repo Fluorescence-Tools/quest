@@ -239,8 +239,9 @@ class ProjectFormModel:
         return copy.deepcopy(self._project)
 
     def load_project_dict(self, project: dict) -> None:
-        """Replace the whole state with *project*."""
+        """Replace the whole state with *project*, then fix attachment if needed."""
         object.__setattr__(self, "_project", copy.deepcopy(project))
+        self.auto_attach_to_structure()
         self._notify()
 
     def validate(self) -> list[str]:
@@ -326,12 +327,111 @@ class ProjectFormModel:
 
     # -- structure preview -------------------------------------------------
 
+    @property
+    def structure_label(self) -> str:
+        """Human-readable name of the loaded structure, for read-only display.
+
+        Distinct from the ``pdb`` file picker so the form never has two controls
+        bound to one value.
+        """
+        pdb = self._project.get("pdb")
+        if not pdb:
+            return self._t("status.no_structure")
+        return Path(str(pdb)).name
+
     def preview_models(self) -> list[str]:
         """Paths for the 3D viewer: the structure, when there is a readable one."""
         pdb = self._project.get("pdb")
         if pdb and Path(str(pdb)).is_file():
             return [str(pdb)]
         return []
+
+    def auto_attach_to_structure(self) -> None:
+        """Pick valid attachment sites from the loaded PDB.
+
+        When a structure is loaded the template's default attachment (chain A,
+        residue 1) may not exist. This reads the structure's chains/residues and
+        selects sensible defaults: donor on the first standard residue of the
+        first chain, acceptor on the last standard residue of the same chain.
+        Only overwrites an attachment that is missing or invalid.
+        """
+        pdb = self._project.get("pdb")
+        if not pdb or not Path(str(pdb)).is_file():
+            return
+        try:
+            from ..core.structure import structure_metadata
+            meta = structure_metadata(pdb)
+        except Exception:
+            return
+        chains = meta.get("chains", [])
+        if not chains:
+            return
+
+        STANDARD = {
+            "ALA","ARG","ASN","ASP","CYS","GLN","GLU","GLY","HIS","ILE",
+            "LEU","LYS","MET","PHE","PRO","SER","THR","TRP","TYR","VAL",
+        }
+
+        def find_residue(chain, prefer_id=None):
+            residues = chain.get("residues", [])
+            std = [r for r in residues if r.get("name", "").upper() in STANDARD]
+            if not std:
+                return None
+            if prefer_id is not None:
+                for r in std:
+                    if r["id"] == prefer_id:
+                        return r
+            return std[0]
+
+        def first_atom(residue, fallback="CB"):
+            atoms = residue.get("atoms", []) if residue else []
+            for pref in ("CB", "CA", "OG", "SG"):
+                if pref in atoms:
+                    return pref
+            return atoms[0] if atoms else fallback
+
+        chain0 = chains[0]
+        donor_res = find_residue(chain0)
+        if donor_res is None:
+            return
+
+        current_chain = _get_path(self._project, "attachment.chain")
+        current_res = _get_path(self._project, "attachment.residue")
+        needs_fix = current_chain not in {c["id"] for c in chains}
+
+        if needs_fix or current_res is None:
+            _set_path(self._project, "attachment.chain", chain0["id"])
+            _set_path(self._project, "attachment.residue", donor_res["id"])
+            _set_path(self._project, "attachment.atom", first_atom(donor_res))
+            dyes = self._project.get("fret", {}).get("dyes", [])
+            if dyes:
+                dyes[0]["attachment"] = {
+                    "chain": chain0["id"],
+                    "residue": donor_res["id"],
+                    "atom": first_atom(donor_res),
+                }
+
+        # Acceptor: last standard residue on the same chain
+        if self._project.get("fret", {}).get("enabled"):
+            dyes = self._project.get("fret", {}).get("dyes", [])
+            if len(dyes) > 1:
+                acc_chain_id = dyes[1].get("attachment", {}).get("chain")
+                acc_chain = next(
+                    (c for c in chains if c["id"] == acc_chain_id), chain0
+                )
+                all_std = [
+                    r for r in acc_chain.get("residues", [])
+                    if r.get("name", "").upper() in STANDARD
+                ]
+                if all_std:
+                    acc_res = all_std[-1]
+                    dyes[1]["attachment"] = {
+                        "chain": acc_chain["id"],
+                        "residue": acc_res["id"],
+                        "atom": first_atom(acc_res),
+                    }
+
+        self._notify()
 
     # -- persistence: the saved file is a project ---------------------------
 

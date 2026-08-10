@@ -299,11 +299,12 @@ def build_view_spec(locale: str = DEFAULT_LOCALE) -> dict[str, Any]:
                         "title": strings["dock.structure"],
                         "sections": [
                             {
-                                "type": "custom",
-                                "key": "chimol",
-                                "target": "preview_models",
-                                "title": strings["dock.structure"],
-                                "height": 320,
+                                "type": "value",
+                                "attr": "structure_label",
+                                "kind": "str",
+                                "label": strings["dock.structure"],
+                                "read_only": True,
+                                "description": strings["field.state.description"],
                             }
                         ],
                     },

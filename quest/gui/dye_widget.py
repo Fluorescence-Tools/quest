@@ -143,18 +143,25 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         from .chimol_widget import ChiMolStructureWidget
 
         self.chimol_widget = ChiMolStructureWidget(self.model, self)
+        self.chimol_widget.set_selection_callback(self._on_residue_picked)
         self.tabs.addTab(self.chimol_widget, "3D Structure (ChiMol)")
 
         # Tab 3: Quenching Table
         self.quencher_widget = QuencherTableWidget(self.model, self)
         self.tabs.addTab(self.quencher_widget, "Quenching Chemistry")
 
-        # Tab 4: Project JSON State & Output Log
+        # Tab 4: Project JSON State — ChiSurf's SimpleCodeEditor (JSON highlight)
         json_widget = QtWidgets.QWidget(self)
         json_layout = QtWidgets.QVBoxLayout(json_widget)
-        self.json_edit = QtWidgets.QPlainTextEdit(json_widget)
-        self.json_edit.setReadOnly(True)
-        self.json_edit.setStyleSheet("font-family: monospace; font-size: 11px;")
+        json_layout.setContentsMargins(0, 0, 0, 0)
+        try:
+            from chisurf.plugins.core.code_editor import SimpleCodeEditor
+            self.json_edit = SimpleCodeEditor(parent=json_widget, language="JSON")
+            self.json_edit.setReadOnly(True)
+        except Exception:
+            self.json_edit = QtWidgets.QPlainTextEdit(json_widget)
+            self.json_edit.setReadOnly(True)
+            self.json_edit.setStyleSheet("font-family: monospace; font-size: 11px;")
         json_layout.addWidget(self.json_edit)
         self.tabs.addTab(json_widget, "Project JSON")
 
@@ -208,7 +215,7 @@ class TransientDecayGenerator(QtWidgets.QWidget):
     # -- menu actions ------------------------------------------------------
 
     def onLoadPDB(self) -> str | None:
-        """Pick a structure."""
+        """Pick a structure, then auto-select a valid attachment site."""
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
             self._t("dialog.open_structure"),
@@ -218,6 +225,7 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         if not path:
             return None
         self.model.pdb = path
+        self.model.auto_attach_to_structure()
         self.model.status = self._t("status.loaded").format(name=Path(path).name)
         self.refresh()
         return path
@@ -254,4 +262,17 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         result = self.model.run_simulation()
         self.refresh()
         return result
+
+    def _on_residue_picked(self):
+        """Called when a residue is selected in the ChiMol viewer or sequence bar.
+
+        Syncs the form controls to match the new attachment without reloading
+        the 3D structure (the viewer is already showing it).
+        """
+        if self.form is not None:
+            self.form.sync_fields()
+        if hasattr(self, "json_edit"):
+            self.json_edit.setPlainText(
+                json.dumps(self.model.to_project_dict(), indent=2)
+            )
 

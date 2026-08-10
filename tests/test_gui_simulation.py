@@ -116,6 +116,53 @@ class TestTheFormRunsASimulation:
         autocorrelation = simulated.model.autocorrelation_series()
         assert autocorrelation and len(autocorrelation[0]["y"]) > 0
 
+    def test_the_pyqtgraph_canvases_carry_curves(self, simulated) -> None:
+        """The pyqtgraph PlotWidgets must actually hold data after refresh.
+
+        The model data series being populated (the test above) proves the
+        simulation ran; this proves ``refresh()`` pushed it to the canvases
+        the user sees.
+        """
+        for attr, min_points, n_series in (
+            ("decay_plot", 2, 1),
+            ("traj_plot", 100, 1),
+            ("acf_plot", 2, 1),
+        ):
+            canvas = getattr(simulated, attr)
+            assert canvas.plot_widget is not None, f"{attr} has no PlotWidget"
+            items = canvas.plot_widget.getPlotItem().listDataItems()
+            assert len(items) == n_series, (
+                f"{attr} expected {n_series} curve(s), got {len(items)}"
+            )
+            x, y = items[0].getData()
+            assert len(y) >= min_points, (
+                f"{attr} curve has {len(y)} points, expected >= {min_points}"
+            )
+
+    def test_a_fret_run_populates_two_decay_curves(self, fret_simulated) -> None:
+        """FRET adds a second decay curve — verify it reaches the canvas."""
+        canvas = fret_simulated.decay_plot
+        items = canvas.plot_widget.getPlotItem().listDataItems()
+        assert len(items) == 2, f"expected donor + FRET, got {len(items)} curves"
+
+    def test_a_screenshot_is_non_blank(self, simulated, tmp_path) -> None:
+        """Grab the widget to a PNG — a blank image means nothing was drawn."""
+        simulated.resize(1400, 900)
+        from qtpy.QtGui import QImage
+
+        pixmap = simulated.grab()
+        assert not pixmap.isNull(), "grab() produced a null pixmap"
+        image = pixmap.toImage()
+        # A completely white or black image means nothing rendered.
+        pixels = set()
+        for y in range(0, image.height(), max(1, image.height() // 50)):
+            for x in range(0, image.width(), max(1, image.width() // 50)):
+                pixels.add(image.pixel(x, y))
+        assert len(pixels) > 10, (
+            f"screenshot has only {len(pixels)} distinct colours; "
+            "the widget is probably blank"
+        )
+
     def test_it_repaints_after_the_run(self, simulated) -> None:
         simulated.resize(1400, 900)
         assert not simulated.grab().isNull()
