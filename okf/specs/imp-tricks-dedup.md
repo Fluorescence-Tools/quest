@@ -31,6 +31,22 @@ What stays in QuEst:
 
 Nothing in imp-tricks may depend on QuEst. The arrow points one way.
 
+> **Watch: ChiSurf is moving its AV backend into imp.bff too (PRD-97, 2026-08-10).**
+> ChiSurf's `av.py` (742 lines — the LabelLib/IMP backend *selection*) and its
+> fps.json round-trip are classified to move into imp.bff, on the same rule this
+> page states. Its own PRD notes the consequence: three accessible-volume paths
+> would then sit in one repository (`av.py`'s selection, `IMP.bff.av`'s
+> BasicAV/ACV, the C++ `AV`/`PathMap`) — **four counting QuEst's
+> `resolve_av_backend`**, which is a fourth copy of the same choice.
+>
+> That makes QuEst's backend selection a deletion candidate rather than a thing
+> to maintain: QuEst already dispatches through `IMP.bff.av.compute_av`, so what
+> `resolve_av_backend` adds is the *preference* plumbing
+> (`QUEST_AV_BACKEND`, `available_av_backends`) and its error messages. Nothing
+> to do until PRD-97's stage 2 actually lands — but when it does, the question is
+> whether QuEst keeps a selector at all or just passes `backend=` through.
+> Do not add a fifth path in the meantime.
+
 # What imp-tricks already has
 
 Checked against `~/dev/imp-tricks/src/IMP/bff/` on 2026-07-27:
