@@ -75,6 +75,7 @@ ERROR_CODES: dict[str, str] = {
     "unsupported_option": "A parameter carried a value QuEst does not implement.",
     "backend_unavailable": "No accessible-volume backend is usable in this interpreter.",
     "unknown_method": "No such RPC method.",
+    "invalid_request": "The request envelope itself is malformed — unparsable payload, or no method named. The caller is at fault, not the operation.",
     "operation_failed": "Anything else. A host can only report this one.",
 }
 

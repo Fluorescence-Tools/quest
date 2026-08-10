@@ -57,11 +57,19 @@ class ZMQServer:
                 response = self.dispatcher.dispatch(method, params)
         except Exception as exc:
             _log.exception("Failed to process ZMQ message")
-            response = fail(f"Invalid ZMQ request payload: {exc}", "invalid_payload")
+            response = fail(f"Invalid ZMQ request payload: {exc}", "invalid_request")
 
         if req_id is not None:
             response["id"] = req_id
 
+        # The ZMQ server is a transport: native objects (numpy arrays,
+        # DecaySimulationResult) must be converted to JSON-compatible data
+        # before serialisation. This is the boundary the contract names.
+        # A failure envelope carries no `result`; do not invent one.
+        from .contract import to_payload
+
+        if "result" in response:
+            response["result"] = to_payload(response["result"])
         return json.dumps(response)
 
     def serve_one(self, timeout_ms: int = 1000) -> bool:
@@ -75,7 +83,13 @@ class ZMQServer:
 
         if self.socket in events and events[self.socket] == zmq.POLLIN:
             msg = self.socket.recv_string()
-            response_json = self.process_message(msg)
+            try:
+                response_json = self.process_message(msg)
+            except Exception as exc:
+                _log.exception("Unhandled error processing ZMQ message")
+                response_json = json.dumps(
+                    fail(f"Internal server error: {exc}")
+                )
             self.socket.send_string(response_json)
             return True
         return False
