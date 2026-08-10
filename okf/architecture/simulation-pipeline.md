@@ -61,11 +61,19 @@ histogram is integrated directly over many curves (curve mode).
 
 Code: [subsystems/photon-decay.md](/subsystems/photon-decay.md).
 
-Verified against the tree on 2026-08-06: `calc_slow_av` and the
-`_simulate_traj` / `_simulate_traj_grid` kernels are in `quest/core/av.py`,
-`_photon_rate_walk` in `quest/core/photon.py`, and `get_histogram` in
-`quest/core/dye_diffusion.py`. The three-stage structure is unchanged by the
-`quest/lib` -> `quest/core` move; only the file names were.
+**Stage 0, implicitly: the structure arrives without water.** `read` strips
+every residue named as water after the IMP parse, and `structure_metadata`
+filters the PDB text it hands a viewer, so no stage below ever sees an `HOH` —
+and no surface can offer one as a labeling site
+([subsystems/structure-io.md](/subsystems/structure-io.md)).
+
+Verified against the tree on 2026-08-10 (paths re-checked by symbol, not
+recalled): `calc_slow_av` and the `_simulate_traj` / `_simulate_traj_grid`
+kernels are in `quest/core/av.py`, `_photon_rate_walk` in
+`quest/core/photon.py`, `get_histogram` in `quest/core/dye_diffusion.py`, and
+`simulate_project` in `quest/core/simulation.py` with `save_outputs` and
+`render_data` as separate keyword-only parameters. The three-stage structure is
+unchanged by the `quest/lib` -> `quest/core` move; only the file names were.
 
 # What comes out
 

@@ -47,11 +47,19 @@ It also **reopened `known-issues.md`**, which had been empty since 2026-07-28:
 the bundle was still describing the pre-refactor tree — `quest/lib/`,
 `quest/core.py`, `quest/jobs.py`. Every path has since been corrected against a
 `grep` for the symbol, and `overview.md`'s source-layout table was rebuilt. What
-was *not* re-read is the prose, so **four concepts are marked stale on purpose**
-— `subsystems/core-api.md`, `subsystems/structure-io.md`,
+was *not* re-read is the prose, so four concepts were marked unverified on
+purpose — `subsystems/core-api.md`, `subsystems/structure-io.md`,
 `architecture/surfaces.md`, `architecture/simulation-pipeline.md` — because each
-describes *where things live* and every one of those places moved. Treat their
-mechanism as unverified until someone reads them against the code.
+describes *where things live* and every one of those places moved.
+
+> **All four were read against the code on 2026-08-10 and are verified.** Three
+> were already correct (every symbol resolved by `hasattr`, including the names
+> they claim are *gone*); `architecture/surfaces.md` was the one that had rotted
+> — it said Qt was imported in "exactly three files" where there are nine, all
+> still under `quest/gui/`, so the rule held and the count did not. The two
+> surface concepts, [subsystems/webui.md](subsystems/webui.md) and
+> [subsystems/gui.md](subsystems/gui.md), were *not* on that list and were the
+> genuinely stale ones; they are corrected too.
 
 Re-check any time, from this repo alone:
 

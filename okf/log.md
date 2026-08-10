@@ -84,6 +84,41 @@
   Closing the backlog row gave the desktop a mechanism it does not use. Recorded
   in the concept as the current state; not fixed here.
 
+* **The four concepts the handover had marked unverified since 2026-08-06 are
+  verified.** They were flagged because the refactor moved everything they
+  describe and only their *paths* had been corrected, never their prose. Read
+  against the code:
+
+  - [subsystems/core-api.md](/subsystems/core-api.md) — **clean.** Every symbol
+    it names resolves (checked with `hasattr` per module, not by eye), and
+    `DecaySimulationResult`'s dataclass fields match the documented list in
+    both directions: nothing documented is absent, nothing present is
+    undocumented.
+  - [subsystems/structure-io.md](/subsystems/structure-io.md) — **clean**, and
+    the removal claims hold too: every name it says is *gone* was checked to be
+    actually absent, since a removal claim rots the same way a presence claim
+    does. Its water paragraph described one filter where there are three
+    (`_strip_waters` on the array, `strip_water_pdb_text` on text,
+    `water_stripped_pdb_path` for a viewer that wants a file); now tabulated.
+  - [architecture/simulation-pipeline.md](/architecture/simulation-pipeline.md)
+    — **clean**; every kernel resolves in the module claimed. Gained the
+    implicit stage 0: the structure arrives water-free.
+  - [architecture/surfaces.md](/architecture/surfaces.md) — **the one that had
+    rotted.** It said Qt was imported in "exactly three files"; it is nine
+    (`autoform_panel`, `chimol_widget`, `guided_tour`, `plots`,
+    `quencher_widget`, `theme` joined them), *all* still under `quest/gui/`.
+    The rule survived, the count did not — which is the argument for stating a
+    rule rather than a census. Also corrected: two sentences asserting the
+    checked environment has no PyQt5, untrue since base was retired.
+
+  **The lesson is about which concepts get flagged.** The four on the list were
+  flagged because a refactor had moved their subject matter, and three of them
+  were fine. The two that were actually stale — `webui.md` and `gui.md` — were
+  *not* flagged, because nothing structural had moved: the surfaces had simply
+  changed behaviour while their concepts were left alone. A concept rots when
+  the code it describes changes, not when the tree is rearranged, and only the
+  second kind is visible to a path checker.
+
 ## 2026-08-09
 
 * **The web UI is AutoForm-only; the legacy hand-written form is gone.**

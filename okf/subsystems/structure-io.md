@@ -56,6 +56,23 @@ drops waters, but the explicit filter keeps QuEst correct regardless of which
 selector a caller or a future parser passes. `tests/test_water_stripping.py`
 covers it.
 
+**One residue table, three points of use**, because a water reaching *any*
+surface is the same defect:
+
+| Where | What it does |
+|---|---|
+| `_strip_waters(atoms)` | filters the array after the IMP parse — the simulation path |
+| `strip_water_pdb_text(text)` | filters raw PDB text by columns 18–20 — for anything that consumes text |
+| `water_stripped_pdb_path(src)` | writes a cleaned copy to a temp file, reused per source — for a viewer that insists on a *file* |
+
+`structure_metadata` runs PDB text through `strip_water_pdb_text` and skips
+water rows while parsing CIF, so the `pdb_text` it returns to the browser
+viewer carries none either, and no site picker can offer a water as a labeling
+site. The ChiMol 3D viewer loads with `keep_water=True`, which is why stripping
+at the text level — rather than trusting the viewer's own selector — is the
+thing that actually holds. Baselines moved with it: 148L `atom_count`
+1525 → 1385, chain E residues 291 → 164.
+
 Residue names coming out of the structured array are byte-string valued and need
 normalising before comparison -- hence `_normalize_residue_name` in both
 `quest/core/simulation.py` and `quest/core/dye_diffusion.py` (it also unwraps
@@ -117,6 +134,9 @@ check across the boundary failed and a `Structure` got wrapped twice. `quest/lib
 itself is gone; the rule is why the replacement is a package under
 `quest/core/`.
 
-Re-read against the tree on 2026-08-06. Every name above was checked to exist,
-and the ones that no longer do are named as removed rather than quietly
-dropped.
+Re-read against the tree on 2026-08-10, mechanically: every name above was
+resolved with `hasattr`, and every name this concept claims is *gone* was
+checked to be actually absent — a removal claim rots the same way a presence
+claim does. `tests/test_coarse_grained.py` and `tests/test_pdb_id_support.py`
+both exist. The only sentence that needed changing was the water paragraph,
+which described one filter where there are now three.

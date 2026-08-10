@@ -74,19 +74,29 @@ it. A feature that exists only in the web UI is a design error.
 | Python API | `from quest.api import …` | Documented in [subsystems/core-api.md](/subsystems/core-api.md); safe in headless environments |
 | CLI | `quest simulate/scan/template/validate/gui` | [subsystems/cli.md](/subsystems/cli.md) |
 | Web UI | FastAPI + Next.js (+ Electron shell) | [subsystems/webui.md](/subsystems/webui.md) |
-| Qt GUI | `cs.quest`, `quest gui` (`quest.gui:start_gui`) | Needs Qt bindings, which are **not** in the checked environment — [subsystems/gui.md](/subsystems/gui.md) |
+| Qt GUI | `cs.quest`, `quest gui` (`quest.gui:start_gui`) | Needs a Qt binding and a ChiSurf checkout to render the form — [subsystems/gui.md](/subsystems/gui.md) |
 
 # Qt is optional, and the layout is what keeps it that way
 
-Qt is imported in exactly three files, all of them under `quest/gui/`:
-`app.py`, `dye_widget.py` and `form_model.py`. Nothing in `quest/core/`,
-`quest/rpc/` or the CLI touches it.
+Qt is imported in nine files and **every one of them is under `quest/gui/`**:
+`app.py`, `autoform_panel.py`, `chimol_widget.py`, `dye_widget.py`,
+`form_model.py`, `guided_tour.py`, `plots.py`, `quencher_widget.py`,
+`theme.py`. Nothing in `quest/core/`, `quest/rpc/`, the CLI or the web backend
+touches it. (This concept said "exactly three files" until 2026-08-10 — the
+count grew with the viewer, the tour and the plots; the rule it was standing
+for did not change, which is why a *rule* is the durable claim and a count is
+not.)
+
+`form_model.py` is on that list only through two function-local
+`from qtpy import QtWidgets` calls in its file dialogs, so importing the model
+still pulls in no Qt — the subprocess guardrail in `tests/test_form_model.py`
+asserts exactly that, and `tests/test_service_layer.py` asserts the same for
+`quest.api` / `quest.rpc` / `quest.core`.
 
 That is a stronger guarantee than the one this concept used to describe --
 `try`/`except qtpy` with dummy widget bases inside `core/av.py` and
 `core/dye_diffusion.py`, which no longer import Qt at all. The rule is now
-structural: **Qt lives in `quest/gui/` and nowhere else.** The environment this
-was checked in has no PyQt5, and the CLI, the API and the web backend all run in
-it.
+structural: **Qt lives in `quest/gui/` and nowhere else**, which is what lets
+the CLI, the API and the web backend run in an interpreter without a binding.
 
-Verified against the tree on 2026-08-06.
+Verified against the tree on 2026-08-10.

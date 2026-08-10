@@ -125,9 +125,13 @@ A dataclass, not a dict:
   voxel outputs.
 - `_subsample_points` — the one place display thinning happens.
 
-Verified against the tree on 2026-08-06: every name in this concept resolves,
-`DecaySimulationResult` is still a dataclass, and `simulate_project` still takes
-the keyword arguments listed above.
+Verified against the tree on 2026-08-10, mechanically: every symbol named in
+this concept was resolved with `hasattr` against its module, and
+`DecaySimulationResult`'s dataclass fields were compared to the list above in
+both directions — nothing documented is absent and nothing present is
+undocumented. `simulate_project` still takes the keyword arguments listed
+above. This concept was marked unverified on 2026-08-06 because the tree had
+moved under it; it had not in fact rotted.
 
 # FPS-JSON scanning
 
