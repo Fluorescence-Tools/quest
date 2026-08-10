@@ -65,6 +65,11 @@ class TransientDecayGenerator(QtWidgets.QWidget):
         self.btn_run.clicked.connect(self.update_all)
         header_box.addWidget(self.btn_run)
 
+        self.btn_cancel = QtWidgets.QPushButton(self._t("action.cancel"), left_container)
+        self.btn_cancel.clicked.connect(self.cancel_run)
+        self.btn_cancel.setEnabled(False)
+        header_box.addWidget(self.btn_cancel)
+
         btn_pdb = QtWidgets.QPushButton("Load PDB...", left_container)
         btn_pdb.clicked.connect(self.onLoadPDB)
         header_box.addWidget(btn_pdb)
@@ -258,10 +263,50 @@ class TransientDecayGenerator(QtWidgets.QWidget):
 
 
     def update_all(self):
-        """Simulate, then show the result."""
-        result = self.model.run_simulation()
+        """Simulate off the GUI thread, then show the result.
+
+        The run used to be a plain call on the GUI thread, which froze the
+        window for its whole duration and could not be stopped. It is a job
+        now ([`quest.tasks`](../tasks.py)); this method pumps the event queue
+        while waiting, so the window keeps painting and the Cancel button
+        keeps responding, and still returns the result to its caller.
+
+        **What this does and does not buy**: the trajectory kernels are
+        `njit(nogil=True)` — deliberately, so whole trajectories can run
+        concurrently — so the GUI thread really does get the interpreter back
+        during the dominant cost. The AV grid kernels are `parallel=True`
+        without `nogil` and still hold it, so a very large volume can stutter.
+        That is a smaller freeze than the whole run, not none.
+
+        Re-entrant clicks are ignored rather than queued: pumping events means
+        this method can be re-entered from the button that started it.
+        """
+        if self.model.simulation_running:
+            return None
+
+        self.btn_run.setEnabled(False)
+        self.btn_cancel.setEnabled(True)
+        try:
+            self.model.start_simulation()
+            while not self.model.wait_simulation(timeout=0.05):
+                QtWidgets.QApplication.processEvents()
+            self.model.poll_simulation()
+        finally:
+            self.btn_run.setEnabled(True)
+            self.btn_cancel.setEnabled(False)
+
         self.refresh()
-        return result
+        return self.model.results
+
+    def cancel_run(self):
+        """Ask the running simulation to stop.
+
+        Cooperative, and a single simulation has essentially one checkpoint —
+        the result is discarded when the kernel returns rather than the
+        computation being interrupted. `ProjectFormModel.cancel_simulation`
+        says why.
+        """
+        return self.model.cancel_simulation()
 
     def _on_residue_picked(self):
         """Called when a residue is selected in the ChiMol viewer or sequence bar.

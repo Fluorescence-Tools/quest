@@ -155,13 +155,42 @@ trajectory and point clouds, so the desktop silently had no plots to draw;
 `render_data` is now a separate parameter (see
 [simulation-pipeline](/architecture/simulation-pipeline.md)).
 
-**The run is still synchronous and blocks the form.** `LAY-07` — "long-running
-work has three mechanisms" — was closed on 2026-07-28 by `quest/tasks.py`, but
-closing it gave the desktop a mechanism it does not yet use: `run_simulation`
-calls `simulate_project` on the GUI thread rather than registering a job.
-Nothing is wrong with the result; the window is simply unresponsive for the
-duration and the run cannot be cancelled. Re-checked against the code
-2026-08-10.
+**The run is a job, and the window stays alive** (since 2026-08-10). `LAY-07`
+closed on 2026-07-28 by building `quest/tasks.py`, but the desktop went on
+calling `simulate_project` on the GUI thread — the mechanism existed and the
+surface that motivated it did not use it. Now:
+
+| Call | Thread | Does |
+|---|---|---|
+| `start_simulation()` | caller's | registers a `quest.tasks` job, spawns the worker, returns the `job_id` |
+| `wait_simulation(timeout)` | caller's | joins with a timeout, so a GUI can pump events in between |
+| `poll_simulation()` | **GUI thread** | applies the outcome and notifies listeners; returns the terminal status once |
+| `cancel_simulation()` | caller's | asks; see the honesty note below |
+| `run_simulation()` | caller's | the three above, joined — the synchronous entry point, unchanged for headless callers, still raising |
+
+**The worker never notifies.** A listener redraws widgets, and touching a
+widget off the GUI thread is undefined; that split is the whole reason this is
+several methods instead of one, and `test_the_worker_never_notifies` pins it by
+recording the thread every listener fires on.
+
+`TransientDecayGenerator.update_all` pumps the event queue between joins, so
+the window keeps painting and Cancel keeps responding, and still returns the
+result. Re-entrant clicks are ignored rather than queued — pumping events means
+the button can re-enter the handler that started the run.
+
+**What it buys, honestly.** The trajectory kernels are `njit(nogil=True)`
+deliberately, so the GUI thread does get the interpreter back during the
+dominant cost; the AV grid kernels are `parallel=True` without `nogil` and
+still hold it, so a very large volume can still stutter. A smaller freeze, not
+none. And **cancellation cannot interrupt a single simulation**: `_simulate_traj`
+computes the whole trajectory inside one `njit` call and a jitted kernel cannot
+poll a Python flag, so Cancel marks the job `CANCELLING`, the form stops waiting
+and the result is *discarded* when the kernel returns. A scan, which checks
+between sites, really does stop ([tasks.md](tasks.md)).
+
+One user-visible consequence: clicking ▶ on a broken project no longer raises
+out of the Qt slot — the failure is reported in the status line. The exception
+is still raised by `run_simulation()`, where a caller can act on it.
 
 # ChiSurf is required for the desktop surface, and only for it
 

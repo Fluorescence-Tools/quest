@@ -180,6 +180,12 @@ class ProjectFormModel:
         self.results = None
         #: One line of human-readable state, shown read-only in the form.
         self.status = self._t("status.idle")
+        # The off-thread run (see start_simulation). __getattr__ raises for
+        # anything it does not know, so these exist from the start.
+        self._sim_thread = None
+        self._sim_job_id = None
+        self._sim_result = None
+        self._sim_error = None
 
     # -- AutoForm plumbing --------------------------------------------------
 
@@ -486,30 +492,145 @@ class ProjectFormModel:
 
     # -- running, and what came out ----------------------------------------
 
-    def run_simulation(self) -> Any:
-        """Simulate the current project through the service layer.
+    def start_simulation(self) -> str:
+        """Start a run on a worker thread and return its job id.
 
         The view-model calls `quest.api`, exactly as the CLI and the web
         backend do — the form contributes no physics of its own. That is the
         rule the GUI broke before, when it shipped its own quenching chemistry.
 
-        Runs synchronously, so a long simulation blocks the form (`LAY-07`).
+        The run is registered with :mod:`quest.tasks`, so a desktop run is
+        observable through `quest.jobs.list` like any other — that mechanism
+        existed from `LAY-07` but the desktop did not use it, and ran on the
+        GUI thread instead.
+
+        **Nothing here touches Qt and nothing here notifies.** A listener may
+        redraw widgets, which is only safe on the GUI thread, so the worker
+        only stores its outcome; :meth:`poll_simulation` applies it. That is
+        the whole reason this is three methods rather than one.
+
         `save_outputs=False` keeps a GUI run from littering `jobs/` in whatever
         directory the app happened to start in.
         """
-        from ..api import simulate_project
+        import threading
 
+        from ..tasks import default_manager
+
+        if self._sim_thread is not None and self._sim_thread.is_alive():
+            return self._sim_job_id
+
+        manager = default_manager()
+        job = manager.create("quest.simulate", {"surface": "gui"})
+        manager.start(job.job_id)
+        self._sim_job_id = job.job_id
+        self._sim_error = None
+        self._sim_result = None
         self.status = self._t("status.running")
         self._notify()
-        try:
-            self.results = simulate_project(self._project, save_outputs=False)
-        except Exception as error:
+
+        project = copy.deepcopy(self._project)
+
+        def worker() -> None:
+            from ..api import simulate_project
+            from ..rpc.contract import error_code_for
+
+            try:
+                result = simulate_project(project, save_outputs=False)
+            except Exception as error:  # noqa: BLE001 — re-raised on the GUI thread
+                self._sim_error = error
+                manager.fail(job.job_id, str(error), error_code_for(error))
+            else:
+                self._sim_result = result
+                manager.finish(job.job_id, result)
+
+        self._sim_thread = threading.Thread(
+            target=worker, name=f"quest-gui-simulate-{job.job_id[:8]}", daemon=True
+        )
+        self._sim_thread.start()
+        return job.job_id
+
+    def wait_simulation(self, timeout: float | None = None) -> bool:
+        """Block until the run finishes, or *timeout* seconds pass.
+
+        Returns whether it is finished. A GUI caller passes a short timeout in
+        a loop and pumps its event queue in between; a headless caller passes
+        `None`.
+        """
+        if self._sim_thread is None:
+            return True
+        self._sim_thread.join(timeout)
+        return not self._sim_thread.is_alive()
+
+    def poll_simulation(self) -> str | None:
+        """Apply a finished run's outcome. **Call this on the GUI thread.**
+
+        Returns the terminal job status (`completed`, `failed`, `cancelled`)
+        once, or `None` while the run is still going. Applying the outcome —
+        and therefore notifying listeners — happens here so that widgets are
+        only ever touched from the thread that owns them.
+        """
+        from ..tasks import default_manager
+
+        if self._sim_job_id is None:
+            return None
+        if self._sim_thread is not None and self._sim_thread.is_alive():
+            return None
+
+        job = default_manager().get(self._sim_job_id)
+        status = job.status.value if job is not None else "completed"
+        self._sim_thread = None
+        self._sim_job_id = None
+
+        if self._sim_error is not None:
             self.results = None
-            self.status = self._t("status.failed").format(error=error)
-            self._notify()
-            raise
-        self.status = self._describe(self.results)
+            self.status = self._t("status.failed").format(error=self._sim_error)
+        elif status == "cancelled":
+            # The worker returned after the flag was set: its result is not the
+            # one the user asked for, so it is discarded rather than displayed.
+            self.results = None
+            self._sim_result = None
+            self.status = self._t("status.cancelled")
+        else:
+            self.results = self._sim_result
+            self.status = self._describe(self.results)
         self._notify()
+        return status
+
+    def cancel_simulation(self) -> bool:
+        """Ask a running simulation to stop. Returns whether anything was asked.
+
+        **Honest about what this delivers**: cancellation is cooperative and a
+        single simulation has essentially one checkpoint, because
+        `_simulate_traj` computes the whole trajectory inside one `njit` call
+        and a jitted kernel cannot poll a Python flag ([tasks.md]). So this
+        marks the run `CANCELLING`, the form stops waiting on it, and the
+        result is discarded when the kernel eventually returns — it does not
+        stop the computation. A scan, which checks between sites, does stop.
+        """
+        from ..tasks import default_manager
+
+        if self._sim_job_id is None:
+            return False
+        return default_manager().cancel(self._sim_job_id)
+
+    @property
+    def simulation_running(self) -> bool:
+        return self._sim_thread is not None and self._sim_thread.is_alive()
+
+    def run_simulation(self) -> Any:
+        """Simulate and return the result, blocking until it is done.
+
+        The synchronous entry point, for headless callers and tests. It is the
+        threaded path joined immediately, not a second implementation — a
+        second one is how the GUI drifted from the CLI in the first place.
+        Raises whatever the run raised, as it always did.
+        """
+        self.start_simulation()
+        self.wait_simulation()
+        self.poll_simulation()
+        if self._sim_error is not None:
+            error, self._sim_error = self._sim_error, None
+            raise error
         return self.results
 
     @staticmethod

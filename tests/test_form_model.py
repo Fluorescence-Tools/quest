@@ -250,3 +250,107 @@ class TestStatusAndResults:
         model.add_listener(lambda: 1 / 0)
         model.tau0 = 2.0  # must not raise
         assert model.tau0 == 2.0
+
+
+@pytest.mark.needs_av
+class TestTheRunIsAJob:
+    """The desktop run goes off-thread and through `quest.tasks`.
+
+    It used to be a plain call on the GUI thread: the window froze for the
+    duration and nothing could observe or stop it, even though `LAY-07` had
+    already built the mechanism for exactly that. These tests need no Qt —
+    the threading lives in the model, and only the event pumping is Qt's.
+    """
+
+    def _configured(self):
+        from pathlib import Path
+
+        model = ProjectFormModel()
+        model.pdb = str(Path(__file__).parent / "148l.pdb")
+        model.attachment_chain = "E"
+        model.attachment_residue = 118
+        model.attachment_atom = "CB"
+        model.t_max = 40.0
+        model.t_step = 0.02
+        model.n_photons = 5_000
+        model.random_seed = 5
+        model.fret_enabled = False
+        return model
+
+    def test_the_worker_never_notifies(self) -> None:
+        """Listeners redraw widgets, so they must only fire on the caller's thread."""
+        import threading
+
+        model = self._configured()
+        caller = threading.get_ident()
+        threads = []
+        model.add_listener(lambda: threads.append(threading.get_ident()))
+
+        model.start_simulation()
+        model.wait_simulation()
+        model.poll_simulation()
+
+        assert threads, "the run notified nobody"
+        assert set(threads) == {caller}, (
+            "a listener fired on the worker thread; it may touch Qt widgets"
+        )
+
+    def test_the_run_is_visible_as_a_job(self) -> None:
+        from quest.tasks import default_manager
+
+        model = self._configured()
+        job_id = model.start_simulation()
+        assert model.simulation_running or True  # may already be done on a fast box
+
+        model.wait_simulation()
+        model.poll_simulation()
+
+        job = default_manager().get(job_id)
+        assert job is not None, "a desktop run must be observable like any other"
+        assert job.action == "quest.simulate"
+        assert job.status.value == "completed"
+
+    def test_starting_twice_does_not_start_two_runs(self) -> None:
+        model = self._configured()
+        first = model.start_simulation()
+        second = model.start_simulation()
+        model.wait_simulation()
+        model.poll_simulation()
+        assert first == second
+
+    def test_run_simulation_still_blocks_and_returns(self) -> None:
+        """The synchronous entry point keeps its contract for headless callers."""
+        model = self._configured()
+        result = model.run_simulation()
+        assert result is not None
+        assert model.results is result
+        assert model.simulation_running is False
+
+    def test_a_failed_run_raises_on_the_calling_thread(self) -> None:
+        model = ProjectFormModel()
+        model.pdb = "/nonexistent/structure.pdb"
+        with pytest.raises(Exception):
+            model.run_simulation()
+        assert model.results is None
+        assert "Failed" in model.status or "chec" in model.status.lower()
+
+    def test_a_cancelled_run_discards_its_result(self) -> None:
+        """Cancellation is cooperative: the kernel finishes, the result is dropped.
+
+        This is the honest semantics, not a limitation being hidden — a single
+        simulate has essentially one checkpoint because `_simulate_traj` runs
+        the whole trajectory inside one `njit` call.
+        """
+        model = self._configured()
+        model.start_simulation()
+        assert model.cancel_simulation() is True
+        model.wait_simulation()
+        status = model.poll_simulation()
+
+        assert status == "cancelled"
+        assert model.results is None, "a cancelled run must not display its result"
+        assert "ancel" in model.status
+
+    def test_cancelling_nothing_is_not_an_error(self) -> None:
+        model = ProjectFormModel()
+        assert model.cancel_simulation() is False

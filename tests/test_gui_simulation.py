@@ -23,13 +23,20 @@ import pytest
 
 pytest.importorskip("qtpy", reason="no Qt binding in this environment")
 QtWidgets = pytest.importorskip("qtpy.QtWidgets", reason="no Qt binding")
+QtCore = pytest.importorskip("qtpy.QtCore", reason="no Qt binding")
 
 from quest.hosts import autoform_available  # noqa: E402
 
-pytestmark = pytest.mark.skipif(
-    not autoform_available(),
-    reason="the Qt form is rendered by ChiSurf's AutoForm (set CHISURF_ROOT)",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        not autoform_available(),
+        reason="the Qt form is rendered by ChiSurf's AutoForm (set CHISURF_ROOT)",
+    ),
+    # Every test here drives a real run, and the widget reports a failed run in
+    # its status line rather than raising — so the error never reaches the
+    # conftest hook that would skip it.
+    pytest.mark.needs_av,
+]
 
 STRUCTURE = Path(__file__).parent / "148l.pdb"
 
@@ -351,3 +358,111 @@ class TestTheFormRunsFret:
         assert restored["fret"]["R0_matrix"][0][1] == pytest.approx(
             fret_simulated.model.fret_R0
         )
+
+
+class TestTheWindowStaysAliveDuringARun:
+    """The ▶ button must not freeze the form for the length of a simulation.
+
+    The run used to be a plain call on the GUI thread. `LAY-07` had already
+    built one observable, cancelable mechanism for long work — the desktop was
+    the surface that did not use it. What these pin is the *user-visible*
+    consequence: events still get delivered while a run is in flight.
+    """
+
+    def test_events_are_delivered_while_a_run_is_in_flight(self, app) -> None:
+        from quest.gui import TransientDecayGenerator
+
+        widget = TransientDecayGenerator()
+        try:
+            _configure(widget, t_max=300.0, seed=3)
+            ticks = []
+            timer = QtCore.QTimer()
+            timer.setInterval(10)
+            timer.timeout.connect(lambda: ticks.append(1))
+            timer.start()
+
+            widget.update_all()
+            timer.stop()
+
+            assert widget.model.results is not None, "the run must still produce one"
+            assert ticks, (
+                "no timer event was delivered during the run — the GUI thread "
+                "was blocked, which is the defect this replaced"
+            )
+        finally:
+            widget.close()
+
+    def test_the_run_button_is_disabled_while_running(self, app) -> None:
+        from quest.gui import TransientDecayGenerator
+
+        widget = TransientDecayGenerator()
+        try:
+            _configure(widget, t_max=300.0, seed=11)
+            states = []
+            timer = QtCore.QTimer()
+            timer.setInterval(5)
+            timer.timeout.connect(
+                lambda: states.append(
+                    (widget.btn_run.isEnabled(), widget.btn_cancel.isEnabled())
+                )
+            )
+            timer.start()
+            widget.update_all()
+            timer.stop()
+
+            assert (False, True) in states, (
+                "Run stayed enabled (or Cancel stayed disabled) during the run"
+            )
+            assert widget.btn_run.isEnabled()
+            assert not widget.btn_cancel.isEnabled()
+        finally:
+            widget.close()
+
+    def test_a_failed_run_leaves_the_buttons_usable(self, app) -> None:
+        """A bad project must not leave the form stuck with Run disabled.
+
+        Clicking ▶ no longer raises out of the slot: the failure is reported in
+        the status line instead. `ProjectFormModel.run_simulation` still raises
+        for headless callers, which is where an exception is useful.
+        """
+        from quest.gui import TransientDecayGenerator
+
+        widget = TransientDecayGenerator()
+        try:
+            widget.model.pdb = "/nonexistent/structure.pdb"
+            widget.update_all()
+
+            assert widget.model.results is None
+            assert widget.btn_run.isEnabled()
+            assert not widget.btn_cancel.isEnabled()
+            assert "Failed" in widget.model.status
+        finally:
+            widget.close()
+
+    def test_a_second_click_while_running_is_ignored(self, app) -> None:
+        """Pumping events means the button that started this can re-enter it."""
+        from quest.gui import TransientDecayGenerator
+
+        widget = TransientDecayGenerator()
+        try:
+            _configure(widget, t_max=200.0, seed=9)
+            reentered = []
+
+            def click_again() -> None:
+                if widget.model.simulation_running:
+                    reentered.append(widget.update_all())
+
+            timer = QtCore.QTimer()
+            timer.setInterval(10)
+            timer.timeout.connect(click_again)
+            timer.start()
+
+            result = widget.update_all()
+            timer.stop()
+
+            assert result is not None
+            assert all(r is None for r in reentered), (
+                "a re-entrant click started a second run"
+            )
+        finally:
+            widget.close()
