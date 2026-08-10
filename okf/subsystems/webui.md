@@ -121,6 +121,19 @@ and `MolView` ([subsystems/chisurf-widgets.md](/subsystems/chisurf-widgets.md));
 a feature that reaches only one of the two surfaces is a bug, which is why they
 land together.
 
+> **NGL is scheduled to be replaced by chimol here.** The two surfaces draw the
+> same structure with two different engines — ChiSurf's chimol on the desktop,
+> NGL in the browser — which is the same two-implementations shape the AutoForm
+> migration removed from the forms. ChiSurf's `chimol → WebGPU` work exists to
+> close it: one WGSL source, a desktop driver and a browser driver, so the web
+> viewer becomes the *same* renderer rather than a lookalike.
+> **Not yet actionable** (checked 2026-08-10): the desktop WGSL renderer runs
+> (`CHIMOL_RENDERER=wgpu`), but the browser/JS driver has not been started and
+> `rendercanvas`'s `pyodide` backend is still an open question upstream. The
+> status lives on ChiSurf's agent board (`~/dev/chisurf/okf/agent-board.md`) and
+> in `~/dev/chisurf/okf/plugins/chimol-web.md` — check those, not this file,
+> for whether it has landed.
+
 ## Guided tour (`components/tour/`)
 
 `Tour.tsx` is a **dependency-free, quest-agnostic onboarding overlay** — it
