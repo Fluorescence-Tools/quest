@@ -37,11 +37,11 @@ def _make_job(root: Path, *, chain: str = "E", residue: int = 55, result: bool =
 class TestStructureMetadata:
     def test_reports_chains_residues_and_atoms(self) -> None:
         metadata = structure_metadata(STRUCTURE)
-        assert metadata["atom_count"] == 1525
+        assert metadata["atom_count"] == 1385  # waters stripped (was 1525)
         chains = {chain["id"]: chain for chain in metadata["chains"]}
         assert set(chains) == {"A", "E", "S"}
         # T4 lysozyme is the long chain; the ligand and solvent chains are short.
-        assert len(chains["E"]["residues"]) == 291
+        assert len(chains["E"]["residues"]) == 164  # waters stripped (was 291)
 
         residue = next(r for r in chains["E"]["residues"] if r["id"] == 55)
         assert "CB" in residue["atoms"]

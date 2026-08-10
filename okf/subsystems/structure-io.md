@@ -49,6 +49,13 @@ sugar. QuEst used to strip every HETATM, which on 148L discarded 41 atoms
 crystallographic solvent is mobile on the timescale a tethered dye explores.
 Full measurement: [specs/structure-io.md](/specs/structure-io.md).
 
+As a defensive guarantee added 2026-08-07, `_strip_waters` runs after the IMP
+parse and removes every atom whose residue name identifies it as water (`HOH`,
+`WAT`, `TIP3`, `SOL`, … — see `_WATER_RESIDUE_NAMES`). IMP's selector already
+drops waters, but the explicit filter keeps QuEst correct regardless of which
+selector a caller or a future parser passes. `tests/test_water_stripping.py`
+covers it.
+
 Residue names coming out of the structured array are byte-string valued and need
 normalising before comparison -- hence `_normalize_residue_name` in both
 `quest/core/simulation.py` and `quest/core/dye_diffusion.py` (it also unwraps

@@ -18,7 +18,7 @@ it wants labelled, never *how to read it*.
 from .fetch import download_pdb_id, is_pdb_id, resolve_structure_path
 from .metadata import structure_metadata
 from .model import Structure, move_center_of_mass
-from .reader import keys, formats, read
+from .reader import keys, formats, read, strip_water_pdb_text, water_stripped_pdb_path
 
 __all__ = [
     "Structure",
@@ -26,6 +26,8 @@ __all__ = [
     "read",
     "keys",
     "formats",
+    "strip_water_pdb_text",
+    "water_stripped_pdb_path",
     "resolve_structure_path",
     "download_pdb_id",
     "is_pdb_id",

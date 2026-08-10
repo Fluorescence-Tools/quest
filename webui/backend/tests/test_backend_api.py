@@ -383,4 +383,4 @@ def test_uploaded_structure_reports_its_own_name() -> None:
     payload = response.json()
     assert payload["filename"] == "148l.pdb"
     assert "_" not in payload["filename"].split(".")[0][:9]
-    assert payload["atom_count"] == 1525
+    assert payload["atom_count"] == 1385  # waters stripped (was 1525)

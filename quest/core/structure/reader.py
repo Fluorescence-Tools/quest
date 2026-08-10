@@ -1,6 +1,8 @@
 import os
 import locale
 import threading
+from pathlib import Path
+
 import numpy as np
 
 
@@ -150,6 +152,12 @@ def read(filename, **kwargs):
     wall is a stronger claim than the physics supports. Measured, not assumed:
     see [specs/structure-io.md](okf/specs/structure-io.md).
 
+    As a defensive guarantee, :func:`_strip_waters` runs after the IMP parse and
+    removes every atom whose residue name identifies it as water (``HOH``,
+    ``WAT``, ``TIP3``, ``SOL``, …). IMP's selector already does this, but the
+    explicit filter keeps QuEst correct regardless of which selector a caller
+    or a future parser passes.
+
     Raises
     ------
     ImportError
@@ -178,6 +186,76 @@ def read(filename, **kwargs):
             _PARSE_CACHE.clear()
         _PARSE_CACHE[key] = atoms
     return atoms.copy()
+
+
+#: Residue names that identify water molecules. Every common force field and
+#: crystallographic convention is covered, so the filter does not depend on a
+#: single parser's notion of "water".
+_WATER_RESIDUE_NAMES = frozenset({
+    "HOH", "WAT", "TIP3", "TIP4", "TIP4P", "TIP",
+    "SPC", "SPCM", "SOL", "DOD", "H2O", "OH2", "D2O",
+})
+
+
+def strip_water_pdb_text(pdb_text: str) -> str:
+    """Remove every ATOM/HETATM line whose residue name identifies it as water.
+
+    This operates on raw PDB text, so it can clean a file *before* any viewer
+    or parser sees it — the ChiMol 3D viewer deliberately keeps waters
+    (``keep_water=True``), so stripping at the text level is the only point
+    that covers every consumer. Column-based parsing follows the PDB spec:
+    residue name is columns 18–20 (0-indexed 17:20).
+    """
+    kept = []
+    for line in pdb_text.splitlines():
+        if line.startswith(("ATOM  ", "HETATM")):
+            res_name = line[17:20].strip().upper()
+            if res_name in _WATER_RESIDUE_NAMES:
+                continue
+        kept.append(line)
+    return "\n".join(kept) + "\n" if kept else ""
+
+
+def water_stripped_pdb_path(source_path: str | os.PathLike) -> tuple[str, str]:
+    """Return ``(temp_path, name)`` for a water-stripped copy of *source_path*.
+
+    Reads the PDB file, removes water lines, and writes the result to a
+    temporary file that is reused on repeated calls for the same source.
+    The temp file is **not** deleted — it lives in the system temp directory
+    and is overwritten on the next call for the same source.
+    """
+    import tempfile
+
+    source = Path(source_path)
+    text = source.read_text(encoding="utf-8", errors="replace")
+    cleaned = strip_water_pdb_text(text)
+    stem = source.stem
+    fd, tmp = tempfile.mkstemp(prefix=f"{stem}_nowat_", suffix=source.suffix)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(cleaned)
+    return tmp, stem
+
+
+def _strip_waters(atoms: np.ndarray) -> np.ndarray:
+    """Remove every atom whose residue names it as water.
+
+    IMP's default PDB selector already drops waters, but relying on that alone
+    couples QuEst's correctness to an external library's default. This is the
+    explicit, defensive guarantee that water is never a steric obstacle — a
+    crystallographic solvent molecule is mobile on the timescale a tethered dye
+    explores, and treating it as a rigid wall is a stronger claim than the
+    physics supports.
+    """
+    if len(atoms) == 0:
+        return atoms
+    names = np.char.strip(atoms["res_name"].astype(str))
+    upper = np.char.upper(names)
+    mask = np.ones(len(atoms), dtype=bool)
+    for water in _WATER_RESIDUE_NAMES:
+        mask &= upper != water
+    if mask.all():
+        return atoms
+    return atoms[mask].copy()
 
 
 def _read_with_imp(path):
@@ -231,5 +309,5 @@ def _read_with_imp(path):
         atoms["radius"][index] = radius
         atoms["mass"][index] = mass
 
-    return atoms
+    return _strip_waters(atoms)
 

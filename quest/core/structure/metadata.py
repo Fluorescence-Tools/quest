@@ -11,6 +11,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .reader import _WATER_RESIDUE_NAMES, strip_water_pdb_text
+
 __all__ = ["structure_metadata"]
 
 
@@ -45,10 +47,16 @@ def structure_metadata(path: Path | str) -> dict[str, Any]:
     chains: dict[str, dict[int, dict[str, Any]]] = {}
     atom_count = 0
     with path.open("r", encoding="utf8", errors="replace") as handle:
-        pdb_text = handle.read()
+        raw_text = handle.read()
 
-    # Check if CIF format
-    if 'loop_' in pdb_text and '_atom_site.' in pdb_text:
+    # Strip water from the returned pdb_text so no surface ever renders it.
+    # PDB lines are filtered directly; CIF rows are skipped during parsing and
+    # the raw text is returned as-is (the browser viewer does not use pdb_text
+    # for CIF files).
+    is_cif = 'loop_' in raw_text and '_atom_site.' in raw_text
+    pdb_text = raw_text if is_cif else strip_water_pdb_text(raw_text)
+
+    if is_cif:
         rows = pdb_text.splitlines()
         in_loop = False
         loop_headers = []
@@ -142,9 +150,12 @@ def structure_metadata(path: Path | str) -> dict[str, Any]:
                         if len(parts) >= len(loop_headers):
                             group = clean_val(parts[group_col]) if group_col is not None else 'ATOM'
                             if group in ('ATOM', 'HETATM'):
-                                atom_count += 1
                                 atom_name = clean_val(parts[atom_name_col]) if atom_name_col is not None else ''
                                 residue_name = clean_val(parts[res_name_col]) if res_name_col is not None else ''
+                                if residue_name.strip().upper() in _WATER_RESIDUE_NAMES:
+                                    i += 1
+                                    continue
+                                atom_count += 1
                                 chain_id = clean_val(parts[chain_col]) if chain_col is not None else 'A'
                                 chain_id = chain_id.strip() or "_"
                                 raw_residue = clean_val(parts[res_id_col]) if res_id_col is not None else '1'
