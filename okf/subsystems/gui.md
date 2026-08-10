@@ -24,9 +24,11 @@ sources:
 | `form_model.py` | `ProjectFormModel` — the state. **Qt-free.** |
 | `quest.view.json` | the layout. **Generated**; never hand-edit. |
 | `generate_view_spec.py` | the generator, run by hand like `doc/generate_parameter_docs.py`. |
-| `dye_widget.py` | ~130 lines: puts an AutoForm in a `QWidget`. |
+| `dye_widget.py` | puts an AutoForm in a `QWidget`. |
 | `app.py` | the standalone window and its menu bar. |
 | `autoform_panel.py` | renders one RPC method's parameters from `manifest.json`. |
+| `chimol_widget.py` | the 3D viewer + sequence bar, both **embedded from ChiSurf**. |
+| `quencher_widget.py`, `plots.py`, `theme.py`, `guided_tour.py` | the table, the canvases, the palette, the tour. |
 
 Entry points: `quest gui` (CLI subcommand), the `cs.quest` gui-script, and
 ChiSurf's `quenching_estimator` plugin, which puts `TransientDecayGenerator` in
@@ -51,12 +53,27 @@ what `quest simulate` runs and what the web UI posts.
 
 Two consequences worth knowing:
 
-- The model imports no Qt, so it is testable — and usable — headless.
-  `tests/test_form_model.py` runs in the *base* environment, which has no Qt
-  binding at all, and a subprocess guardrail asserts importing it pulls none in.
+- The model imports no Qt, so it is testable — and usable — headless. A
+  subprocess guardrail asserts that importing it pulls no Qt binding in. (It
+  used to be phrased as "runs in the *base* environment"; base is retired —
+  [workflows/environment.md](/workflows/environment.md).)
 - Save/load is `save_project` / `load_project`, writing plain project JSON.
   AutoForm's generic `save_state`/`load_state` also work, but the project file
   is the one that means something to another surface.
+
+Two derived members exist so that the form does not need special cases:
+
+- **`structure_label`** is a read-only property returning the loaded file's
+  name. Without it the dock's structure display and the file picker were both
+  bound to `pdb`, i.e. two controls on one value — which the drift guard
+  `test_each_scalar_field_appears_exactly_once` fails on.
+- **`auto_attach_to_structure`** runs on `load_project_dict`. The template's
+  default site (chain A, residue 1) frequently does not exist in the structure
+  just opened, which left a project that validates but cannot run. It only
+  overwrites an attachment that is missing or invalid, prefers `CB`/`CA`/`OG`/
+  `SG`, and never selects a non-standard residue — a water could otherwise be
+  chosen, the same class of error as
+  [`lastLabelableResidue`](/subsystems/webui.md) on the web.
 
 # The layout is generated from the parameter catalog
 
@@ -93,7 +110,13 @@ Everything the form draws is an AutoForm section type:
 - the structure picker — `value` of `kind: "file"`;
 - the quencher table — an editable `table` over `quencher_rows`, writing back
   through `update_quencher_cell`;
-- the 3D view — the `chimol` custom section, bound to `preview_models`;
+- the 3D view — the `chimol` custom section, bound to `preview_models`, backed
+  by `ChiMolStructureWidget`, which embeds ChiSurf's `MolView` *and*
+  `SequenceDock` and emits `residueSelected(chain, residue)` when either is
+  clicked; donor/acceptor toggle buttons say which attachment the next click
+  sets. The widget is a host of ChiSurf's widgets, not a re-implementation —
+  the mapping of what to embed is
+  [subsystems/chisurf-widgets.md](/subsystems/chisurf-widgets.md);
 - the three plots (decay, trajectory, autocorrelation) — `plot` sections,
   rendered through ChiSurf's `chiplot`. QuEst supplies only series data
   (`decay_series`, `trajectory_series`, `autocorrelation_series`).
@@ -132,7 +155,13 @@ trajectory and point clouds, so the desktop silently had no plots to draw;
 `render_data` is now a separate parameter (see
 [simulation-pipeline](/architecture/simulation-pipeline.md)).
 
-The run is synchronous and blocks the form — `LAY-07`, still open.
+**The run is still synchronous and blocks the form.** `LAY-07` — "long-running
+work has three mechanisms" — was closed on 2026-07-28 by `quest/tasks.py`, but
+closing it gave the desktop a mechanism it does not yet use: `run_simulation`
+calls `simulate_project` on the GUI thread rather than registering a job.
+Nothing is wrong with the result; the window is simply unresponsive for the
+duration and the run cannot be cancelled. Re-checked against the code
+2026-08-10.
 
 # ChiSurf is required for the desktop surface, and only for it
 
@@ -150,11 +179,12 @@ backend run in the base environment, where **PyQt5 is not installed**.
 
 Practical consequences:
 
-- The GUI cannot be launched or screenshotted from the *default* interpreter;
-  the `arm64` and `chisurf` conda environments have PyQt5 and import quest from
+- The GUI cannot be launched or screenshotted from an interpreter without a Qt
+  binding; `arm64` — the one environment — has PyQt5 and imports quest from
   this tree ([workflows/testing.md](/workflows/testing.md)).
-- `pytest` needs `-p no:pytest-qt` where no binding exists, because the plugin
-  aborts collection.
+- **Do not pass `-p no:pytest-qt`.** It was mandatory only while the retired
+  base environment had no binding; in `arm64` it removes the `qtbot` fixture
+  and breaks the widget tests.
 - `quest/gui/__init__.py` resolves the Qt-bearing names lazily, so
   `from quest.gui.form_model import ProjectFormModel` works with no Qt at all.
 - A change that makes a `qtpy` import unconditional breaks the headless

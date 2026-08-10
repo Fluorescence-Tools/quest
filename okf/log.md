@@ -48,6 +48,42 @@
   `reader.strip_water_pdb_text` under a private name; it imports the one
   implementation now. Same behaviour, one place to correct it.
 
+* **The two surface concepts were re-read against the code they describe.**
+  Step 2 of the loop had been skipped while the surfaces changed underneath
+  them: [subsystems/webui.md](/subsystems/webui.md) still described a
+  hand-written React form, a labeling page carrying the FRET panel, a backend
+  importing the CLI's private helpers, and `data-testid="tour-btn"`; none of
+  those had been true for a day or more. What is corrected, each verified
+  against the tree rather than the prose:
+
+  - **The backend route list** was five routes short (`/api/autoform-spec`,
+    `/api/tour`, `/api/demo-project`, `/api/i18n`, `POST /api/dyes`), and the
+    paragraph justifying the `quest.cli` private imports describes a coupling
+    that `LAY-01` removed in phase 8 — `main.py` imports `quest.api`.
+  - **The sidebar form is generated**, with `lib/autoformPaths.ts` named as
+    load-bearing and the two fields that bypass `setNested`
+    (`fret.enabled` → `setFretEnabled`, `fret.R0_matrix.0.1` →
+    `setForsterRadius`) written down where a reader will meet them.
+  - **Click-to-select** documented on both surfaces at once, which is the point
+    of the rule in `AGENTS.md`.
+  - The **duplicated "Design language" section** (two verbatim copies) is one,
+    and the browser-suite section carries the AutoForm locators, the 10 s
+    `_server_is_up` timeout and the hidden-checkbox trap.
+
+  [subsystems/gui.md](/subsystems/gui.md) gains `structure_label` and
+  `auto_attach_to_structure`, the `ChiMolStructureWidget` embedding, and two
+  corrections: the file table (nine files, not five), and the retired base
+  environment, which survived in two sentences — one of them recommending
+  `-p no:pytest-qt`, which the handover lists as a trap.
+
+  **One finding is a real gap, not a stale sentence.** `gui.md` said the
+  desktop run was synchronous "— `LAY-07`, still open". `LAY-07` *is* closed:
+  `quest/tasks.py` owns the one mechanism. But `ProjectFormModel.run_simulation`
+  still calls `simulate_project` on the GUI thread instead of registering a job,
+  so the window is unresponsive for the duration of a run and cannot cancel it.
+  Closing the backlog row gave the desktop a mechanism it does not use. Recorded
+  in the concept as the current state; not fixed here.
+
 ## 2026-08-09
 
 * **The web UI is AutoForm-only; the legacy hand-written form is gone.**

@@ -37,18 +37,27 @@ packaged builds.
 ```
 GET  /health
 GET  /api/parameter-catalog     # quest/settings/parameter_catalog.json
+GET  /api/autoform-spec         # build_view_spec(locale) — the form the UI renders
+GET  /api/tour                  # quest.tour: the guided-tour steps
+GET  /api/demo-project          # quest.tour: the 148L demo project
+GET  /api/i18n                  # locales_handler
 GET  /api/dyes                  # dye presets;  POST /api/dyes appends one
 GET  /api/quenching-defaults    # REFERENCE_PET_QUENCHING + DEFAULT_QUENCHER_ATOMS
-GET  /api/template              # the CLI's own _template_project
-POST /api/validate              # the CLI's own _validate_project
+GET  /api/template
+POST /api/validate
 POST /api/structure/metadata    # chains/residues parsed from an uploaded structure
 POST /api/simulate
 POST /api/scan
 GET  /api/jobs, /api/jobs/{id}, /api/jobs/{id}/download
 ```
 
-Importing `quest.cli`'s `_template_project` / `_validate_project` is deliberate:
-one definition of "a valid project", shared with the terminal.
+**The backend goes through `quest.api`, not through the CLI.** It once imported
+`quest.cli`'s private `_template_project` / `_validate_project` at four call
+sites (`LAY-01`); since phase 8 it calls the facade and maps `error_code` onto
+an HTTP status, so "a valid project" has one definition and the web is not
+coupled to a terminal surface ([subsystems/core-api.md](/subsystems/core-api.md)).
+`to_payload` is applied here because the transport is the boundary that
+serialises — the same rule the [ZMQ server](/subsystems/rpc.md) follows.
 
 # Things that are easy to get wrong
 
@@ -70,12 +79,47 @@ one definition of "a valid project", shared with the terminal.
 App-router pages: `/` , `/simulation`, `/labeling`, `/scan`, `/advanced`, with
 shared state in `context/AppContext.tsx`.
 
-# Design language
+## The sidebar form is generated, not written (since 2026-08-09)
 
-The visual layer lives entirely in `webui/frontend/src/app/globals.css` — no
-inline styles, no per-component styling — so the look is changed by editing the
-stylesheet and *nothing else*. Class names, ids and visible text are contract:
-the browser suite pins them (`tests/test_webui_e2e.py`).
+`AppLayout` fetches `/api/autoform-spec?locale=…` and renders it through
+`components/autoform/` (`AutoForm` → `AutoPanel` → `AutoSection` →
+`AutoValue`/`AutoChoice`/`AutoToggle`). **No form is hand-written on this
+surface any more**; the ~540-line legacy React block and its AutoForm/legacy
+toggle are gone, and the only remaining switch is the JSON overlay
+(`showJson`). The desktop renders the *same* spec through ChiSurf's AutoForm,
+so a parameter added to the catalog reaches both
+([specs/autoform-scheme.md](/specs/autoform-scheme.md)).
+
+Two consequences worth knowing before editing anything here:
+
+- **`lib/autoformPaths.ts` is load-bearing.** A spec `attr` is the flat
+  `ProjectFormModel` attribute (`attachment_chain`, `fret_enabled`, `fret_R0`),
+  not the nested project path (`attachment.chain`, `fret.enabled`,
+  `fret.R0_matrix[0][1]`). `AutoSection` resolves every `attr` through
+  `attrToPath` before reading or writing; without it the form silently produces
+  projects the backend rejects. `tests/test_autoform_blueprint.py` fails if the
+  catalog grows a parameter the map does not cover.
+- **Two fields do not go through `setNested`.** `fret.enabled` routes through
+  `setFretEnabled` (which seeds the acceptor dye and the R0 matrix — a bare
+  toggle leaves a one-dye project) and `fret.R0_matrix.0.1` through
+  `setForsterRadius`, because a list cell is not a path `setNested` can index.
+
+The scan residue picker and the Calculate Scan button live in a **Scan
+Settings** card on `app/scan/page.tsx` — they were in the deleted sidebar
+block. `app/advanced/page.tsx` still uses the hand-written `Field.tsx` +
+`HelpBadge.tsx` (labels and help from `lib/parameterCatalog.ts`) and
+`QuenchingEditor.tsx`, the per-residue interaction table; those are the pieces
+the view spec does not describe.
+
+## Click-to-select a labeling site
+
+`ProteinViewer.tsx` (NGL, vendored at `public/vendor/ngl.js` — no CDN) wires
+NGL's picking proxy on `stage.signals.clicked` to the same `onResidueSelect`
+callback the sequence bar uses, so clicking a residue in the 3D view sets the
+attachment. The desktop has the same gesture through ChiSurf's `SequenceDock`
+and `MolView` ([subsystems/chisurf-widgets.md](/subsystems/chisurf-widgets.md));
+a feature that reaches only one of the two surfaces is a bug, which is why they
+land together.
 
 ## Guided tour (`components/tour/`)
 
@@ -95,9 +139,11 @@ tooltip card sits below (or above) the box, clamped into the viewport, and is
 repositioned on resize/scroll. Keys: `Esc`/click-elsewhere close, `←→` step,
 `Enter` advances. Labels (`next`, `prev`, `done`, `close`,
 `stepIndicator(c,t)` are passed in already-translated. Spotlight targets live
-on `data-tour` attributes, so steps are stable under refactors. The "Tour"
-button is `data-testid="tour-btn"`; the tour's step copy is the `web.tour.*`
-keys in all three locales.
+on `data-tour` attributes, so steps are stable under refactors. The button that
+opens it is **`data-testid="guide-btn"`** (it was `tour-btn` until 2026-08-08,
+when the control was renamed "Guide" to match ChiSurf's chrome; `.tour-btn` is
+still the CSS class on the tour's own next/prev buttons, which is a trap when
+grepping). The step copy is the `web.tour.*` keys in all three locales.
 
 Since 2026-08-07 the tour is **exhaustive and cross-page** (24 steps, all three
 locales). A step may carry a `before` hook that routes the app first (e.g.
@@ -118,12 +164,14 @@ with the active tab, get their own steps. Two consequences:
   page starts it; the last is a centred closing card. `TestTour` walks through
   the `before` navigation and pins the titles via the browser suite.
 
-## The CSS refresh
+# Design language
 
 The visual layer lives entirely in `webui/frontend/src/app/globals.css` — no
 inline styles, no per-component styling — so the look is changed by editing the
 stylesheet and *nothing else*. Class names, ids and visible text are contract:
 the browser suite pins them (`tests/test_webui_e2e.py`).
+
+## The CSS refresh
 
 A 2026-08-07 refresh made it denser and slightly more modern without touching
 the DOM:
@@ -152,24 +200,29 @@ the DOM:
   flip `button.primary`'s label colour have `:root[data-theme=…]` twins so the
   toggle path is styled too.
 
-The labeling page carries the **FRET acceptor** panel: an enable toggle, the
-acceptor chain/residue/atom selectors, `R0 [Å]` and the acceptor diffusion
-coefficient. Enabling it seeds the acceptor on the *last labelable* residue of
-the current chain — `lastLabelableResidue` skips the waters and ions structures
-end with, which a dye cannot be tethered to — so switching FRET on yields a
-project that validates. Notable components: `Plots.tsx`,
-`ProteinViewer.tsx` (NGL, vendored at `public/vendor/ngl.js` — no CDN),
-`QuenchingEditor.tsx` (the per-residue interaction table), and `Field.tsx` +
-`HelpBadge.tsx`, which render labels and help from
-`lib/parameterCatalog.ts` — i.e. from
-[the parameter catalog](/architecture/project-schema.md), not from hard-coded
-strings.
+**FRET is a sidebar section of the generated form, not a page panel.** It was
+a hand-written panel on the labeling page until 2026-08-09; that page is now
+just the `ProteinViewer`. Enabling FRET still seeds the acceptor on the *last
+labelable* residue of the current chain — `lastLabelableResidue` skips the
+waters and ions structures end with, which a dye cannot be tethered to — so
+switching it on yields a project that validates. That seeding is why the
+`fret.enabled` field is routed through `setFretEnabled` rather than written
+straight into the project.
 
 # Tests
 
 `webui/backend/tests/test_backend_api.py` covers the API directly.
 `tests/test_webui_e2e.py` drives a real browser and **skips unless both servers
 are already running** — see [workflows/testing.md](/workflows/testing.md).
+
+Since the form became generated, the browser suite locates fields *by label*
+through `_autoform_field` / `_autoform_input` / `_autoform_check` rather than by
+the ids the hand-written inputs used to carry; `_use_legacy_form` is gone. Two
+mechanical traps live here: `_server_is_up` waits **10 s** because a cold
+Next.js dev server takes >3 s and a shorter timeout silently skipped the whole
+suite, and a styled toggle's real checkbox is `display:none`, so a `.click()` on
+the visible slider times out intermittently — drive it with `.check()` or
+`evaluate()`.
 
 Two of its guards exist because a panel defect had no signal anywhere else:
 
