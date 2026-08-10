@@ -4,11 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppContext } from "../context/AppContext";
-import Field from "./Field";
-import HelpBadge from "./HelpBadge";
-import { fieldLabel, getParameterHelp } from "../lib/parameterCatalog";
 import {
-  AMINO_ACID_RESIDUES,
   DEFAULT_FORSTER_RADIUS,
   DEFAULT_KAPPA2,
   defaultAcceptorDye,
@@ -16,9 +12,6 @@ import {
   forsterMatrix,
   lastLabelableResidue,
   n,
-  projectJson,
-  normalizeAminoAcidInteractions,
-  slowFactor,
 } from "../lib/projectHelpers";
 import { Tour } from "./tour/Tour";
 import { getTourLabels, getTourSteps } from "./tour/tourSteps";
@@ -77,8 +70,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     saveDyePreset,
     saveParameter,
     applyJson,
-    onChainChange,
-    onResidueChange,
     updateProject,
     allResidues,
   } = useAppContext();
@@ -205,7 +196,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     setTourOpen(true);
   };
 
-  const [useAutoform, setUseAutoform] = React.useState(true);
   const [autoformSpec, setAutoformSpec] = React.useState<AutoFormSpec | null>(null);
   const router = useRouter();
 
@@ -235,9 +225,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }, [theme]);
   const runSimulationDisabled = clientReady && (!structure || status.kind === "busy");
   const downloadDisabled = clientReady && !result && !scanResults;
-  const chainSelectDisabled = clientReady && !chains.length;
-  const residueSelectDisabled = clientReady && !residues.length;
-  const atomSelectDisabled = clientReady && !atoms.length;
 
   function handleToggleJson(checked: boolean) {
     if (!checked) {
@@ -464,30 +451,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <h2>Configuration</h2>
             <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
               <label className="toggle-switch">
-                <span className="toggle-label">AutoForm</span>
-                <div className="switch">
-                  <input
-                    type="checkbox"
-                    checked={useAutoform}
-                    onChange={(event) => {
-                      setUseAutoform(event.target.checked);
-                      if (event.target.checked && showJson) setShowJson(false);
-                    }}
-                    data-testid="autoform-toggle"
-                  />
-                  <span className="slider"></span>
-                </div>
-              </label>
-              <label className="toggle-switch">
                 <span className="toggle-label">JSON</span>
                 <div className="switch">
                   <input
                     type="checkbox"
                     checked={showJson}
-                    onChange={(event) => {
-                      handleToggleJson(event.target.checked);
-                      if (event.target.checked && useAutoform) setUseAutoform(false);
-                    }}
+                    onChange={(event) => handleToggleJson(event.target.checked)}
                   />
                   <span className="slider"></span>
                 </div>
@@ -522,560 +491,33 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
             </div>
           </div>
-          {useAutoform ? (
+          {!showJson ? (
             <div className="panel-section autoform-wrapper" style={{ padding: "12px" }}>
               {autoformSpec ? (
                 <AutoForm
                   spec={autoformSpec}
                   data={project}
-                  onChange={(path, val) => updateProject(path, val)}
+                  onChange={(path, val) => {
+                    // fret_R0 is a single number stored as the donor->acceptor
+                    // cell of a symmetric matrix; setNested cannot index a list.
+                    if (path === "fret.R0_matrix.0.1") {
+                      setForsterRadius(Number(val));
+                      return;
+                    }
+                    // Enabling FRET must seed the acceptor dye and R0, exactly
+                    // like the legacy toggle did; a bare fret.enabled=true
+                    // leaves a project with one dye that validates but cannot
+                    // transfer.
+                    if (path === "fret.enabled") {
+                      setFretEnabled(Boolean(val));
+                      return;
+                    }
+                    updateProject(path, val);
+                  }}
                   catalog={catalog || undefined}
-
                 />
               ) : (
                 <div style={{ padding: "12px", color: "var(--text-muted)" }}>Loading AutoForm spec...</div>
-              )}
-            </div>
-          ) : !showJson ? (
-
-            <div className="setup-vertical-stack">
-              {currentTab === "/labeling" && (
-                <>
-                  <section className="panel-section" data-tour="structure">
-                    <h2>Structure</h2>
-                    <div className="structure-stats">
-                      <strong>{structure?.filename || "No structure loaded"}</strong>
-                      <span>
-                        {structure
-                          ? `${structure.chains.length} chains, ${structure.atom_count} atoms`
-                          : "Upload a structure file to start."}
-                      </span>
-                    </div>
-                  </section>
-
-                  <section className="panel-section" data-tour="labeling">
-                    <h2>Labeling site</h2>
-                    <label className="field">
-                      <span className="help-badge-container">
-                        Chain
-                        {catalog && <HelpBadge definition={getParameterHelp(catalog, "attachment.chain")} />}
-                      </span>
-                      <select
-                        value={project.attachment?.chain || ""}
-                        onChange={(event) => onChainChange(event.target.value)}
-                        disabled={chainSelectDisabled}
-                      >
-                        {chains.length ? (
-                          chains.map((chain) => <option key={chain.id}>{chain.id}</option>)
-                        ) : (
-                          <option value="">-</option>
-                        )}
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span className="help-badge-container">
-                        Residue
-                        {catalog && <HelpBadge definition={getParameterHelp(catalog, "attachment.residue")} />}
-                      </span>
-                      <select
-                        value={project.attachment?.residue || ""}
-                        onChange={(event) => onResidueChange(Number(event.target.value))}
-                        disabled={residueSelectDisabled}
-                      >
-                        {residues.length ? (
-                          residues.map((residue) => (
-                            <option key={residue.id} value={residue.id}>
-                              {residue.id} {residue.name}
-                            </option>
-                          ))
-                        ) : (
-                          <option value="">-</option>
-                        )}
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span className="help-badge-container">
-                        Atom
-                        {catalog && <HelpBadge definition={getParameterHelp(catalog, "attachment.atom")} />}
-                      </span>
-                      <select
-                        value={project.attachment?.atom || ""}
-                        onChange={(event) => updateProject("attachment.atom", event.target.value)}
-                        disabled={atomSelectDisabled}
-                      >
-                        {atoms.length ? (
-                          atoms.map((atom) => <option key={atom}>{atom}</option>)
-                        ) : (
-                          <option value="">-</option>
-                        )}
-                      </select>
-                    </label>
-                  </section>
-
-                  <section className="panel-section compact fret-section" data-tour="fret">
-                    <label className="check-field">
-                      <input
-                        type="checkbox"
-                        checked={fretEnabled}
-                        aria-label="Simulate FRET acceptor"
-                        onChange={(event) => setFretEnabled(event.target.checked)}
-                      />
-                      <span className="help-badge-container">
-                        FRET acceptor
-                        {catalog && <HelpBadge definition={getParameterHelp(catalog, "fret.enabled")} />}
-                      </span>
-                    </label>
-                    {fretEnabled && (
-                      <>
-                        <label className="field">
-                          <span className="help-badge-container">
-                            Acceptor chain
-                            {catalog && (
-                              <HelpBadge
-                                definition={getParameterHelp(catalog, "fret.dyes.1.attachment.chain")}
-                              />
-                            )}
-                          </span>
-                          <select
-                            value={acceptor?.attachment?.chain || ""}
-                            onChange={(event) => onAcceptorChainChange(event.target.value)}
-                            disabled={chainSelectDisabled}
-                          >
-                            {chains.length ? (
-                              chains.map((chain) => <option key={chain.id}>{chain.id}</option>)
-                            ) : (
-                              <option value="">-</option>
-                            )}
-                          </select>
-                        </label>
-                        <label className="field">
-                          <span className="help-badge-container">
-                            Acceptor residue
-                            {catalog && (
-                              <HelpBadge
-                                definition={getParameterHelp(catalog, "fret.dyes.1.attachment.residue")}
-                              />
-                            )}
-                          </span>
-                          <select
-                            value={acceptor?.attachment?.residue || ""}
-                            onChange={(event) => onAcceptorResidueChange(Number(event.target.value))}
-                            disabled={clientReady && !acceptorResidues.length}
-                          >
-                            {acceptorResidues.length ? (
-                              acceptorResidues.map((residue) => (
-                                <option key={residue.id} value={residue.id}>
-                                  {residue.id} {residue.name}
-                                </option>
-                              ))
-                            ) : (
-                              <option value="">-</option>
-                            )}
-                          </select>
-                        </label>
-                        <label className="field">
-                          <span className="help-badge-container">
-                            Acceptor atom
-                            {catalog && (
-                              <HelpBadge
-                                definition={getParameterHelp(catalog, "fret.dyes.1.attachment.atom")}
-                              />
-                            )}
-                          </span>
-                          <select
-                            value={acceptor?.attachment?.atom || ""}
-                            onChange={(event) =>
-                              updateProject("fret.dyes.1.attachment.atom", event.target.value)
-                            }
-                            disabled={clientReady && !acceptorAtoms.length}
-                          >
-                            {acceptorAtoms.length ? (
-                              acceptorAtoms.map((atom) => <option key={atom}>{atom}</option>)
-                            ) : (
-                              <option value="">-</option>
-                            )}
-                          </select>
-                        </label>
-                        <Field
-                          label="R0 [Å]"
-                          value={r0}
-                          onChange={(value) => setForsterRadius(value)}
-                          parameterId="fret.R0_matrix"
-                          catalog={catalog}
-                          isDirty={r0 !== savedR0}
-                        />
-                        <Field
-                          label="κ²"
-                          // Rounded for display only: the stored default is
-                          // exactly 2/3, and the rate's neutrality depends on
-                          // that (kappa2 / (2/3) == 1). Rendering the raw
-                          // double put 0.6666666666666666 in the box.
-                          value={Number(kappa2.toPrecision(4))}
-                          step="0.05"
-                          min={0}
-                          max={4}
-                          onChange={(value) => updateProject("fret.kappa2", value)}
-                          parameterId="fret.kappa2"
-                          catalog={catalog}
-                          isDirty={kappa2 !== savedKappa2}
-                        />
-                        <Field
-                          label="Acceptor D [Å²/ns]"
-                          value={n(acceptor?.D, 7.0)}
-                          onChange={(value) => updateProject("fret.dyes.1.D", value)}
-                          parameterId="fret.dyes.1.D"
-                          catalog={catalog}
-                          isDirty={n(acceptor?.D, 7.0) !== n(savedProject.fret?.dyes?.[1]?.D, 7.0)}
-                        />
-                        {/* The acceptor is its own dye: it diffuses and sticks
-                            with its own coefficient and radius. Both default to
-                            the donor's when left alone. */}
-                        <Field
-                          label="Acceptor slowing radius [Å]"
-                          value={n(acceptor?.slow_radius, n(project.slow_radius, 8.5))}
-                          onChange={(value) => updateProject("fret.dyes.1.slow_radius", value)}
-                          parameterId="fret.dyes.1.slow_radius"
-                          catalog={catalog}
-                          isDirty={
-                            n(acceptor?.slow_radius, n(project.slow_radius, 8.5)) !==
-                            n(
-                              savedProject.fret?.dyes?.[1]?.slow_radius,
-                              n(savedProject.slow_radius, 8.5)
-                            )
-                          }
-                        />
-                        <label className="field">
-                          <span className="help-badge-container">
-                            {fieldLabel(catalog, "fret.acceptor_dynamics", "Acceptor dynamics")}
-                            <HelpBadge
-                              definition={getParameterHelp(catalog, "fret.acceptor_dynamics")}
-                            />
-                          </span>
-                          <select
-                            value={project.fret?.acceptor_dynamics ?? "trajectory"}
-                            onChange={(event) =>
-                              updateProject("fret.acceptor_dynamics", event.target.value)
-                            }
-                            data-testid="acceptor-dynamics"
-                          >
-                            <option value="trajectory">trajectory (diffuses)</option>
-                            <option value="averaged">averaged (fast-acceptor limit)</option>
-                          </select>
-                        </label>
-                      </>
-                    )}
-                  </section>
-
-                  <section className="panel-section compact" data-tour="av">
-                    <h2>Accessible volume</h2>
-                    <Field
-                      label="Linker length"
-                      value={n(project.av_parameter?.linker_length, 21.5)}
-                      onChange={(value) => updateProject("av_parameter.linker_length", value)}
-                      parameterId="av_parameter.linker_length"
-                      catalog={catalog}
-                      onSave={() => saveParameter("av_parameter.linker_length")}
-                      isDirty={
-                        n(project.av_parameter?.linker_length, 21.5) !==
-                        n(savedProject.av_parameter?.linker_length, 21.5)
-                      }
-                    />
-                    <Field
-                      label="Linker width"
-                      value={n(project.av_parameter?.linker_width, 0.5)}
-                      onChange={(value) => updateProject("av_parameter.linker_width", value)}
-                      parameterId="av_parameter.linker_width"
-                      catalog={catalog}
-                      onSave={() => saveParameter("av_parameter.linker_width")}
-                      isDirty={
-                        n(project.av_parameter?.linker_width, 0.5) !==
-                        n(savedProject.av_parameter?.linker_width, 0.5)
-                      }
-                    />
-                    <Field
-                      label="Dye radius"
-                      value={n(project.av_parameter?.radius1, 3.5)}
-                      onChange={(value) => updateProject("av_parameter.radius1", value)}
-                      parameterId="av_parameter.radius1"
-                      catalog={catalog}
-                      onSave={() => saveParameter("av_parameter.radius1")}
-                      isDirty={
-                        n(project.av_parameter?.radius1, 3.5) !==
-                        n(savedProject.av_parameter?.radius1, 3.5)
-                      }
-                    />
-                    <Field
-                      label="Grid dg"
-                      value={n(project.dg, 0.5)}
-                      onChange={(value) => updateProject("dg", value)}
-                      parameterId="dg"
-                      catalog={catalog}
-                      onSave={() => saveParameter("dg")}
-                      isDirty={n(project.dg, 0.5) !== n(savedProject.dg, 0.5)}
-                    />
-                  </section>
-                </>
-              )}
-              {currentTab === "/simulation" && (
-                <>
-                  <section className="panel-section compact" data-tour="sim-settings">
-                    <h2>{t("web.card.settings", "Simulation Settings")}</h2>
-                    <Field
-                      label="tau0 [ns]"
-                      value={n(project.tau0, 4.2)}
-                      onChange={(value) => updateProject("tau0", value)}
-                      parameterId="tau0"
-                      catalog={catalog}
-                      onSave={() => saveParameter("tau0")}
-                      isDirty={n(project.tau0, 4.2) !== n(savedProject.tau0, 4.2)}
-                    />
-                    <Field
-                      label="D [A2/ns]"
-                      value={n(donor?.D, 7.0)}
-                      onChange={(value) => updateProject("fret.dyes.0.D", value)}
-                      parameterId="fret.dyes.0.D"
-                      catalog={catalog}
-                      onSave={() => saveParameter("fret.dyes.0.D")}
-                      isDirty={n(donor?.D, 7.0) !== n(savedProject.fret?.dyes?.[0]?.D, 7.0)}
-                    />
-                    <Field
-                      label="Quench radius"
-                      value={n(project.critical_distance, 4.0)}
-                      onChange={(value) => updateProject("critical_distance", value)}
-                      parameterId="critical_distance"
-                      catalog={catalog}
-                      onSave={() => saveParameter("critical_distance")}
-                      isDirty={n(project.critical_distance, 4.0) !== n(savedProject.critical_distance, 4.0)}
-                    />
-                    <Field
-                      label="t max [ns]"
-                      value={n(project.t_max, 200)}
-                      step="10"
-                      onChange={(value) => updateProject("t_max", value)}
-                      parameterId="t_max"
-                      catalog={catalog}
-                      onSave={() => saveParameter("t_max")}
-                      isDirty={n(project.t_max, 200) !== n(savedProject.t_max, 200)}
-                    />
-                    <Field
-                      label="t step [ns]"
-                      value={n(project.t_step, 0.02)}
-                      step="0.001"
-                      onChange={(value) => updateProject("t_step", value)}
-                      parameterId="t_step"
-                      catalog={catalog}
-                      onSave={() => saveParameter("t_step")}
-                      isDirty={n(project.t_step, 0.02) !== n(savedProject.t_step, 0.02)}
-                    />
-                    <Field
-                      label="Photons"
-                      value={n(project.n_photons, 10000)}
-                      step="1000"
-                      onChange={(value) => updateProject("n_photons", value)}
-                      parameterId="n_photons"
-                      catalog={catalog}
-                      onSave={() => saveParameter("n_photons")}
-                      isDirty={n(project.n_photons, 10000) !== n(savedProject.n_photons, 10000)}
-                    />
-                    <Field
-                      label="Bins"
-                      value={n(project.n_bins, 256)}
-                      step="1"
-                      onChange={(value) => updateProject("n_bins", value)}
-                      parameterId="n_bins"
-                      catalog={catalog}
-                      onSave={() => saveParameter("n_bins")}
-                      isDirty={n(project.n_bins, 256) !== n(savedProject.n_bins, 256)}
-                    />
-                  </section>
-
-                </>
-              )}
-              {currentTab === "/scan" && (
-                <>
-                  <section className="panel-section">
-                    <h2>Structure</h2>
-                    <div className="structure-stats">
-                      <strong>{structure?.filename || "No structure loaded"}</strong>
-                      <span>
-                        {structure
-                          ? `${structure.chains.length} chains, ${structure.atom_count} atoms`
-                          : "Upload a structure file to start."}
-                      </span>
-                    </div>
-                  </section>
-
-                  <section className="panel-section" data-tour="scan-settings">
-                    <h2>{t("web.card.scan_settings", "Scan Settings")}</h2>
-                    <label className="check-field" style={{ marginBottom: "8px" }}>
-                      <input
-                        type="checkbox"
-                        checked={scanAll}
-                        onChange={(e) => setScanAll(e.target.checked)}
-                        disabled={!structure}
-                      />
-                      <span>Scan all residues ({allResidues.length})</span>
-                    </label>
-
-                    {!scanAll && structure && (
-                      <div className="scan-residues-selection">
-                        <div className="scan-selection-actions">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next: Record<string, boolean> = {};
-                              allResidues.forEach((r) => {
-                                next[r.key] = true;
-                              });
-                              setSelectedScanResidues(next);
-                            }}
-                          >
-                            Select All
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next: Record<string, boolean> = {};
-                              allResidues.forEach((r) => {
-                                next[r.key] = false;
-                              });
-                              setSelectedScanResidues(next);
-                            }}
-                          >
-                            Select None
-                          </button>
-                        </div>
-                        <div className="scan-residues-list">
-                          {allResidues.map((res) => (
-                            <label key={res.key} className="scan-residue-item">
-                              <input
-                                type="checkbox"
-                                checked={Boolean(selectedScanResidues[res.key])}
-                                onChange={(e) => {
-                                  setSelectedScanResidues((curr) => ({
-                                    ...curr,
-                                    [res.key]: e.target.checked,
-                                  }));
-                                }}
-                              />
-                              <span>
-                                {res.chain}:{res.residue} ({res.residue_name})
-                              </span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
-                      <button
-                        className="primary"
-                        style={{ flex: 1, fontWeight: "bold" }}
-                        onClick={runScan}
-                        disabled={!structure || isScanning}
-                      >
-                        {isScanning ? "Scanning..." : "Calculate Scan"}
-                      </button>
-                      {isScanning && (
-                        <button
-                          style={{
-                            backgroundColor: "var(--red, #e11d48)",
-                            borderColor: "var(--red, #e11d48)",
-                            color: "white",
-                            fontWeight: "bold",
-                          }}
-                          onClick={abortScan}
-                        >
-                          Stop
-                        </button>
-                      )}
-                    </div>
-                    {scanProgress && (
-                      <div style={{ marginTop: "10px" }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            fontSize: "11px",
-                            marginBottom: "4px",
-                            color: "var(--muted)",
-                          }}
-                        >
-                          <span>Scan Progress</span>
-                          <span>
-                            {scanProgress.current} / {scanProgress.total} (
-                            {Math.round((scanProgress.current / (scanProgress.total || 1)) * 100)}%)
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            width: "100%",
-                            height: "8px",
-                            backgroundColor: "var(--line)",
-                            borderRadius: "4px",
-                            overflow: "hidden",
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: `${(scanProgress.current / (scanProgress.total || 1)) * 100}%`,
-                              height: "100%",
-                              backgroundColor: "var(--accent)",
-                              transition: "width 0.2s ease-in-out",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                    <div
-                      className={`status ${scanStatus.kind}`}
-                      style={{ marginTop: "10px", width: "100%", maxWidth: "none" }}
-                    >
-                      {scanStatus.message}
-                    </div>
-                  </section>
-                </>
-              )}
-              {currentTab === "/advanced" && (
-                <>
-                  <section className="panel-section compact" data-tour="stickiness">
-                    <h2>Dye stickiness</h2>
-                    <Field
-                      label="Slowing radius"
-                      value={n(project.slow_radius, 8.5)}
-                      step="0.1"
-                      onChange={(value) => updateProject("slow_radius", value)}
-                      parameterId="slow_radius"
-                      catalog={catalog}
-                      onSave={() => saveParameter("slow_radius")}
-                      isDirty={n(project.slow_radius, 8.5) !== n(savedProject.slow_radius, 8.5)}
-                    />
-                  </section>
-
-                  <section className="panel-section">
-                    <h2>Quenching residues</h2>
-                    <p className="panel-note">
-                      Edit rates, contact radii and quenching centres in the panel on the right.
-                    </p>
-                    <ul className="quench-summary-list">
-                      {AMINO_ACID_RESIDUES.map((residue) => {
-                        const current = normalizeAminoAcidInteractions(project.amino_acid_interactions)[residue];
-                        if (current.kQ <= 0) return null;
-                        return (
-                          <li key={residue}>
-                            <span className="residue-code">{residue}</span>
-                            <span>
-                              k<sub>Q</sub> {current.kQ.toFixed(2)} /ns
-                            </span>
-                            <span className="muted">
-                              r {(current.quench_radius ?? n(project.critical_distance, 8.5)).toFixed(1)} Å
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </section>
-                </>
               )}
             </div>
           ) : (

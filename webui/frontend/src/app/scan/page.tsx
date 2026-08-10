@@ -9,6 +9,17 @@ export default function ScanPage() {
   const {
     scanResults,
     setProject,
+    structure,
+    scanAll,
+    setScanAll,
+    selectedScanResidues,
+    setSelectedScanResidues,
+    scanProgress,
+    scanStatus,
+    isScanning,
+    allResidues,
+    runScan,
+    abortScan,
     copyScanResultsToClipboard,
   } = useAppContext();
 
@@ -180,6 +191,135 @@ export default function ScanPage() {
 
   return (
     <div className="results-section" data-tour="scan-page">
+      <section className="result-card" data-tour="scan-settings" style={{ marginBottom: "16px" }}>
+        <div className="card-header">
+          <h2>Scan Settings</h2>
+        </div>
+        <div className="advanced-settings-body">
+          <label className="check-field" style={{ marginBottom: "8px" }}>
+            <input
+              type="checkbox"
+              checked={scanAll}
+              onChange={(e) => setScanAll(e.target.checked)}
+              disabled={!structure}
+            />
+            <span>Scan all residues ({allResidues.length})</span>
+          </label>
+
+          {!scanAll && structure && (
+            <div className="scan-residues-selection">
+              <div className="scan-selection-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next: Record<string, boolean> = {};
+                    allResidues.forEach((r) => { next[r.key] = true; });
+                    setSelectedScanResidues(next);
+                  }}
+                >
+                  Select All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next: Record<string, boolean> = {};
+                    allResidues.forEach((r) => { next[r.key] = false; });
+                    setSelectedScanResidues(next);
+                  }}
+                >
+                  Select None
+                </button>
+              </div>
+              <div className="scan-residues-list">
+                {allResidues.map((res) => (
+                  <label key={res.key} className="scan-residue-item">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(selectedScanResidues[res.key])}
+                      onChange={(e) => {
+                        setSelectedScanResidues((curr) => ({
+                          ...curr,
+                          [res.key]: e.target.checked,
+                        }));
+                      }}
+                    />
+                    <span>
+                      {res.chain}:{res.residue} ({res.residue_name})
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
+            <button
+              className="primary"
+              style={{ flex: 1, fontWeight: "bold" }}
+              onClick={runScan}
+              disabled={!structure || isScanning}
+            >
+              {isScanning ? "Scanning..." : "Calculate Scan"}
+            </button>
+            {isScanning && (
+              <button
+                style={{
+                  backgroundColor: "var(--red, #e11d48)",
+                  borderColor: "var(--red, #e11d48)",
+                  color: "white",
+                  fontWeight: "bold",
+                }}
+                onClick={abortScan}
+              >
+                Stop
+              </button>
+            )}
+          </div>
+          {scanProgress && (
+            <div style={{ marginTop: "10px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: "11px",
+                  marginBottom: "4px",
+                  color: "var(--muted)",
+                }}
+              >
+                <span>Scan Progress</span>
+                <span>
+                  {scanProgress.current} / {scanProgress.total} (
+                  {Math.round((scanProgress.current / (scanProgress.total || 1)) * 100)}%)
+                </span>
+              </div>
+              <div
+                style={{
+                  width: "100%",
+                  height: "8px",
+                  backgroundColor: "var(--line)",
+                  borderRadius: "4px",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${(scanProgress.current / (scanProgress.total || 1)) * 100}%`,
+                    height: "100%",
+                    backgroundColor: "var(--accent)",
+                    transition: "width 0.2s ease-in-out",
+                  }}
+                />
+              </div>
+            </div>
+          )}
+          <div
+            className={`status ${scanStatus.kind}`}
+            style={{ marginTop: "10px", width: "100%", maxWidth: "none" }}
+          >
+            {scanStatus.message}
+          </div>
+        </div>
+      </section>
       <div className="results-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
         <div>
           <h2 style={{ margin: 0 }}>Scan Results</h2>

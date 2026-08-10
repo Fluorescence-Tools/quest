@@ -1,3 +1,20 @@
+---
+type: Specification
+title: ChiSurf AutoForm dependency & integration architecture
+description: The ChiSurf AutoForm components QuEst consumes as a host-integrated plugin and as a standalone desktop app, and the in-tree fallback.
+resource: quest/gui/dye_widget.py
+tags: [autoform, chisurf, dependency, gui, standalone, plugin]
+status: draft
+generated: { by: human:tpeulen, at: 2026-08-07T00:00:00Z }
+stale_after: 2026-11-07
+sources:
+  - id: chisurf-autoform
+    resource: ../../chisurf/chisurf/gui/autoform/auto_form.py
+    title: chisurf/gui/autoform (renderer)
+    author: human:tpeulen
+    last_modified: 2026-08-07
+---
+
 # ChiSurf AutoForm Dependency & Integration Architecture
 
 This specification details the ChiSurf AutoForm components available to QuEst as an allowed dependency, explaining how QuEst consumes them both as a host-integrated ChiSurf plugin and as a standalone desktop application.

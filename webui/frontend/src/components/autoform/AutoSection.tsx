@@ -7,6 +7,7 @@ import { AutoValue } from "./AutoValue";
 import { AutoChoice } from "./AutoChoice";
 import { AutoToggle } from "./AutoToggle";
 import { getNestedValue } from "./utils";
+import { attrToPath } from "../../lib/autoformPaths";
 
 interface AutoSectionProps {
   section: AutoFormSection;
@@ -25,7 +26,7 @@ export const AutoSection: React.FC<AutoSectionProps> = ({
   onAction,
   catalog,
 }) => {
-  const path = section.attr || section.target || "";
+  const path = attrToPath(section.attr || section.target || "");
 
   switch (section.type) {
     case "panel":

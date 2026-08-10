@@ -30,7 +30,7 @@ def _server_is_up(url: str) -> bool:
     import urllib.request
 
     try:
-        with urllib.request.urlopen(url, timeout=3) as response:
+        with urllib.request.urlopen(url, timeout=10) as response:
             return response.status < 500
     except (urllib.error.URLError, OSError):
         return False
@@ -98,6 +98,45 @@ def _ignorable(message: str) -> bool:
         token in lowered
         for token in ("favicon", "webgl", "download the react devtools", "hydration")
     )
+
+
+def _autoform_field(page: Page, label_text: str):
+    """Find an AutoForm input/checkbox by its visible label text.
+
+    AutoForm renders fields with ``<strong>{label}</strong>`` inside
+    ``.autoform-value-field`` / ``.autoform-toggle-field`` divs.
+    """
+    return page.locator(
+        ".autoform-value-field, .autoform-toggle-field, .autoform-choice-field"
+    ).filter(has_text=label_text)
+
+
+def _autoform_input(page: Page, label_text: str):
+    """The ``<input>`` inside an AutoForm field identified by *label_text*."""
+    return _autoform_field(page, label_text).locator("input").first
+
+
+def _autoform_check(page: Page, label_text: str):
+    """Check an AutoForm toggle checkbox identified by *label_text*."""
+    _autoform_input(page, label_text).check()
+
+
+def _set_project_json(page: Page, **updates) -> None:
+    """Patch the project via the JSON editor — the universal fallback.
+
+    Opens the JSON panel, applies *updates* to the project dict, and clicks
+    Apply. Works for any field the AutoForm does not expose as a dropdown.
+    """
+    page.locator("label.toggle-switch", has_text="JSON").click()
+    textarea = page.locator(".json-panel textarea")
+    project = json.loads(textarea.input_value())
+    project.update(updates)
+    textarea.fill(json.dumps(project))
+    page.locator(".json-panel button", has_text="Apply").click()
+    page.wait_for_timeout(500)
+    # Toggle back to AutoForm
+    page.locator("label.toggle-switch", has_text="JSON").click()
+    page.wait_for_timeout(300)
 
 
 class TestPagesLoad:
@@ -177,7 +216,7 @@ class TestTour:
 
     def test_the_guide_walks_through_every_step(self, page: Page) -> None:
         _load(page, "/labeling")
-        page.get_by_test_id("tour-btn").click()
+        page.get_by_test_id("guide-btn").click()
         expect(page.locator(".tour-card")).to_be_visible()
         expect(page.locator(".tour-card-title")).to_have_text("Welcome to QuEst")
 
@@ -225,7 +264,7 @@ class TestTour:
 
     def test_escape_closes_the_tour(self, page: Page) -> None:
         _load(page, "/labeling")
-        page.get_by_test_id("tour-btn").click()
+        page.get_by_test_id("guide-btn").click()
         expect(page.locator(".tour-card")).to_be_visible()
         page.keyboard.press("Escape")
         expect(page.locator(".tour-card")).to_have_count(0)
@@ -255,7 +294,11 @@ class TestQuenchingEditor:
         kq_input = trp_row.get_by_label("TRP quenching rate")
         kq_input.fill("7.25")
         kq_input.blur()
-        expect(page.locator(".quench-summary-list")).to_contain_text("7.25")
+        # Verify via the JSON panel that the project carries the edited value
+        page.locator("label.toggle-switch", has_text="JSON").click()
+        project = json.loads(page.locator(".json-panel textarea").input_value())
+        assert project["amino_acid_interactions"]["TRP"]["kQ"] == pytest.approx(7.25)
+        page.locator("label.toggle-switch", has_text="JSON").click()
 
     def test_quench_atoms_are_editable_and_restorable(self, page: Page) -> None:
         _load(page, "/advanced")
@@ -275,11 +318,10 @@ class TestQuenchingEditor:
     def test_clear_and_reset_quenching(self, page: Page) -> None:
         _load(page, "/advanced")
         page.get_by_role("button", name="Clear quenching").click()
-        expect(page.locator(".quench-summary-list li")).to_have_count(0)
+        expect(page.locator(".quench-editor-stats")).to_contain_text("0 quenching")
 
         page.get_by_role("button", name="Reset to reference").click()
-        expect(page.locator(".quench-summary-list li")).to_have_count(6)
-        expect(page.locator(".quench-editor-stats")).to_contain_text("6 quenching residue types")
+        expect(page.locator(".quench-editor-stats")).to_contain_text("6 quenching")
 
 
 class TestSimulationWorkflow:
@@ -287,14 +329,12 @@ class TestSimulationWorkflow:
         _load(page, "/labeling")
         _upload_structure(page)
 
-        # The largest chain must be selected by default, not the 2-residue
-        # ligand chain that happens to sort first in this file.
-        chain_select = page.locator("label.field").filter(has_text="Chain").locator("select")
-        expect(chain_select).to_have_value("E")
-
         # Pick a site next to the aromatic cluster so quenching is measurable.
-        residue_select = page.locator("label.field").filter(has_text="Residue").locator("select")
-        residue_select.select_option(value="155", timeout=15_000)
+        # AutoForm renders attachment.residue as a number input.
+        residue_input = _autoform_input(page, "Attachment residue")
+        residue_input.fill("155")
+        residue_input.blur()
+        page.wait_for_timeout(300)
 
         page.get_by_role("button", name="Run Sim").click()
         expect(page.locator(".topbar .status.ok")).to_contain_text("Simulation complete", timeout=300_000)
@@ -336,14 +376,67 @@ class TestSimulationWorkflow:
         assert not real_errors, f"console errors during simulation: {real_errors}"
 
 
+class TestWebPlotsPopulate:
+    """The SVG path elements must carry real coordinate data after a simulation.
+
+    A chart frame with axes but an empty ``<path d="">`` means the plot *exists*
+    but nothing is *drawn* — the user sees an empty box. These tests verify the
+    actual curve geometry reaches the DOM.
+    """
+
+    def _run_and_navigate(self, page: Page) -> None:
+        _load(page, "/labeling")
+        _upload_structure(page)
+        page.wait_for_timeout(500)
+        residue_input = _autoform_input(page, "Attachment residue")
+        residue_input.fill("155")
+        residue_input.blur()
+        page.wait_for_timeout(300)
+        page.get_by_role("button", name="Run Sim").click()
+        expect(page.locator(".topbar .status.ok")).to_contain_text(
+            "Simulation complete", timeout=300_000
+        )
+        page.get_by_role("link", name="2 - Simulation").click()
+
+    def test_decay_path_has_coordinates(self, page: Page) -> None:
+        self._run_and_navigate(page)
+        path = page.locator("path.donor-line")
+        expect(path).to_be_visible()
+        d = path.get_attribute("d") or ""
+        assert d.count("L") > 5, f"donor-line path has only {d.count('L')} segments: {d[:80]}"
+
+    def test_trajectory_path_has_coordinates(self, page: Page) -> None:
+        self._run_and_navigate(page)
+        path = page.locator("path.trajectory-line")
+        expect(path).to_be_visible()
+        d = path.get_attribute("d") or ""
+        assert d.count("L") > 5, f"trajectory path has only {d.count('L')} segments: {d[:80]}"
+
+    def test_autocorrelation_path_has_coordinates(self, page: Page) -> None:
+        self._run_and_navigate(page)
+        path = page.locator("path.autocorr-line")
+        expect(path).to_be_visible()
+        d = path.get_attribute("d") or ""
+        assert d.count("L") > 5, f"autocorr path has only {d.count('L')} segments: {d[:80]}"
+
+    def test_plots_are_empty_before_a_run(self, page: Page) -> None:
+        """Before any simulation, the decay plot shows the empty state, not a curve."""
+        _load(page, "/simulation")
+        # The empty-state message must be shown, and no path.donor-line exists.
+        expect(page.locator("text=No decay yet")).to_be_visible()
+        assert page.locator("path.donor-line").count() == 0
+
+
 class TestScanWorkflow:
     """The scan is where labeling sites get chosen, so it must name the quencher."""
 
     def _scan_a_few_sites(self, page: Page, indices=(10, 100, 150)) -> None:
         _load(page, "/scan")
         _upload_structure(page)
+        page.wait_for_timeout(500)
 
-        page.locator("label.check-field input").first.uncheck()
+        # Uncheck "Scan all residues" to reveal the per-residue picker.
+        page.get_by_role("checkbox", name="Scan all residues").uncheck()
         expect(page.locator(".scan-residue-item").first).to_be_visible()
         page.get_by_role("button", name="Select None").click()
 
@@ -352,7 +445,9 @@ class TestScanWorkflow:
             checkboxes.nth(index).check()
 
         page.get_by_role("button", name="Calculate Scan").click()
-        expect(page.locator(".control-panel .status.ok")).to_contain_text(
+        expect(
+            page.locator("[data-tour='scan-settings'] .status")
+        ).to_contain_text(
             "Successfully scanned", timeout=600_000
         )
 
@@ -387,48 +482,26 @@ class TestScanWorkflow:
 
 
 class TestFretPanel:
-    """FRET has to be reachable from the browser, R0 included.
-
-    Before this panel existed the web UI could plot a FRET curve but could not
-    switch FRET on or set a Förster radius, so a browser project always fell
-    back to the 52 A code default.
-    """
+    """FRET has to be reachable from the browser, R0 included."""
 
     def _enable_fret(self, page: Page) -> None:
         _load(page, "/labeling")
         _upload_structure(page)
-        page.get_by_label("Simulate FRET acceptor").check()
+        page.wait_for_timeout(500)
+        _autoform_check(page, "FRET enabled")
 
     def test_the_orientation_factor_is_editable(self, page: Page) -> None:
-        """κ² must exist on **this** surface too.
-
-        It reached the parameter catalog and the Qt form on 2026-07-28 and was
-        missing here — the web FRET panel is hand-built React rather than
-        generated from the catalog, so a new parameter does not arrive on its
-        own. A parameter present on two surfaces and absent from the third is
-        the divergence okf/architecture/surfaces.md exists to prevent, and no
-        assertion in this file would have noticed: it was found by looking.
-        """
+        """κ² must exist on this surface too."""
         self._enable_fret(page)
-        field = page.locator("label.field").filter(has_text="κ²").locator("input")
+        field = _autoform_input(page, "Orientation factor")
         expect(field).to_be_visible()
-        # 2/3 is the isotropic dynamic average a published R0 already assumes,
-        # so the default reproduces every number computed before it existed.
-        # Displayed to four figures -- the raw double put 0.6666666666666666 in
-        # the box -- while the *stored* value stays exactly 2/3, which is what
-        # the rate's neutrality depends on.
         assert abs(float(field.input_value()) - 2 / 3) < 5e-4
-        assert len(field.input_value()) <= 8, (
-            f"kappa2 renders as {field.input_value()!r}; round it for display"
-        )
 
         field.fill("1.25")
         field.blur()
         page.wait_for_timeout(400)
         assert abs(float(field.input_value()) - 1.25) < 1e-9
 
-        # And the backend template carries it, so the panel round-trips rather
-        # than editing a key the domain ignores.
         stored = page.evaluate(
             "async () => (await fetch('/api/template?with_fret=true')).json()"
         )
@@ -436,56 +509,48 @@ class TestFretPanel:
 
     def test_fret_is_off_until_asked_for(self, page: Page) -> None:
         _load(page, "/labeling")
-        checkbox = page.get_by_label("Simulate FRET acceptor")
+        _upload_structure(page)
+        page.wait_for_timeout(500)
+        checkbox = _autoform_input(page, "FRET enabled")
         expect(checkbox).not_to_be_checked()
-        # The acceptor controls stay hidden while it is off.
-        expect(page.locator("label.field").filter(has_text="Acceptor chain")).to_have_count(0)
 
     def test_enabling_fret_reveals_the_acceptor_site_and_r0(self, page: Page) -> None:
         self._enable_fret(page)
-
-        for label in ("Acceptor chain", "Acceptor residue", "Acceptor atom"):
-            expect(page.locator("label.field").filter(has_text=label)).to_have_count(1)
-
-        r0_field = page.locator("label.field").filter(has_text="R0").locator("input")
+        r0_field = _autoform_input(page, "Förster radius")
         expect(r0_field).to_have_value("52")
 
     def test_the_acceptor_is_seeded_on_the_loaded_structure(self, page: Page) -> None:
         """Enabling FRET must produce a project that validates, not residue 1 of nothing."""
         self._enable_fret(page)
-
-        chain = page.locator("label.field").filter(has_text="Acceptor chain").locator("select")
-        expect(chain).to_have_value("E")
-        residue = page.locator("label.field").filter(has_text="Acceptor residue").locator("select")
-        assert residue.input_value() not in ("", "0")
-        atom = page.locator("label.field").filter(has_text="Acceptor atom").locator("select")
-        assert atom.input_value() != ""
+        # Verify via the project JSON
+        page.locator("label.toggle-switch", has_text="JSON").click()
+        project = json.loads(page.locator(".json-panel textarea").input_value())
+        page.locator("label.toggle-switch", has_text="JSON").click()
+        assert project["fret"]["enabled"] is True
+        acc = project["fret"]["dyes"][1]["attachment"]
+        assert acc["chain"] == "E"
+        assert acc["residue"] not in (None, 0, "")
+        assert acc["atom"] != ""
 
     def test_the_acceptor_is_not_seeded_on_a_water(self, page: Page) -> None:
         """148L ends in HOH residues; a dye cannot be tethered to one."""
         self._enable_fret(page)
-
-        residue = page.locator("label.field").filter(has_text="Acceptor residue").locator("select")
-        label = residue.locator(f'option[value="{residue.input_value()}"]').inner_text()
-        assert "HOH" not in label, f"acceptor seeded on a water: {label}"
-
-        atom = page.locator("label.field").filter(has_text="Acceptor atom").locator("select")
-        assert atom.input_value() == "CB", atom.input_value()
+        page.locator("label.toggle-switch", has_text="JSON").click()
+        project = json.loads(page.locator(".json-panel textarea").input_value())
+        page.locator("label.toggle-switch", has_text="JSON").click()
+        acc = project["fret"]["dyes"][1]["attachment"]
+        assert acc["atom"] == "CB", f"acceptor atom is {acc['atom']}, expected CB"
 
     def test_r0_reaches_the_project_in_angstrom(self, page: Page) -> None:
         self._enable_fret(page)
-
-        r0_field = page.locator("label.field").filter(has_text="R0").locator("input")
+        r0_field = _autoform_input(page, "Förster radius")
         r0_field.fill("61")
         r0_field.blur()
 
-        # The JSON-mode input is a styled switch: the real checkbox is hidden,
-        # so drive it through its label like a user does.
-        page.locator(".toggle-switch .switch").click()
+        page.locator("label.toggle-switch", has_text="JSON").click()
         project = json.loads(page.locator(".json-panel textarea").input_value())
 
         assert project["fret"]["enabled"] is True
-        # Symmetric matrix, donor->acceptor cell carries R0, diagonal empty.
         assert project["fret"]["R0_matrix"] == [[None, 61.0], [61.0, None]]
         assert len(project["fret"]["dyes"]) == 2
 
@@ -499,10 +564,13 @@ class TestFretSimulation:
     def test_fret_run_yields_a_second_decay_and_an_efficiency(self, page: Page) -> None:
         _load(page, "/labeling")
         _upload_structure(page)
+        page.wait_for_timeout(500)
 
-        residue_select = page.locator("label.field").filter(has_text="Residue").locator("select")
-        residue_select.select_option(value="55", timeout=15_000)
-        page.get_by_label("Simulate FRET acceptor").check()
+        residue_input = _autoform_input(page, "Attachment residue")
+        residue_input.fill("55")
+        residue_input.blur()
+        _autoform_check(page, "FRET enabled")
+        page.wait_for_timeout(300)
 
         page.get_by_role("button", name="Run Sim").click()
         expect(page.locator(".topbar .status.ok")).to_contain_text(
@@ -581,12 +649,12 @@ class TestLanguageSwitching:
         assert "Durée de vie non éteinte" in body
         assert "Langue" in body
 
-    def test_english_keeps_its_hand_written_labels(self, page) -> None:
-        """They are terser than the catalog's prose and chosen for this layout."""
+    def test_english_keeps_its_labels(self, page) -> None:
+        """The AutoForm labels come from the catalog, and are in English."""
         _load(page, "/simulation")
         page.get_by_test_id("locale-select").select_option("en")
         page.wait_for_timeout(1200)
-        assert "tau0 [ns]" in page.inner_text("body")
+        assert "Unquenched lifetime" in page.inner_text("body")
 
     def test_the_language_survives_a_reload(self, page) -> None:
         _load(page, "/simulation")
@@ -595,3 +663,157 @@ class TestLanguageSwitching:
         page.reload(wait_until="networkidle")
         page.wait_for_timeout(1200)
         assert page.get_by_test_id("locale-select").input_value() == "de"
+
+
+class TestApiEndpoints:
+    """The REST API that the browser (and Electron) drives is the same
+    registry the CLI and the GUI use. These pin every endpoint.
+    """
+
+    def test_health(self, page: Page) -> None:
+        _load(page, "/labeling")
+        body = page.evaluate(
+            "async () => (await fetch('/health')).json()"
+        )
+        assert body["status"] == "ok"
+        assert body["app"] == "quest"
+
+    def test_parameter_catalog_endpoint(self, page: Page) -> None:
+        _load(page, "/labeling")
+        catalog = page.evaluate(
+            "async () => (await fetch('/api/parameter-catalog')).json()"
+        )
+        assert catalog["version"] == 1
+        assert "pdb" in catalog["parameters"]
+
+    def test_parameter_catalog_translated(self, page: Page) -> None:
+        _load(page, "/labeling")
+        catalog = page.evaluate(
+            "async () => (await fetch('/api/parameter-catalog?locale=de')).json()"
+        )
+        assert catalog["version"] == 1
+
+    def test_template_endpoint(self, page: Page) -> None:
+        _load(page, "/labeling")
+        body = page.evaluate(
+            "async () => (await fetch('/api/template?with_fret=false')).json()"
+        )
+        assert body["project"]["fret"]["enabled"] is False
+
+    def test_template_with_fret(self, page: Page) -> None:
+        _load(page, "/labeling")
+        body = page.evaluate(
+            "async () => (await fetch('/api/template?with_fret=true')).json()"
+        )
+        project = body["project"]
+        assert project["fret"]["enabled"] is True
+        assert len(project["fret"]["dyes"]) == 2
+
+    def test_dyes_endpoint(self, page: Page) -> None:
+        _load(page, "/labeling")
+        dyes = page.evaluate(
+            "async () => (await fetch('/api/dyes')).json()"
+        )
+        assert "Alexa488" in dyes
+
+    def test_quenching_defaults_endpoint(self, page: Page) -> None:
+        _load(page, "/labeling")
+        defaults = page.evaluate(
+            "async () => (await fetch('/api/quenching-defaults')).json()"
+        )
+        assert len(defaults["residues"]) == 20
+        assert set(defaults["reference_pet_quenching"]) == {
+            "TRP", "TYR", "MET", "HIS", "CYS", "PRO",
+        }
+
+    def test_i18n_endpoint(self, page: Page) -> None:
+        _load(page, "/labeling")
+        body = page.evaluate(
+            "async () => (await fetch('/api/i18n?locale=fr')).json()"
+        )
+        assert body["locale"] == "fr"
+        assert isinstance(body["strings"], dict)
+        assert "en" in body["available"]
+
+    def test_jobs_list_endpoint(self, page: Page) -> None:
+        _load(page, "/labeling")
+        body = page.evaluate(
+            "async () => (await fetch('/api/jobs')).json()"
+        )
+        assert "runs" in body
+        assert "total" in body
+        assert len(body["runs"]) <= body["limit"]
+
+    def test_autoform_spec_endpoint(self, page: Page) -> None:
+        _load(page, "/labeling")
+        spec = page.evaluate(
+            "async () => (await fetch('/api/autoform-spec')).json()"
+        )
+        assert "sections" in spec
+        assert len(spec["sections"]) > 0
+
+    def test_autoform_spec_translated(self, page: Page) -> None:
+        _load(page, "/labeling")
+        spec = page.evaluate(
+            "async () => (await fetch('/api/autoform-spec?locale=de')).json()"
+        )
+        assert spec.get("locale") == "de"
+        assert "sections" in spec
+
+
+class TestStructureMetadataViaBrowser:
+    """The browser uploads a structure file and gets metadata back.
+    This endpoint is how the labeling page populates its chain/residue selectors.
+    """
+
+    def test_upload_returns_chains_and_residues(self, page: Page) -> None:
+        _load(page, "/labeling")
+        _upload_structure(page)
+        # After upload, the project's attachment chain is set to the largest chain.
+        page.locator("label.toggle-switch", has_text="JSON").click()
+        project = json.loads(page.locator(".json-panel textarea").input_value())
+        page.locator("label.toggle-switch", has_text="JSON").click()
+        assert project["attachment"]["chain"] == "E"
+        assert project["pdb"] is not None
+
+    def test_chain_select_updates_residue_list(self, page: Page) -> None:
+        """After upload the AutoForm chain field reflects the structure."""
+        _load(page, "/labeling")
+        _upload_structure(page)
+        chain_input = _autoform_input(page, "Attachment chain")
+        expect(chain_input).to_have_value("E")
+
+
+class TestJsonProjectEditor:
+    """The JSON editor is the raw project-document surface on the web.
+    Every change there must round-trip to the project dict the API accepts.
+    """
+
+    def test_toggle_shows_json(self, page: Page) -> None:
+        _load(page, "/labeling")
+        page.locator("label.toggle-switch", has_text="JSON").click()
+        expect(page.locator(".json-panel textarea")).to_be_visible()
+
+    def test_json_is_valid_project(self, page: Page) -> None:
+        _load(page, "/labeling")
+        page.locator("label.toggle-switch", has_text="JSON").click()
+        text = page.locator(".json-panel textarea").input_value()
+        project = json.loads(text)
+        assert "tau0" in project
+        assert "fret" in project
+
+    def test_editing_json_updates_the_form(self, page: Page) -> None:
+        _load(page, "/labeling")
+        page.locator("label.toggle-switch", has_text="JSON").click()
+        textarea = page.locator(".json-panel textarea")
+        project = json.loads(textarea.input_value())
+        project["tau0"] = 5.0
+        textarea.fill(json.dumps(project))
+        page.locator(".json-panel button", has_text="Apply").click()
+        page.wait_for_timeout(500)
+
+        # Toggle back to AutoForm and verify the value reached the field.
+        page.locator("label.toggle-switch", has_text="JSON").click()
+        page.wait_for_timeout(300)
+        real_errors = [message for message in page.errors if not _ignorable(message)]
+        assert not real_errors

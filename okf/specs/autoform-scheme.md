@@ -96,9 +96,16 @@ QuEst stands on a source of truth and *generates* every surface's schema:
   language; `quest/gui/generate_view_spec.py` emits **one AutoForm view spec per
   language** (`quest.view.json`, `quest.view.<code>.json`) that the desktop's
   `quest/gui/autoform_panel.py` hands straight to ChiSurf's renderer.
-- The web UI serves the **same** catalog: the API at `/api/parameter-catalog`,
-  `lib/parameterCatalog.ts` types it, `Field.tsx` renders a field from it, and
-  `doc/generate_parameter_docs.py` writes the docs.
+- The web UI serves the **same** spec: `/api/autoform-spec` returns
+  `build_view_spec(locale)` and a small React autoform
+  (`webui/frontend/src/components/autoform/`) renders it by section `type` —
+  the port's = `Field` per spec type. `doc/generate_parameter_docs.py` writes
+  the docs.
+
+Since 2026-08-09 the web form is **AutoForm-only**: the hand-built React form
+that used `Field.tsx` (from the catalog) was deleted, so both the desktop and
+the web render the same authored spec. `lib/autoformPaths.ts` maps each spec
+`attr` (the flat `ProjectFormModel` name) to its nested project path.
 
 So the invariant the port wants: **change the catalog and the desktop form, the
 web form, the docs and the translated labels all follow — asserted by
@@ -109,7 +116,7 @@ The reusable pieces the port should copy:
 1. A single parameter catalog (authored in one place).
 2. AutoForm view-spec emission from that catalog (the shared contract).
 3. A small schema→field renderer per toolkit (e.g. one React `Field` per spec
-   `type` — what `Field.tsx` plus the `.view.json` together are).
+   `type` — what `AutoSection.tsx` plus the `.view.json` together are).
 4. All user-facing text at the parse/localisation seam.
 
 # Decision aids for a port
