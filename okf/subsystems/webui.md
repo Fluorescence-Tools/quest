@@ -127,12 +127,22 @@ land together.
 > migration removed from the forms. ChiSurf's `chimol → WebGPU` work exists to
 > close it: one WGSL source, a desktop driver and a browser driver, so the web
 > viewer becomes the *same* renderer rather than a lookalike.
-> **Not yet actionable** (checked 2026-08-10): the desktop WGSL renderer runs
-> (`CHIMOL_RENDERER=wgpu`), but the browser/JS driver has not been started and
-> `rendercanvas`'s `pyodide` backend is still an open question upstream. The
-> status lives on ChiSurf's agent board (`~/dev/chisurf/okf/agent-board.md`) and
-> in `~/dev/chisurf/okf/plugins/chimol-web.md` — check those, not this file,
-> for whether it has landed.
+> **Not yet actionable.** Upstream's desktop port is *done* — chimol draws with
+> WGSL and the OpenGL renderer is deleted (`76df2fcfd`) — but its own handover
+> says the browser half "has not been started". The status lives on ChiSurf's
+> agent board (`~/dev/chisurf/okf/agent-board.md`) and in
+> `~/dev/chisurf/okf/plugins/chimol-web.md` — check those, not this file, for
+> whether it has landed.
+>
+> **What the swap will need from a browser driver**, i.e. what NGL does here
+> today, so the first consumer's requirements are known before the driver is
+> designed: load a structure from a string/blob (`loadFile`); three
+> representations — `cartoon`, `licorice`, `surface` — added and removed per
+> project change; a selection language, applied through
+> `projectHelpers.selectionString`; `autoView` framing; a resize hook; and
+> **atom picking**, which is what `stage.signals.clicked` feeds into
+> `onResidueSelect`. Picking is the one that matters most and is the one
+> upstream lists as still GL-only on the desktop side.
 
 ## Guided tour (`components/tour/`)
 
