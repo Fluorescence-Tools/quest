@@ -271,6 +271,34 @@ replaced by the GitHub Actions one.
 
 # Still open
 
+## Upstream: `IMP.bff`'s C++ fps.json reader collapses a 3-radius AV to 1 radius — logged 2026-08-10
+
+**Not QuEst's bug, and it does not change a QuEst number** — recorded because
+QuEst *writes* the affected fields, so a consumer of a QuEst fps.json inherits
+it.
+
+ChiSurf found (`chisurf 47eb871cf`, PRD-95) that `AV::set_av_parameter`
+(`AV.cpp:208-210`) does `set_radius2(r[0]); set_radius3(r[0])` — radius2 and
+radius3 are parsed from the file into `r[1]`/`r[2]` and then overwritten with
+radius1. **Every three-radius AV built from an fps.json through that reader is
+silently a one-radius AV.** The fix belongs in imp.bff.
+
+Why QuEst is unaffected, checked rather than assumed:
+
+- QuEst never calls that setter. `quest/core/av.py` passes
+  `dye_radii=(radius1, radius2, radius3)` straight into
+  `IMP.bff.av.compute_av` from Python; the C++ fps.json path is not on its
+  route.
+- QuEst is **AV1-only** — `simulation_type` is validated in `AV.__init__` and
+  anything but `"AV1"` raises, so `radius2`/`radius3` reach no kernel that
+  reads them ([subsystems/accessible-volume.md](/subsystems/accessible-volume.md)).
+
+**What to watch**: `quest/core/fps_json.py` writes `radius2` and `radius3` into
+the fps.json it emits (defaults 4.5 and 3.5). Those values are honest, and a
+reader with this bug will discard them without saying so. If an fps.json round
+trip ever disagrees about dye size, this is the first thing to check — and it
+will look like a QuEst export bug.
+
 ## This bundle points at files that no longer exist — found 2026-08-06
 
 **The concepts describe the pre-refactor tree.** `quest/lib/` is gone entirely,
