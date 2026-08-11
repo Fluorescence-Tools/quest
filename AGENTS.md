@@ -117,12 +117,23 @@ Fast paths:
 - **A number-moving change is verified against `tests/baselines/`, not against a
   green suite** — and every fix must be *seen to fail* before it is believed.
   [`okf/specs/programme-2026-07.md`](okf/specs/programme-2026-07.md), decision 13.
-- **General fluorescence machinery belongs in imp-tricks, under `IMP.bff`.**
-  QuEst is the application — project schema, PET workflow, surfaces, scanning.
-  Accessible volumes, dye distributions and FRET distance/rate math are general;
-  before writing any of that here, check whether `IMP.bff` already has it (it
-  usually does) and prefer depending on it to adding a second copy. Direction
-  and migration map: [`okf/specs/imp-tricks-dedup.md`](okf/specs/imp-tricks-dedup.md).
+- **General fluorescence machinery belongs under `IMP.bff`.** QuEst is the
+  application — project schema, PET workflow, surfaces, scanning. Accessible
+  volumes, dye distributions and FRET distance/rate math are general; before
+  writing any of that here, check whether `IMP.bff` already has it (it usually
+  does) and prefer depending on it to adding a second copy. Direction and
+  migration map: [`okf/specs/imp-tricks-dedup.md`](okf/specs/imp-tricks-dedup.md).
+  Note `IMP.bff` no longer lives in imp-tricks: it was handed to `../imp.bff` on
+  2026-08-10, so the shim's `~/dev/imp-tricks` path names a checkout that no
+  longer carries it.
+  **Scoped by the dependency policy** (owner, 2026-08-11, canonical copy in
+  [`../fpsimp/okf/references/dependency-policy.md`](../fpsimp/okf/references/dependency-policy.md)):
+  a *simple* method reachable only through a *complex* package gets transcribed
+  here and A/B'd against the reference, not depended on. That question is asked
+  when a dependency would be **added** — QuEst already depends on `IMP.bff` for
+  `compute_av`, which is real machinery, so the smaller kernels adopted beside
+  it are not up for re-litigation. It binds when something new would pull in a
+  new package.
 - **Keep the optional dependencies optional.** Qt, LabelLib and IMP are all
   imported behind `try`/`except` with fallbacks. That is what lets the CLI, the
   API and the web backend run in this environment, which has no Qt bindings and

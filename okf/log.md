@@ -2,6 +2,34 @@
 
 ## 2026-08-11
 
+* **A dependency policy now scopes "prefer depending on `IMP.bff`".** The
+  owner's rule, set today: *if a simple method is only available inside a complex
+  package, reimplement the method and A/B it against the reference; do not add
+  the dependency.* Canonical copy in FPSIMP,
+  [references/dependency-policy.md](../../fpsimp/okf/references/dependency-policy.md);
+  [AGENTS.md](../AGENTS.md) records it beside the rule it qualifies.
+
+  It does **not** reopen anything here. The question is asked when a dependency
+  would be *added*, and QuEst already depends on `IMP.bff` for `compute_av` —
+  a Dijkstra over a voxel grid, machinery that plainly earns it — so the five
+  smaller kernels adopted beside it (`density2points`, `random_distances`,
+  `av_pair_statistics`, `mean_position_distance`, `split_av_acv`) are settled.
+  The rule binds the next time something new would pull in a new package. It
+  bites much harder in FPSIMP, which depends on `IMP.bff` for nothing, and where
+  it has already settled the κ² question against adoption.
+
+  Recorded here too because the two repositories are meant to run the same
+  rules, and this one reads as a reversal of QuEst's standing instruction if you
+  meet it without the scoping.
+
+* **A stale path, noted not fixed.** `quest/hosts/imp_tricks.py` defaults to
+  `~/dev/imp-tricks/src` and every error message names it, but `IMP.bff` was
+  handed from imp-tricks to `../imp.bff` on 2026-08-10 and that checkout no
+  longer contains `IMP/bff/`. The six symbols QuEst imports now resolve only
+  from an installed or compiled `imp.bff`. Nothing here has broken — the splice
+  returns `[]` when it finds nothing and the compiled module answers — but the
+  shim now points at a tree that cannot supply what its name promises.
+
 * **The sibling link is bidirectional, and both repositories now say
   `AGENTS.md`.** FPSIMP kept its agent guidance in `CLAUDE.md` — the same
   content under a name only one tool reads — while this repository and
