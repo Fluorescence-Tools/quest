@@ -47,10 +47,16 @@ Since 2026-08-06 every concept carries `status`, `generated`, `stale_after` and
   bundle drifting behind a refactor, which is exactly what happened to
   `quest/lib/` ([`okf/references/known-issues.md`](okf/references/known-issues.md)).
 
-Format and shared conventions: [`okf/references/okf-format.md`](okf/references/okf-format.md).
-The rules are shared with the sibling project **FPSIMP** (`../fpsimp`), which
-runs the same taxonomy and the same validator — the two are heading for one
-server, so keep them shaped alike.
+Format and shared conventions: [`okf/references/okf-format.md`](okf/references/okf-format.md),
+and FPSIMP's [`okf/references/okf-conventions.md`](../fpsimp/okf/references/okf-conventions.md),
+which is the canonical copy of the rule set the two share.
+The rules are shared with the sibling project **FPSIMP** (`../fpsimp`), whose
+agent entry point is [`../fpsimp/AGENTS.md`](../fpsimp/AGENTS.md) — same file,
+same role. Every repository in this family uses `AGENTS.md` and no per-tool
+instruction file; FPSIMP finished that rename on 2026-08-11. It runs the same
+taxonomy and the same validator (vendored into each repository, FPSIMP's copy
+canonical, `diff` the sync check) — the two are heading for one server, so keep
+them shaped alike.
 
 Fast paths:
 

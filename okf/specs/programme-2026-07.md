@@ -55,7 +55,8 @@ are called out so a reader who trusts the older text is corrected:
 
 - **Decision 4 reverses "both environments must stay green"**
   ([workflows/environment.md](../workflows/environment.md),
-  [workflows/testing.md](../workflows/testing.md), and the root `CLAUDE.md`).
+  [workflows/testing.md](../workflows/testing.md), and the root `AGENTS.md`,
+  named `CLAUDE.md` when this was written).
   The owner ruled base out of scope. Recorded honestly: **no defect in base was
   reproduced here** — its web backend tests gave 16 passed and `import
   quest.core` succeeded on 2026-07-28. This is an owner ruling, not a

@@ -1,5 +1,27 @@
 # Update Log
 
+## 2026-08-11
+
+* **The sibling link is bidirectional, and both repositories now say
+  `AGENTS.md`.** FPSIMP kept its agent guidance in `CLAUDE.md` — the same
+  content under a name only one tool reads — while this repository and
+  `../imp-tricks` had already moved to the tool-agnostic `AGENTS.md`. FPSIMP
+  renamed it today, so the family convention is now uniform: a root `AGENTS.md`,
+  no per-tool instruction file. Two FPSIMP concepts had been citing this
+  repository's `CLAUDE.md` as a source since our own rename deleted it; they now
+  cite `AGENTS.md`, and the convention is written down in FPSIMP's
+  [okf-conventions.md](../../fpsimp/okf/references/okf-conventions.md), which is
+  the canonical copy of the rule set the two bundles share.
+
+  On this side: [AGENTS.md](../AGENTS.md) now links `../fpsimp/AGENTS.md` and that
+  conventions concept directly, rather than naming the sibling in prose, and
+  says which validator copy is canonical. One stale mention in
+  [specs/programme-2026-07.md](/specs/programme-2026-07.md) named the root
+  `CLAUDE.md`; it names `AGENTS.md` now, and says the file was called
+  `CLAUDE.md` when the passage was written — the reversal it records is about
+  the environments, not the filename, and losing that would make the sentence
+  read as if a different document had been contradicted.
+
 ## 2026-08-10
 
 * **The desktop run is a job, and the window survives it.** `LAY-07` closed on
