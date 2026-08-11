@@ -1,0 +1,111 @@
+name: CI
+
+# Replaces the old conda-build workflow, which still pointed at
+# `modules/quest/**` — the path QuEst has when it is vendored inside ChiSurf,
+# not the layout of this repository — so it had stopped matching anything.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # ChiSurf brings tttrlib with its own OpenMP runtime; numba's `workqueue`
+  # layer aborts the interpreter alongside it. See okf/workflows/testing.md.
+  NUMBA_THREADING_LAYER: omp
+
+jobs:
+  test:
+    name: Library & web backend (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: latest
+          cache: true
+          environments: default
+
+      # The browser suite skips itself unless the servers are up; it runs in the
+      # `e2e` job below, so it is excluded here rather than silently skipped.
+      - name: Library
+        run: pixi run -e default test
+
+      - name: Web backend
+        run: pixi run -e default test-web
+
+  gui:
+    name: Qt GUI (offscreen)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: latest
+          cache: true
+          environments: desktop
+
+      # A Qt binding needs an X stack even offscreen.
+      - name: System Qt dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 \
+            libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+            libxcb-render-util0 libxcb-shape0 libxcb-xinerama0
+
+      - name: Widget tests
+        run: pixi run -e desktop test-gui
+
+  frontend:
+    name: Web UI (typecheck & build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: latest
+          cache: true
+          environments: frontend
+
+      - run: pixi run -e frontend typecheck
+      - run: pixi run -e frontend build
+
+  package:
+    name: Conda package (rattler-build)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: latest
+          cache: true
+          environments: build
+
+      - name: Build
+        run: pixi run -e build build-pkg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quest-conda-${{ matrix.os }}
+          path: build/pkg/**/*.conda
+          if-no-files-found: error

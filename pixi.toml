@@ -1,0 +1,161 @@
+# Pixi workspace for QuEst.
+#
+# The Node.js toolchain used by the web UI lives in its own `frontend`
+# environment so it never has to be installed system-wide and cannot drift from
+# the version Next.js requires. The Python side keeps using conda/pip as before;
+# the default environment here is intentionally empty.
+#
+#   pixi install -e frontend     # materialise the Node toolchain
+#   pixi run -e frontend dev     # backend on :8000 must already be running
+#
+# See webui/frontend/README.md for the full workflow.
+
+[workspace]
+name = "quest"
+description = "QuEst - protein structure based fluorescence quenching estimator"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "osx-64", "linux-64", "linux-aarch64", "win-64"]
+
+[dependencies]
+
+# --- Node.js toolchain for the Next.js web UI -------------------------------
+# Next.js 16 refuses to start on anything older than Node 20.9.
+[feature.frontend.dependencies]
+nodejs = ">=22.11,<25"
+
+[feature.frontend.tasks]
+node = "node --version"
+
+# Next.js web UI
+install = { cmd = "npm install", cwd = "webui/frontend" }
+dev = { cmd = "npm run dev", cwd = "webui/frontend", depends-on = ["install"] }
+build = { cmd = "npm run build", cwd = "webui/frontend", depends-on = ["install"] }
+start = { cmd = "npm run start", cwd = "webui/frontend" }
+typecheck = { cmd = "npx tsc --noEmit", cwd = "webui/frontend", depends-on = ["install"] }
+lint = { cmd = "npm run lint", cwd = "webui/frontend", depends-on = ["install"] }
+
+# Electron desktop shell
+desktop-install = { cmd = "npm install", cwd = "webui/desktop" }
+desktop = { cmd = "npm run start", cwd = "webui/desktop", depends-on = ["desktop-install"] }
+desktop-dist = { cmd = "npm run dist", cwd = "webui/desktop", depends-on = ["desktop-install"] }
+
+# --- Python: the library, its surfaces, and the packaging -------------------
+# The science stack. `imp-tricks` owns the accessible-volume computation and
+# its backend dispatch; IMP carries the structure reader and the compiled
+# IMP.bff backend; LabelLib is the fallback backend.
+#
+# **Two dependencies are not on conda-forge**, and they are handled differently
+# because their situations differ (measured 2026-08-10, `pixi search`):
+#
+#   labellib    on the owner's `tpeulen` channel, and specifically on its **dev
+#               label**: the `main` label stops at the 2020 builds, which are
+#               py37-py39 and pin `numpy <2`, so pointing at the bare channel
+#               fails with "labellib 1.0.0 would require numpy <2.0a0" while
+#               this project requires numpy >=2. The dev label carries
+#               py310-py313 builds against numpy >=2.2, for linux-64,
+#               osx-arm64 and win-64 — hence the `platforms` list below, which
+#               drops the two it has no build for.
+#   imp-tricks  on no public channel at all. Publication was ruled out on
+#               2026-07-28 (it stays local), so it is a feature *no environment
+#               uses*, below.
+#
+# It used to sit in this list, which made `default` and `desktop` unsolvable and
+# left two CI jobs permanently red — and a permanently red job trains people to
+# ignore the light. An environment without it cannot compute an accessible
+# volume at all (both AV backends route through `IMP.bff.av`), so 141 tests skip
+# there with a stated reason and ~550 still run: the contract, the project
+# schema, the RPC envelopes, i18n, the view spec, the form model. That is the
+# honest trade, recorded rather than glossed.
+#
+# Day-to-day work uses the `arm64` conda environment plus the checkout path shim
+# in `quest/hosts/imp_tricks.py` — see okf/workflows/environment.md.
+[feature.py]
+channels = ["conda-forge", "https://conda.anaconda.org/tpeulen/label/dev"]
+# osx-64 and linux-aarch64 are deliberately absent: `labellib`'s dev label has
+# no build for either. The CI matrix (ubuntu / macos-arm / windows) is covered.
+platforms = ["osx-arm64", "linux-64", "win-64"]
+
+[feature.py.dependencies]
+python = ">=3.10,<3.13"
+numpy = ">=2.0"
+numexpr = "*"
+numba = "*"
+click = "*"
+pyyaml = "*"
+tqdm = "*"
+labellib = "*"
+imp = "*"
+pytables = "*"
+
+# imp-tricks owns the accessible-volume computation, and **no environment below
+# includes this feature**, on purpose: nothing public ships the package, so any
+# environment that carried it would be unsolvable and would take `pixi lock`
+# down with it. The feature exists so that the day it *is* published, turning it
+# on is one word in `[environments]` rather than an archaeology exercise.
+[feature.imp-tricks.dependencies]
+imp-tricks = "*"
+
+[feature.py.pypi-dependencies]
+quest = { path = ".", editable = true }
+
+[feature.py.tasks]
+test = "pytest tests -q -p no:pytest-qt"
+simulate = "quest simulate"
+scan = "quest scan"
+# Reports without deleting; `pixi run clean -- --yes` does it. Runs no longer
+# land in the checkout at all (they go to the per-user artefact root), so this
+# is for the per-user root and for an explicit --project-dir.
+clean = "quest runs clean"
+
+# The desktop surface. Separated so a headless install never pulls Qt.
+[feature.gui.dependencies]
+pyqt = "*"
+qtpy = "*"
+pyqtgraph = "*"
+pyopengl = "*"
+
+[feature.gui.tasks]
+gui = "quest gui"
+test-gui = { cmd = "pytest tests/test_gui_widget.py tests/test_gui_simulation.py -q", env = { QT_QPA_PLATFORM = "offscreen" } }
+
+# The FastAPI backend behind the web UI.
+[feature.web.dependencies]
+fastapi = ">=0.115"
+uvicorn = ">=0.30"
+python-multipart = ">=0.0.9"
+
+[feature.web.tasks]
+serve = "uvicorn webui.backend.app.main:app --host 127.0.0.1 --port 8000"
+test-web = "pytest webui/backend/tests -q -p no:pytest-qt"
+
+[feature.test.dependencies]
+pytest = "*"
+scipy = "*"
+matplotlib-base = "*"
+nbclient = "*"
+nbformat = "*"
+ipykernel = "*"
+
+[feature.test.pypi-dependencies]
+playwright = "*"
+
+[feature.test.tasks]
+test-e2e = "pytest tests/test_webui_e2e.py -q -p no:pytest-qt -m browser"
+test-notebooks = "pytest tests/test_notebooks.py tests/test_examples.py -q -p no:pytest-qt -m notebooks"
+test-all = { depends-on = ["test", "test-web", "test-notebooks"] }
+
+# Building the conda package with rattler-build.
+[feature.build.dependencies]
+rattler-build = "*"
+
+[feature.build.tasks]
+build-pkg = "rattler-build build --recipe rattler-recipe/recipe.yaml --output-dir build/pkg"
+
+[environments]
+frontend = { features = ["frontend"], solve-group = "frontend" }
+# Headless: library, CLI and the web backend. No Qt.
+default = { features = ["py", "web", "test"], solve-group = "py" }
+# Everything, including the desktop form.
+desktop = { features = ["py", "gui", "web", "test"], solve-group = "py" }
+# Packaging only, so CI does not solve the science stack to build a package.
+build = { features = ["build"], no-default-feature = true }

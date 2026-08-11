@@ -8,6 +8,9 @@ import json
 import click
 
 from . import api
+from .project import ProjectValidationError, template_project, validate_project
+from .scan import simulate_site
+from .core.structure import resolve_structure_path
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -31,14 +34,35 @@ def _parse_value(raw: str) -> Any:
 
 
 def _set_path(target: MutableMapping[str, Any], path: str, value: Any) -> None:
-    """Set dotted path inside a mapping, creating nested dicts as needed."""
+    """Set dotted path inside a mapping, creating nested dicts or list indices as needed."""
     parts = path.split(".")
-    cursor: MutableMapping[str, Any] = target
-    for key in parts[:-1]:
-        if key not in cursor or not isinstance(cursor[key], MutableMapping):
-            cursor[key] = {}
-        cursor = cursor[key]
-    cursor[parts[-1]] = value
+    cursor: Any = target
+    for i, key in enumerate(parts[:-1]):
+        next_key = parts[i + 1]
+        if next_key.isdigit():
+            if key not in cursor or not isinstance(cursor[key], list):
+                cursor[key] = []
+            cursor = cursor[key]
+        elif isinstance(cursor, list) and key.isdigit():
+            idx = int(key)
+            while len(cursor) <= idx:
+                cursor.append({})
+            if not isinstance(cursor[idx], dict):
+                cursor[idx] = {}
+            cursor = cursor[idx]
+        else:
+            if key not in cursor or not isinstance(cursor[key], dict):
+                cursor[key] = {}
+            cursor = cursor[key]
+
+    last_key = parts[-1]
+    if isinstance(cursor, list) and last_key.isdigit():
+        idx = int(last_key)
+        while len(cursor) <= idx:
+            cursor.append(None)
+        cursor[idx] = value
+    else:
+        cursor[last_key] = value
 
 
 def _clone_with_overrides(project: MutableMapping[str, Any], setters: Sequence[tuple[str, Any]]) -> MutableMapping[str, Any]:
@@ -139,8 +163,8 @@ def _resolve_output_path(
     "--pdb",
     "pdb_path",
     required=False,
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
-    help="Override PDB path instead of project['pdb'].",
+    type=str,
+    help="Override structure path or PDB ID instead of project['pdb'].",
 )
 @click.option(
     "-o",
@@ -184,7 +208,7 @@ def _resolve_output_path(
 )
 def simulate(
     project_path: Path,
-    pdb_path: Path | None,
+    pdb_path: str | None,
     output_path: Path | None,
     nbins: int | None,
     tac_start: float,
@@ -214,8 +238,9 @@ def simulate(
     runs = _build_runs(base_project, setters)
     results_written = []
 
-    for idx, (project, tags) in enumerate(runs):
-        _validate_project(project, project_path)
+    from tqdm import tqdm
+    for idx, (project, tags) in enumerate(tqdm(runs, desc="Simulating grid", disable=len(runs) <= 1)):
+        _validate_project(project, project_path, pdb_path=pdb_path)
 
         try:
             result = api.simulate_project(
@@ -223,6 +248,12 @@ def simulate(
                 pdb_path=pdb_path,
                 nbins=nbins,
                 tac_range=(tac_start, tac_stop),
+                project_dir=project_path.parent,
+                # Explicit since 2026-07-28: `save_outputs` defaults to False,
+                # and the CLI is one of the two surfaces whose user asked for a
+                # run record. Next to the project, because that is where a CLI
+                # user looks for it.
+                save_outputs=True,
             )
         except Exception as exc:  # pragma: no cover - defensive
             raise click.ClickException(f"Simulation failed: {exc}")
@@ -269,7 +300,7 @@ def simulate(
 def template(output_path: Path | None, with_fret: bool) -> None:
     """Emit a minimal QuEst project template."""
 
-    project = _template_project(with_fret=with_fret)
+    project = template_project(with_fret=with_fret)
     payload = json.dumps(project, indent=2)
 
     if output_path:
@@ -301,59 +332,212 @@ def validate(project_path: Path) -> None:
 
 
 @cli.command()
+@click.option(
+    "-p",
+    "--project",
+    "project_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Path to a QuEst project JSON file.",
+)
+@click.option(
+    "-l",
+    "--labeling",
+    "labeling_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Path to an fps.json file defining labeling sites.",
+)
+@click.option(
+    "--pdb",
+    "pdb_path",
+    required=False,
+    type=str,
+    help="Override structure path or PDB ID instead of project['pdb'].",
+)
+@click.option(
+    "-o",
+    "--output",
+    "output_path",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Output JSON file to write simulation results to.",
+)
+@click.option(
+    "--nbins",
+    type=int,
+    default=None,
+    help="Number of histogram bins.",
+)
+@click.option(
+    "--tac-start",
+    type=float,
+    default=0.0,
+    show_default=True,
+    help="Start of TAC range in ns.",
+)
+@click.option(
+    "--tac-stop",
+    type=float,
+    default=50.0,
+    show_default=True,
+    help="End of TAC range in ns.",
+)
+def scan(
+    project_path: Path,
+    labeling_path: Path,
+    pdb_path: str | None,
+    output_path: Path,
+    nbins: int | None,
+    tac_start: float,
+    tac_stop: float,
+) -> None:
+    """Run accessible volume and quenching simulations for multiple sites in an fps.json file."""
+
+    try:
+        project = api.load_project(project_path)
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load project: {exc}")
+
+    try:
+        fps_data = api.load_fps_json(labeling_path)
+    except Exception as exc:
+        raise click.ClickException(f"Failed to load labeling fps.json: {exc}")
+
+    resolved_pdb: Path | None = None
+    structure_source = pdb_path or project.get("pdb")
+    if structure_source is not None:
+        try:
+            resolved_pdb = resolve_structure_path(structure_source)
+        except Exception as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    # The scan runs with save_outputs=False, so nothing is written here; the
+    # path only exists because simulate_project takes a project directory.
+    scan_temp_dir = output_path.parent
+
+    positions = fps_data.get("Positions", {})
+    if not positions:
+        click.echo("No positions found in fps.json. Nothing to scan.")
+        return
+
+    results = {}
+    from tqdm import tqdm
+    progress = tqdm(positions.items(), desc="Scanning labeling sites")
+
+    for name, pos in progress:
+        progress.set_postfix_str(f"site {name}")
+        res = simulate_site(
+            project,
+            pos,
+            name=name,
+            pdb_path=resolved_pdb,
+            nbins=nbins,
+            tac_range=(tac_start, tac_stop),
+            project_dir=scan_temp_dir,
+        )
+        results[name] = res
+
+    try:
+        output_path.write_text(json.dumps(results, indent=2), encoding="utf8")
+        click.echo(f"Wrote scan results to {output_path}")
+    except Exception as exc:
+        raise click.ClickException(f"Failed to write output file: {exc}")
+
+
+@cli.group()
+def runs() -> None:
+    """Inspect and tidy the run artefacts a simulation leaves behind.
+
+    Named `runs`, not `jobs`: a *job* is a running operation (quest.jobs.*),
+    and the two meant the same word until 2026-07-28.
+    """
+
+
+@runs.command("clean")
+@click.option(
+    "--project-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Clean this project's jobs/ instead of the per-user artefact root.",
+)
+@click.option(
+    "--older-than",
+    "older_than_days",
+    type=float,
+    default=None,
+    help="Only remove runs untouched for this many days.",
+)
+@click.option(
+    "--yes",
+    "confirmed",
+    is_flag=True,
+    default=False,
+    help="Actually delete. Without it this only reports what would go.",
+)
+def runs_clean(project_dir: Path | None, older_than_days: float | None, confirmed: bool) -> None:
+    """Delete run directories. Reports without deleting unless --yes is given."""
+
+    from .runs import purge_runs
+
+    report = purge_runs(
+        project_dir, older_than_days=older_than_days, dry_run=not confirmed
+    )
+    megabytes = report["bytes"] / (1024 * 1024)
+    verb = "Would remove" if report["dry_run"] else "Removed"
+    click.echo(f"{verb} {report['count']} run(s), {megabytes:.1f} MB from {report['directory']}")
+    if report["dry_run"] and report["count"]:
+        click.echo("Nothing was deleted. Pass --yes to do it.")
+
+
+@cli.command()
 def gui() -> None:
     """Launch the QuEst GUI."""
 
     try:
-        from .quest_gui import start_gui
+        from .gui import start_gui
     except Exception as exc:  # pragma: no cover - defensive
         raise click.ClickException(f"Failed to import GUI: {exc}")
 
     start_gui()
 
 
-def _validate_project(project: Mapping[str, Any], project_path: Path | None = None) -> None:
-    """Raise ClickException if the project is malformed."""
+@cli.command("rpc")
+@click.option("--zmq", is_flag=True, help="Run ZeroMQ RPC server.")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind ZeroMQ RPC server.")
+@click.option("--port", default=5555, show_default=True, type=int, help="Port to bind ZeroMQ RPC server.")
+def rpc_cmd(zmq: bool, host: str, port: int) -> None:
+    """Start QuEst RPC services (e.g. ZeroMQ RPC server)."""
+    from quest.rpc.dispatcher import ServiceDispatcher
+    from quest.rpc.services import register_services
+    from quest.rpc.zmq_server import ZMQServer
 
-    required_top = [
-        "tau0",
-        "kQ",
-        "n_photons",
-        "t_max",
-        "t_step",
-        "dg",
-        "slow_fact",
-        "critical_distance",
-        "av_parameter",
-        "quencher",
-    ]
-    missing = [key for key in required_top if key not in project]
-    if missing:
-        raise click.ClickException(f"Project missing required keys: {', '.join(missing)}")
+    dispatcher = ServiceDispatcher()
+    register_services(dispatcher)
 
-    pdb = project.get("pdb")
-    if pdb is None and project_path is None:
-        raise click.ClickException("Project must define 'pdb' path when no override is provided.")
-    if pdb is not None:
-        pdb_path = Path(pdb)
-        if not pdb_path.exists():
-            raise click.ClickException(f"PDB path does not exist: {pdb_path}")
+    if zmq or True:
+        server = ZMQServer(dispatcher, host=host, port=port)
+        click.echo(f"Starting QuEst ZeroMQ RPC server on {server.endpoint}...")
+        server.start(in_background=False)
 
-    fret_block = project.get("fret") or {}
-    dyes: Sequence[Mapping[str, Any]] = fret_block.get("dyes") or []
-    if not dyes:
-        raise click.ClickException("Project must define at least one dye in fret.dyes with a diffusion coefficient 'D'.")
-    donor_dye = dyes[0]
-    if donor_dye.get("D") is None:
-        raise click.ClickException("Donor dye entry must define diffusion coefficient 'D'.")
 
-    # Basic TAC sanity
-    t_start = project.get("t_start", 0.0)
-    t_stop = project.get("t_max", None)
-    if t_stop is None:
-        raise click.ClickException("Project must define 't_max' (simulation duration).")
-    if t_stop <= t_start:
-        raise click.ClickException("Project 't_max' must be greater than 't_start'.")
+
+def _validate_project(
+    project: Mapping[str, Any],
+    project_path: Path | None = None,
+    pdb_path: Path | str | None = None,
+) -> None:
+    """Validate a project, reporting failures the way Click expects.
+
+    The rules live in :mod:`quest.project` so every surface enforces the same
+    ones; this wrapper only translates the domain error into a
+    ``ClickException``.
+    """
+
+    try:
+        validate_project(project, project_path=project_path, pdb_path=pdb_path)
+    except ProjectValidationError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 def _write_csv(path: Path, result: api.DecaySimulationResult) -> None:
@@ -396,56 +580,14 @@ def _write_json(path: Path, result: api.DecaySimulationResult) -> None:
         "collisions_fraction": result.collisions_fraction,
         "fret_efficiency": result.fret_efficiency,
         "project": result.project,
+        "aa_residence": getattr(result, "aa_residence", []),
     }
     path.write_text(json.dumps(payload, indent=2), encoding="utf8")
 
 
-def _template_project(*, with_fret: bool = True) -> MutableMapping[str, Any]:
-    """Create a minimal valid project dictionary."""
-
-    project: MutableMapping[str, Any] = {
-        "tau0": 4.2,
-        "kQ": 0.0,
-        "n_photons": 500000,
-        "t_max": 16000.0,
-        "t_step": 0.032,
-        "dg": 0.0,
-        "slow_fact": 0.1,
-        "critical_distance": 8.5,
-        "av_parameter": 1000,
-        "quencher": "TRY",
-        "pdb": "structure.pdb",
-        "n_bins": 4096,
-        "attachment": {"chain": "A", "residue": 1, "atom": "CB"},
-        "save_avs": False,
-        "slow_radius": 8.5,
-        "all_quencher_atoms": True,
-        "output_file": "out",
-    }
-
-    dyes = [
-        {
-            "name": "donor",
-            "D": 7.5,
-            "attachment": {"chain": "A", "residue": 1, "atom": "CB"},
-            "av_parameter": 1000,
-        }
-    ]
-
-    fret_block: MutableMapping[str, Any] = {"enabled": with_fret, "dyes": dyes}
-    if with_fret:
-        fret_block["dyes"].append(
-            {
-                "name": "acceptor",
-                "D": 7.5,
-                "attachment": {"chain": "A", "residue": 2, "atom": "CB"},
-                "av_parameter": 1000,
-            }
-        )
-        fret_block["R0_matrix"] = [[None, 5.5], [5.5, None]]
-
-    project["fret"] = fret_block
-    return project
+#: Kept as a module-level alias so existing callers keep working; the template
+#: itself is domain logic and lives in :mod:`quest.project`.
+_template_project = template_project
 
 
 if __name__ == "__main__":

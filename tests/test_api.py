@@ -17,18 +17,30 @@ from pathlib import Path
 from typing import Dict, Any
 
 import json
+import numpy as np
 
 # Ensure the vendored "quest" package (in modules/quest) is importable
 # tests are in modules/quest/tests, so parents[3] is the repository root
-ROOT = Path(__file__).resolve().parents[3]
-QUEST_ROOT = ROOT / "modules" / "quest"
+ROOT = Path(__file__).resolve().parents[1]
+QUEST_ROOT = ROOT / "quest"
 if str(QUEST_ROOT) not in sys.path:
     sys.path.insert(0, str(QUEST_ROOT))
 
 from quest.api import load_project, simulate_project, DecaySimulationResult  # type: ignore[import]
 
 
-PDB_PATH = ROOT / "test" / "data" / "atomic_coordinates" / "pdb_files" / "148l.pdb"
+PDB_PATH = Path(__file__).resolve().parent / "148l.pdb"
+AAS = [
+    "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY", "HIS", "ILE",
+    "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL",
+]
+
+
+def _aa_interactions(**overrides: dict[str, float]) -> dict[str, dict[str, float]]:
+    interactions = {aa: {"slow_factor": 1.0, "kQ": 0.0} for aa in AAS}
+    for aa, values in overrides.items():
+        interactions[aa].update(values)
+    return interactions
 
 
 def _make_minimal_project(with_fret: bool) -> Dict[str, Any]:
@@ -44,7 +56,27 @@ def _make_minimal_project(with_fret: bool) -> Dict[str, Any]:
     project["pdb"] = str(PDB_PATH)
     project["attachment"] = {
         "chain": "E",
-        "residue": 10,
+        # This project switches every quencher off except TYR, so
+        # `quenching_grid.max() >= 2.0` really asserts "a tyrosine is within
+        # critical_distance of the accessible volume". Which sites satisfy that
+        # is sensitive to the AV, so it has been re-measured twice rather than
+        # relaxed:
+        #
+        #   2026-07-27, move to IMP radii — larger atoms shrank every volume,
+        #               leaving only 36 and 82 on this chain.
+        #   2026-07-28, one grid-offset convention — the quenching grid had been
+        #               stamped up to one voxel per axis from where the walk read
+        #               it, so *which* residues were in reach changed wholesale.
+        #               Re-scanned residues 2..164 under both backends:
+        #                 imp_bff  : 80 86 97 103 117 127 129 131 132 135 136
+        #                            137 139 141 143 144 145 149 150 151 152
+        #                            154 157 160
+        #                 labellib : 2 74 92 95 96 97 130 134 138 160
+        #               The intersection is {97, 160}; 36 is in neither.
+        #
+        # It must hold under **both** backends, or this file goes red wherever
+        # only one of them is installed.
+        "residue": 97,
         "atom": "CB",
     }
 
@@ -64,15 +96,11 @@ def _make_minimal_project(with_fret: bool) -> Dict[str, Any]:
     project["skip_frame"] = 10
 
     project["tau0"] = 4.2
-    project["kQ"] = 2.0
-    project["slow_fact"] = 0.1
     project["critical_distance"] = 6.5
-    project["quencher"] = {"TYR": ["CB"]}
+    project["amino_acid_interactions"] = _aa_interactions(TYR={"kQ": 2.0})
 
     project["output_file"] = "test_out"
     project["save_avs"] = False
-    project["all_quencher_atoms"] = True
-    project["sticky_mode"] = "quencher"
 
     # Dyes and per-dye diffusion coefficients
     dyes = []
@@ -183,3 +211,82 @@ def test_simulate_project_with_fret() -> None:
 
     if result.fret_efficiency is not None:
         assert 0.0 <= result.fret_efficiency <= 1.0
+
+
+def test_simulate_project_with_custom_amino_acid_kq() -> None:
+    """Verify that per-AA kQ values drive the additive quenching-rate grid."""
+    project = _make_minimal_project(with_fret=False)
+    project["amino_acid_interactions"] = _aa_interactions(
+        TYR={"kQ": 3.0},
+        MET={"kQ": 1.5},
+    )
+    result = simulate_project(project)
+    assert isinstance(result, DecaySimulationResult)
+    assert 0.0 < result.quantum_yield_donor <= 1.0
+
+
+def test_simulate_project_job_dir(tmp_path: Path) -> None:
+    """Verify that running a simulation writes files to a unique folder under project_dir."""
+    project = _make_minimal_project(with_fret=False)
+    # `save_outputs` is opt-in since 2026-07-28; this test is about *where* the
+    # artefacts land once a caller has asked for them.
+    result = simulate_project(project, project_dir=tmp_path, save_outputs=True)
+    assert isinstance(result, DecaySimulationResult)
+    assert result.job_id is not None
+
+    jobs_dir = tmp_path / "jobs"
+    assert jobs_dir.is_dir()
+
+    job_folders = [p for p in jobs_dir.iterdir() if p.is_dir()]
+    assert len(job_folders) == 1
+    job_folder = job_folders[0]
+    assert job_folder.name == result.job_id
+
+    # Verify uuid format
+    import uuid
+    uuid.UUID(job_folder.name)
+
+    out_xyz = job_folder / "out.xyz"
+    out_slow_xyz = job_folder / "out_slow.xyz"
+    result_json = job_folder / "result.json"
+    sampled_density_mrc = job_folder / "sampled_dye_density.mrc"
+    diffusion_coefficients_mrc = job_folder / "diffusion_coefficients.mrc"
+    quenching_rates_mrc = job_folder / "quenching_rates.mrc"
+    aa_residence_csv = job_folder / "aa_residence.csv"
+
+    assert out_xyz.is_file()
+    assert out_slow_xyz.is_file()
+    assert result_json.is_file()
+    assert sampled_density_mrc.is_file()
+    assert diffusion_coefficients_mrc.is_file()
+    assert quenching_rates_mrc.is_file()
+    assert aa_residence_csv.is_file()
+    assert sampled_density_mrc.stat().st_size > 1024
+    with sampled_density_mrc.open("rb") as f:
+        header = f.read(212)
+    assert header[208:212] == b"MAP "
+    with diffusion_coefficients_mrc.open("rb") as f:
+        header = f.read(1024)
+        diffusion_grid = np.frombuffer(f.read(), dtype=np.float32)
+    assert header[208:212] == b"MAP "
+    assert diffusion_grid.max() <= project["fret"]["dyes"][0]["D"]
+    assert diffusion_grid.max() > 0.0
+    with quenching_rates_mrc.open("rb") as f:
+        header = f.read(1024)
+        quenching_grid = np.frombuffer(f.read(), dtype=np.float32)
+    assert header[208:212] == b"MAP "
+    assert quenching_grid.max() >= 2.0
+
+    with result_json.open("r", encoding="utf8") as f:
+        data = json.load(f)
+    assert data["job_id"] == result.job_id
+    assert "time_ns" in data
+    assert "donor_counts" in data
+    assert result.trajectory_points is not None
+    assert result.trajectory_points.ndim == 2
+    assert result.trajectory_points.shape[1] == 3
+    assert len(result.trajectory_points) <= 2000
+    assert data["trajectory_points"] == result.trajectory_points.tolist()
+    assert isinstance(result.aa_residence, list)
+    assert data["aa_residence"] == result.aa_residence
+    assert aa_residence_csv.read_text(encoding="utf-8").startswith("residue_name,center_count")

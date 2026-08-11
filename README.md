@@ -1,4 +1,8 @@
-[![Build Status](https://travis-ci.org/Fluorescence-Tools/quest.svg?branch=master)](https://travis-ci.org/Fluorescence-Tools/ques)
+[![CI](https://github.com/Fluorescence-Tools/quest/actions/workflows/ci.yml/badge.svg)](https://github.com/Fluorescence-Tools/quest/actions/workflows/ci.yml)
+
+<p align="center">
+  <img src="doc/logo.png" alt="QuEst Logo" width="220" />
+</p>
 
 # QuEst - Quenching Estimator
 
@@ -6,7 +10,7 @@
 
 QUEST (QUenching ESTimation) simulates the dynamic quenching of xanthene 
 dyes tethers to proteins by flexible linkers by simulating PET and the 
-diffusion of dyes.
+diffusion of dyes (see [Peulen et al., 2017](https://doi.org/10.1021/acs.jpcb.7b03441)).
 
 The dynamic quenching of a fluorescent dye coupled to a protein is 
 simulated in three steps:
@@ -27,10 +31,34 @@ to calculate the dye's fluorescence decay.
 In QUEST the dyes are approximated by a sphere diffusing within their 
 accessible volume (AV) (see [labellib](https://github.com/Fluorescence-Tools/LabelLib)). 
 
-PET-quenching of the dye by MET, HIS, TYR and TRP residues is 
-approximated by a step function where the dye is quenched with a 
-provided rate contestant if it is closer than a given threshold 
-distance.
+### Amino-acid specific quenching
+
+PET-quenching is resolved per residue type. Each residue is described by four
+quantities, editable per dye in the web UI (*Adv. Settings -> Amino-acid
+specific quenching*) or under `amino_acid_interactions` in a project file:
+
+| Field | Meaning |
+| --- | --- |
+| `kQ` | Quenching rate (1/ns) applied while the dye is in contact. |
+| `quench_radius` | Contact radius (Å), measured from the **dye centre** to the residue's quenching centre. `null` inherits the project-wide `critical_distance`. |
+| `quench_atoms` | Atom names whose centroid defines the **quenching centre**. |
+| `slow_factor` | Diffusion scaling (0–1) modelling unspecific stickiness near the residue. |
+
+The quenching centre sits on the residue's redox-active moiety rather than on
+CB: the indole ring for TRP, the phenol ring for TYR, the imidazole ring for
+HIS, SD for MET and SG for CYS. For tryptophan this moves the quencher ~3.3 Å
+away from CB, which matters at contact distances of a few Ångström.
+
+Quenching rates from residues whose contact spheres overlap **add up**;
+stickiness factors **multiply**. Every simulation reports how much each residue
+type contributed to the total quenching rate (`quench_rate_fraction` in
+`result.json` and `aa_residence.csv`, and the *Quenching by residue type* panel
+in the web UI).
+
+The shipped dye presets start from reference PET parameters for a xanthene dye
+(TRP > PRO ≈ TYR > MET > HIS > CYS), scaled to each dye's radius. These are
+starting values intended to be calibrated against measured lifetimes, not fixed
+constants.
 
 The relevant simulation parameters can be adjusted either in a 
 graphical user interface `quest_gui` or QuEst can be controlled
@@ -115,9 +143,15 @@ if result.fret_counts is not None:
 The API is designed so that it does not depend on any GUI widgets and
 can therefore be safely imported and used in headless environments.
 
-Notebook examples:
-- `modules/quest/notebooks/quest_core_headless_demo.ipynb` – minimal headless API usage.
-- (Legacy) other notebooks for diffusion/quenching/FRET remain available in the same folder.
+Notebook examples (each one is executed by `tests/test_notebooks.py`, so they
+run rather than merely parse):
+- [`notebooks/01_quenching.ipynb`](notebooks/01_quenching.ipynb) – PET quenching of a tethered donor.
+- [`notebooks/02_fret.ipynb`](notebooks/02_fret.ipynb) – adding a FRET acceptor.
+- [`notebooks/03_et_distance_distribution.ipynb`](notebooks/03_et_distance_distribution.ipynb) – donor–acceptor distance distributions.
+- [`notebooks/04_diffusion_modulated_fret.ipynb`](notebooks/04_diffusion_modulated_fret.ipynb) – how dye diffusion changes the transfer.
+
+Scripted equivalents live in [`examples/`](examples/) and are run by
+`tests/test_examples.py`.
 
 ### Command-QuEST (Click CLI)
 
@@ -145,6 +179,65 @@ Notes:
 - Use `--grid key=val1,val2` to sweep multiple values; outputs are tagged per run.
 - Output format chosen by extension (.csv or .json).
 
+## Webapp and Electron
+
+QuEst now includes a hostable web surface and a local Electron shell in `webui/`.
+
+### Hostable web app (FastAPI + Next.js)
+
+The frontend needs **Node.js 20.9 or newer** (Next.js 16). The repository ships
+a [pixi](https://pixi.sh) manifest that provides a pinned Node toolchain in its
+own `frontend` environment, so you do not need Node installed system-wide:
+
+```bash
+python -m pip install -e ".[web]"
+python -m uvicorn webui.backend.app.main:app --host 127.0.0.1 --port 8000
+# new terminal
+pixi run -e frontend dev
+```
+
+`pixi.toml` and `pixi.lock` are committed, so `pixi install -e frontend`
+reproduces the exact toolchain. Available tasks:
+
+| Task | Does |
+| --- | --- |
+| `pixi run -e frontend install` | `npm install` in `webui/frontend` |
+| `pixi run -e frontend dev` | Next.js dev server on :3000 |
+| `pixi run -e frontend build` | Production build (+ standalone assets) |
+| `pixi run -e frontend start` | Serve the production build |
+| `pixi run -e frontend typecheck` | `tsc --noEmit` |
+| `pixi run -e frontend node` | Print the environment's Node version |
+
+If you prefer your own Node, the plain npm workflow still works — check
+`node -v` first, since an older Node fails at startup with a version error:
+
+```bash
+npm --prefix webui/frontend install
+npm --prefix webui/frontend run dev
+```
+
+For production-style frontend:
+
+```bash
+pixi run -e frontend build
+pixi run -e frontend start
+```
+
+Use `QUEST_BACKEND_URL` to point frontend runtime to a hosted backend target.
+
+### Electron app (local desktop shell)
+
+```bash
+npm --prefix webui/desktop install
+npm --prefix webui/desktop run start
+```
+
+Optional Python override:
+
+```bash
+QUEST_PYTHON=/path/to/python npm --prefix webui/desktop run start
+```
+
 ## Warnings
   1. QuEST determines precise values that are not necessary accurate.
   2. QuEST was the first software to implement the ACVs. ACVs were later described in more detail (see: [COSB2016](https://doi.org/10.1016/j.sbi.2016.11.012). Differencies in the ACV implementation, may produce slightly different results.
@@ -155,13 +248,13 @@ Notes:
 ## Citation
 If you have used QuEST in a scientific publication, we would appreciate citations to the following paper: 
 
-[![DOI for citing QuEST](https://img.shields.io/badge/https://doi.org/10.1021/acs.jpcb.7b03441-blue.svg)](https://pubs.acs.org/doi/abs/10.1021/acs.jpcb.7b03441)
+[![DOI](https://img.shields.io/badge/DOI-10.1021%2Facs.jpcb.7b03441-blue.svg)](https://doi.org/10.1021/acs.jpcb.7b03441)
 > Peulen, T.O., Opanasyuk, O., and Seidel, C.A., 2017. Combining Graphical and Analytical Methods with Molecular Simulations To Analyze Time-Resolved FRET Measurements of Labeled Macromolecules Accurately. The Journal of Physical Chemistry B  2017, 121, 35, 8211-8241 (Feature Article)
 
 
 For more informations on accessible contact volumes (ACVs) see:
 
-[![DOI for citing LabelLib](https://img.shields.io/badge/DOI-10.1016%2Fj.sbi.2016.11.012-blue.svg)](https://doi.org/10.1016/j.sbi.2016.11.012)
+[![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.sbi.2016.11.012-blue.svg)](https://doi.org/10.1016/j.sbi.2016.11.012)
 > Dimura, M., Peulen, T.O., Hanke, C.A., Prakash, A., Gohlke, H. and Seidel, C.A., 2016. Quantitative FRET studies and integrative modeling unravel the structure and dynamics of biomolecular systems. Current opinion in structural biology, 40, pp.163-185.
 
 

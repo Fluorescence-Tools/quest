@@ -1,0 +1,219 @@
+---
+type: Playbook
+title: Testing
+description: How to run all four surfaces from one interpreter, what is covered, what skips, and how a number-moving change is verified.
+resource: tests/
+tags: [testing, pytest, playwright]
+status: stable
+generated: { by: process:okf-v0.1-import, at: 2026-07-26T00:00:00Z }
+stale_after: 2027-01-26
+sources:
+  - id: tests
+    resource: ../../tests
+    title: tests/
+    author: human:tpeulen
+    last_modified: 2026-07-28
+---
+
+# Every change is tested on all three surfaces
+
+A change is not verified until the **library, the web UI and the Qt GUI** have
+all been exercised. They have diverged before — the GUI shipped different
+quenching chemistry than the CLI for as long as nobody looked — so a green unit
+suite proves less than it appears to.
+
+**One interpreter runs everything, since 2026-07-28.** `arm64` has Qt, a
+compiled `IMP.bff` *and* the web stack; the base environment is retired
+([environment.md](environment.md), [specs/programme-2026-07.md](/specs/programme-2026-07.md)).
+
+```bash
+ARM64=/Users/tpeulen/mambaforge/envs/arm64/bin/python
+
+# 1. everything except the browser: library + Qt GUI + web backend
+QT_QPA_PLATFORM=offscreen $ARM64 -m pytest tests/ webui/backend/tests -q \
+    --ignore=tests/test_webui_e2e.py
+
+# 2. notebooks and examples (deselected by default; they execute for real)
+QT_QPA_PLATFORM=offscreen $ARM64 -m pytest tests -m notebooks -q
+
+# 3. web UI: start both servers, then run the browser suite in its OWN process
+$ARM64 -m uvicorn webui.backend.app.main:app --port 8000 &
+pixi run -e frontend dev &
+$ARM64 -m pytest tests/test_webui_e2e.py -m browser -q
+```
+
+**Do not pass `-p no:pytest-qt`.** It was mandatory while the base environment
+had no Qt binding; `arm64` *has* pytest-qt, and the flag removes the `qtbot`
+fixture — which is what made ChiSurf's own widget tests error when it was passed
+reflexively to another project's suite.
+
+**The browser suite is deselected by default** (`addopts = "-m 'not browser'"`)
+and must run in its own process. Chromium's renderer dies with a bare
+"Page crashed" once one pytest process has *also* imported IMP, numba and
+FastAPI and executed the notebooks — the suite passes alone and fails at the end
+of a combined run. Deselecting says so; silently skipping would not. A combined
+run reports `22 deselected`, which is the signal that the browser layer still
+needs its own command.
+
+Baseline, all in `arm64`:
+
+| command | result | measured |
+|---|---|---|
+| (1) library + GUI + web backend | **706 passed, 1 skipped** in ~2 m 50 s | 2026-08-10 |
+| (2) notebooks + examples | **16 passed, 2 skipped** | 2026-07-28 |
+| (3) browser e2e, servers up | see [handover.md](../handover.md) | 2026-08-09 |
+
+# Without imp-tricks the suite skips; it does not fail
+
+QuEst's accessible volume dispatches through `IMP.bff.av` on *both* backends
+([subsystems/accessible-volume.md](/subsystems/accessible-volume.md)), so an
+interpreter without imp-tricks cannot simulate at all. Left alone that is 98
+failures and 8 errors — noise that hides every real one. `tests/conftest.py`
+turns it into an explicit skip, in two mechanisms because the failures arrive
+two ways:
+
+- **Two `hookwrapper` hooks** (`pytest_runtest_setup`, `pytest_runtest_call`)
+  rewrite QuEst's own sentinel — "accessible volume requires `IMP.bff.av`" —
+  into a skip carrying the reason. This covers most of the suite without
+  annotating a single test.
+- **`@pytest.mark.needs_av`** for tests that *swallow* that error and assert on
+  a status instead: an RPC envelope with `ok: False`, a CLI exit code, a form
+  whose status line reads "Failed". A hook cannot see the cause there, so those
+  tests say what they need.
+
+**Neither converts anything where imp-tricks is present**: the guard resolves
+once, and on a machine that can compute an AV both paths return immediately. A
+real regression cannot be laundered into a skip.
+
+Measured 2026-08-10 with `IMP_TRICKS_SRC=/nonexistent`: **550 passed, 141
+skipped, 0 failed**. Twelve of those skips are over-skip — tests inside a
+module or class marked `needs_av` that would have passed anyway — which is the
+price of marking by module rather than by test, and is recorded rather than
+rounded away.
+
+`pytest tests -m notebooks` gave **6 failed / 10 passed** from 2026-07-26 until
+2026-07-28. It is fixed, and the cause was not what was recorded — see
+[references/known-issues.md](/references/known-issues.md). Do not reintroduce a
+"run them one file per process" workaround; it was never the problem.
+
+**uvicorn does not reload.** After changing backend code, restart it before
+re-running the browser suite, or you will be testing the old process.
+
+# Numbers move; verify that they moved *correctly*
+
+A green suite does not tell you an accessible volume is right. Since 2026-07-28
+any change that can move a number is checked against a committed numeric
+baseline in `tests/baselines/`, and the baseline is only regenerated by a commit
+whose [log](../log.md) entry accounts for every moved number
+([specs/programme-2026-07.md](/specs/programme-2026-07.md), decision 13).
+
+Two rules that come with it, both bought with time already lost here:
+
+- **A test that has never been seen to fail is not evidence.** Write the
+  assertion, defeat the fix, watch it go red, restore. Four times now a grid or
+  concurrency test proved nothing until that was done.
+- **Clear the numba cache before a baseline run.** `@njit(cache=True)` kernels
+  only re-read configuration when they actually compile, so a warm cache hides
+  compile-time failures entirely.
+
+# What the suites cover
+
+| File | Covers |
+|---|---|
+| `test_core_api.py` | The service layer: project loading, `simulate_project`, result fields |
+| `test_api.py` | The `quest.api` re-export surface |
+| `test_cli.py`, `test_cli_smoke.py` | CLI commands, overrides, grid sweeps |
+| `test_aa_specific_quenching.py` | Per-residue PET quenching, contributions split by residue type |
+| `test_scan_reporting.py` | What a scan reports: quencher attribution and failure diagnostics |
+| `test_grid_kernels.py` | Equivalence and behaviour of the AV grid kernels |
+| `test_simulation_performance.py` | The scan fast path (`save_outputs=False`) and seeded reproducibility |
+| `test_coarse_grained.py` | The coarse-grained structure representation |
+| `test_fps_json.py` | fps.json labeling files |
+| `test_pdb_id_support.py` | Bare PDB IDs accepted wherever a path is |
+| `test_use_cases.py`, `test_mc4r.py` | End-to-end scientific use cases |
+| `test_notebooks.py` | Notebooks are readable/valid |
+| `test_webui_e2e.py` | Playwright browser tests against a running UI, including the FRET panel and a full FRET run |
+| `test_gui_widget.py` | The Qt widget headlessly: chemistry parity with the domain, the R0 control, that it paints |
+| `test_service_layer.py` | The RPC envelope and registry, the scan record shape, and the layering guardrails |
+| `test_fret_units.py` | R0 is a Förster radius in Ångström, not nanometres |
+
+# Testing the Qt GUI
+
+`arm64` carries PyQt5, pytest-qt, LabelLib, numba and pyqtgraph, and imports
+`quest` straight from this working tree, so no install step is needed:
+
+```bash
+QT_QPA_PLATFORM=offscreen /Users/tpeulen/mambaforge/envs/arm64/bin/python \
+    -m pytest tests/test_gui_widget.py -q
+```
+
+`tests/test_gui_widget.py` skips itself where Qt is absent, so it is safe to
+include in any run.
+
+**Render it and look at it.** Construction tests only prove the widget did not
+crash; clipped labels, a control that is missing entirely, and a table showing
+the wrong chemistry are invisible to assertions and obvious in an image:
+
+```python
+w = TransientDecayGenerator(tempfile.gettempdir())
+w.resize(1400, 900); w.show(); app.processEvents()
+w.grab().save("gui.png")
+```
+
+Then **read the PNG yourself** rather than handing it to the user. That is how
+the missing R0 control and the water-molecule acceptor default were found. Note
+that `QOpenGLWidget` is unsupported offscreen, so the 3D tab will not render
+under this platform plugin — that warning is expected, not a failure.
+
+The same rule applies to the web UI: Playwright can screenshot any element
+(`page.locator("svg.chart").screenshot(...)`), and a chart that plots the right
+numbers can still draw them wrong.
+
+# What skips, and why
+
+- **`test_webui_e2e.py`** — "QuEst web UI is not running". Start the backend on
+  :8000 and the frontend on :3000 first ([environment.md](environment.md)), then
+  rerun; otherwise these prove nothing.
+- **`test_gui_widget.py`** — skips only where Qt is genuinely absent. In `arm64`
+  it must *run*; a skip here means the environment is wrong.
+- **`test_cli.py::…1anf…`** — an opt-in residence diagnostic that is slow and may
+  need the PDB cache or network.
+
+A run whose skips include the browser or GUI files means those layers were
+**not** exercised. Say so when reporting, rather than "all tests pass".
+
+# Conventions
+
+- Structures for tests live in `tests/data/` and `tests/148l.pdb` (T4 lysozyme,
+  the standard small test protein here).
+- Anything touching a numba kernel gets a case in `test_grid_kernels.py` or
+  `test_simulation_performance.py` — those are where kernel equivalence and
+  seeded reproducibility are pinned.
+- Simulations in tests should pass `save_outputs=False` unless the artefacts are
+  the thing under test; otherwise every test writes a job directory into the
+  working tree.
+
+# A warm numba cache hides compile-time failures
+
+`@njit(cache=True)` kernels only re-read numba's configuration when they
+actually compile. A suite that has run once never recompiles, so a class of
+failure — numba refusing a changed `NUMBA_NUM_THREADS`, a kernel that no longer
+type-infers — is invisible until the cache is cold. It cost one confused round
+of "flaky, passes on retry" before the pattern was clear.
+
+Clear it before trusting a green run after touching a jitted module — **both
+locations**:
+
+    find quest -name '__pycache__' -type d \
+      -exec sh -c 'rm -f "$1"/*.nbi "$1"/*.nbc' _ {} \;
+    find ~/.chisurf/cache \( -name '*.nbi' -o -name '*.nbc' \) -delete
+
+**The first command alone is not enough under pytest**, and that was documented
+as if it were until 2026-07-28. `tests/conftest.py` imports ChiSurf, which sets
+`NUMBA_CACHE_DIR=~/.chisurf/cache` (and `PYTHONPYCACHEPREFIX` to the same) into
+`os.environ` — so numba writes and reads *there*, not beside the source. There
+were **193** cached kernels in that directory when it was first looked at. A
+"cold cache" run that only cleared `quest/**/__pycache__` was warm.
+
+`tests/conftest.py` pins `NUMBA_NUM_THREADS` and `NUMBA_THREADING_LAYER` for
+this reason; see [okf/log.md](../log.md), 2026-07-27.

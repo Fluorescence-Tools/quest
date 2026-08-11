@@ -1,0 +1,88 @@
+context:
+  name: "quest"
+  # Set QUEST_VERSION in CI to override; the fallback matches pyproject.toml.
+  version: ${{ env.get("QUEST_VERSION") if "QUEST_VERSION" in env else "19.8.13" }}
+
+package:
+  name: ${{ name|lower }}
+  version: ${{ version }}
+
+source:
+  path: ../
+
+build:
+  number: 0
+  script:
+    - python -m pip install . -vv --no-deps --no-build-isolation
+  python:
+    entry_points:
+      - quest = quest.cli:cli
+      - cs.quest = quest.gui:start_gui
+
+requirements:
+  host:
+    - python
+    - pip
+    - setuptools >=61
+    - wheel
+  run:
+    - python
+    - numpy >=2.0
+    - numexpr
+    - numba
+    - click
+    - pyyaml
+    - tqdm
+    # Accessible volumes. `imp-tricks` owns the AV computation itself
+    # (`IMP.bff.av.compute_av`) and its IMP.bff/LabelLib backend dispatch;
+    # QuEst calls it rather than carrying a second copy. `imp` additionally
+    # provides the structure reader (quest/core/structure/reader.py), and `labellib` is the
+    # fallback backend on platforms without a compiled IMP.bff.
+    #
+    # `imp-tricks` does not resolve from any public channel yet — it lives on a
+    # private GitLab. Declaring it here is deliberate: QuEst genuinely requires
+    # it as of the AV deletion, and a recipe that omitted it would build a
+    # package that cannot run. See okf/specs/imp-tricks-dedup.md.
+    - labellib
+    - imp
+    - imp-tricks
+    # Desktop surface. Optional at runtime — every Qt import is guarded — but
+    # shipped so `cs.quest` works out of the box.
+    - pyqt
+    - qtpy
+    - pyqtgraph
+    - pyopengl
+    - pytables
+
+tests:
+  - python:
+      imports:
+        - quest
+        - quest.api
+        - quest.core
+        - quest.rpc
+      pip_check: true
+  - script:
+      # The CLI must actually start, not merely import.
+      - quest --help
+      - quest template --with-fret > /tmp/quest_template.json
+    requirements:
+      run:
+        - python
+
+about:
+  homepage: https://github.com/Fluorescence-Tools/quest
+  license: MIT
+  license_file: LICENSE
+  summary: Structure-based fluorescence quenching and FRET estimator
+  description: |
+    QuEst predicts the fluorescence decay of a dye tethered to a protein by a
+    flexible linker, from the structure alone: photo-induced electron transfer
+    (PET) quenching by nearby amino acids, plus optional FRET. The dye is
+    diffused through its accessible volume by Brownian dynamics and the decay
+    is generated photon by photon.
+  repository: https://github.com/Fluorescence-Tools/quest
+
+extra:
+  recipe-maintainers:
+    - tpeulen
